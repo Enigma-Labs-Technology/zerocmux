@@ -11,7 +11,7 @@ guard CommandLine.arguments.count > 1 else {
 }
 
 // Pad base64 string if needed (Sparkle keys may be stored without padding)
-var b64 = CommandLine.arguments[1]
+var b64 = CommandLine.arguments[1].trimmingCharacters(in: .whitespacesAndNewlines)
 while b64.count % 4 != 0 {
     b64 += "="
 }

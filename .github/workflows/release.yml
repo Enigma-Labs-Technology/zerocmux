@@ -192,6 +192,27 @@ jobs:
             echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
             exit 1
           fi
+          python3 - <<'PY'
+          import base64
+          import os
+          import re
+          import sys
+
+          value = os.environ["SPARKLE_PRIVATE_KEY"].strip()
+          print(f"SPARKLE_PRIVATE_KEY characters: {len(value)}")
+          if not re.fullmatch(r"[A-Za-z0-9+/=]+", value):
+              print("SPARKLE_PRIVATE_KEY is not plain base64. Store only the raw output from `generate_keys -x <file>`.", file=sys.stderr)
+              sys.exit(1)
+          try:
+              decoded = base64.b64decode(value + "=" * (-len(value) % 4), validate=True)
+          except Exception as error:
+              print(f"SPARKLE_PRIVATE_KEY base64 decode failed: {error}", file=sys.stderr)
+              sys.exit(1)
+          print(f"SPARKLE_PRIVATE_KEY decoded bytes: {len(decoded)}")
+          if len(decoded) not in (32, 96):
+              print("SPARKLE_PRIVATE_KEY must decode to 32 bytes (new Sparkle key) or 96 bytes (old Sparkle key).", file=sys.stderr)
+              sys.exit(1)
+          PY
           DERIVED_PUBLIC_KEY=$(swift scripts/derive_sparkle_public_key.swift "$SPARKLE_PRIVATE_KEY")
           echo "Derived Sparkle public key: $DERIVED_PUBLIC_KEY"
           echo "SPARKLE_PUBLIC_KEY=$DERIVED_PUBLIC_KEY" >> "$GITHUB_ENV"

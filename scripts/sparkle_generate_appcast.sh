@@ -64,7 +64,7 @@ cp "$DMG_PATH" "$archives_dir/$(basename "$DMG_PATH")"
 
 key_file="$work_dir/sparkle_ed_key"
 # Ensure base64 padding (keys may be stored without trailing '=')
-padded_key="$SPARKLE_PRIVATE_KEY"
+padded_key="$(printf "%s" "$SPARKLE_PRIVATE_KEY" | tr -d '[:space:]')"
 while (( ${#padded_key} % 4 != 0 )); do
   padded_key="${padded_key}="
 done
