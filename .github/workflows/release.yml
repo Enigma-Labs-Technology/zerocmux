@@ -92,10 +92,10 @@ jobs:
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_RELEASE_SIGNING_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_RELEASE_SIGNING_ROLE_ARN }}
           role-session-name: zerocmux-release-${{ github.run_id }}
-          allowed-account-ids: ${{ vars.AWS_RELEASE_ACCOUNT_ID }}
+          allowed-account-ids: ${{ secrets.AWS_RELEASE_ACCOUNT_ID }}
           mask-aws-account-id: true
           unset-current-credentials: true
           inline-session-policy: |
@@ -115,14 +115,14 @@ jobs:
                     "secretsmanager:GetSecretValue"
                   ],
                   "Resource": [
-                    "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
-                    "${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
+                    "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
+                    "${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
                   ]
                 },
                 {
@@ -130,20 +130,20 @@ jobs:
                   "Action": [
                     "kms:Decrypt"
                   ],
-                  "Resource": "${{ vars.AWS_RELEASE_KMS_KEY_ARN }}",
+                  "Resource": "${{ secrets.AWS_RELEASE_KMS_KEY_ARN }}",
                   "Condition": {
                     "StringEquals": {
-                      "kms:ViaService": "secretsmanager.${{ vars.AWS_REGION }}.amazonaws.com",
-                      "kms:CallerAccount": "${{ vars.AWS_RELEASE_ACCOUNT_ID }}",
+                      "kms:ViaService": "secretsmanager.${{ secrets.AWS_REGION }}.amazonaws.com",
+                      "kms:CallerAccount": "${{ secrets.AWS_RELEASE_ACCOUNT_ID }}",
                       "kms:EncryptionContext:SecretARN": [
-                        "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
-                        "${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
+                        "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
+                        "${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
                       ]
                     }
                   }
@@ -157,14 +157,14 @@ jobs:
         with:
           parse-json-secrets: false
           secret-ids: |
-            APPLE_CERTIFICATE_BASE64,${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}
-            APPLE_CERTIFICATE_PASSWORD,${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}
-            APPLE_SIGNING_IDENTITY,${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}
-            APPLE_ID,${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}
-            APPLE_APP_SPECIFIC_PASSWORD,${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}
-            APPLE_TEAM_ID,${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}
-            APPLE_RELEASE_PROVISIONING_PROFILE_BASE64,${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}
-            SPARKLE_PRIVATE_KEY,${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}
+            APPLE_CERTIFICATE_BASE64,${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}
+            APPLE_CERTIFICATE_PASSWORD,${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}
+            APPLE_SIGNING_IDENTITY,${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}
+            APPLE_ID,${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}
+            APPLE_APP_SPECIFIC_PASSWORD,${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}
+            APPLE_TEAM_ID,${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}
+            APPLE_RELEASE_PROVISIONING_PROFILE_BASE64,${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}
+            SPARKLE_PRIVATE_KEY,${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}
 
       - name: Validate release signing secrets
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -251,7 +251,7 @@ jobs:
       - name: Build universal app (Release)
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         env:
-          APPLE_RELEASE_BUNDLE_ID: ${{ vars.APPLE_RELEASE_BUNDLE_ID }}
+          APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
         run: |
           APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
           xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
@@ -347,7 +347,7 @@ jobs:
       - name: Embed release provisioning profile
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         env:
-          APPLE_RELEASE_BUNDLE_ID: ${{ vars.APPLE_RELEASE_BUNDLE_ID }}
+          APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
         run: |
           APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
           EXPECTED_APP_ID="${APPLE_TEAM_ID}.${APPLE_RELEASE_BUNDLE_ID}"
