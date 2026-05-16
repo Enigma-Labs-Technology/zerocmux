@@ -3,11 +3,11 @@
 Last updated: February 13, 2026  
 Source inventory snapshot: `vercel-labs/agent-browser` @ `03a8cb9`
 
-This document tracks implemented behavior and remaining parity gaps for the cmux browser port.
+This document tracks implemented behavior and remaining parity gaps for the zerocmux browser port.
 
 ## Goals
 
-1. Provide an LLM-friendly browser automation API in cmux with stable handles.
+1. Provide an LLM-friendly browser automation API in zerocmux with stable handles.
 2. Keep v1 CLI/socket behavior working while v2 reaches full parity.
 3. Port `agent-browser` command surface (where meaningful for `WKWebView`).
 4. Ensure move/reorder operations preserve `surface_id` identity.
@@ -226,11 +226,11 @@ P1 (important but not blocking initial parity):
 3. `browser.frame.main`
 4. `browser.dialog.respond`
 5. `browser.download.wait`
-6. `browser.tab.*` compatibility aliases mapped to cmux surfaces
+6. `browser.tab.*` compatibility aliases mapped to zerocmux surfaces
 7. `browser.console.list`
 8. `browser.errors.list`
 9. `browser.highlight`
-10. `browser.state.save|load` (browser state in cmux context)
+10. `browser.state.save|load` (browser state in zerocmux context)
 
 P2 (advanced parity / optional):
 1. network interception/mocking equivalents (`route|unroute|requests|responsebody`)
@@ -250,24 +250,24 @@ P2 (advanced parity / optional):
 
 Primary form:
 ```bash
-cmux browser --surface <surface-id> <agent-browser-style-command...>
+zerocmux browser --surface <surface-id> <agent-browser-style-command...>
 ```
 
 Shorthand:
 ```bash
-cmux browser <surface-id> <agent-browser-style-command...>
+zerocmux browser <surface-id> <agent-browser-style-command...>
 ```
 
 Agent discovery:
 ```bash
-cmux identify
-cmux capabilities
-cmux browser identify --surface <surface-id>   # wrapper over system.identify + browser fields
+zerocmux identify
+zerocmux capabilities
+zerocmux browser identify --surface <surface-id>   # wrapper over system.identify + browser fields
 ```
 
 Flash:
 ```bash
-cmux trigger-flash [--workspace <id>] [--surface <id>]
+zerocmux trigger-flash [--workspace <id>] [--surface <id>]
 ```
 
 Compatibility:
@@ -379,7 +379,7 @@ Hard invariant:
 2. `src/actions.test.ts` -> adapted negative coverage in `tests_v2/test_browser_api_comprehensive.py` (`invalid_params`, `not_found`, `timeout`).
 3. `src/protocol.test.ts` -> adapted browser command/shape validation in `tests_v2/test_browser_api_unsupported_matrix.py` and existing `CLI/cmux.swift` command grammar checks.
 4. `test/file-access.test.ts` and `test/launch-options.test.ts` -> partially applicable to `WKWebView`; currently tracked as follow-up parity work (not blocking current browser method coverage).
-5. `src/daemon.test.ts`, `src/stream-server.test.ts`, `test/serverless.test.ts`, `src/ios-manager.test.ts` -> out-of-scope for cmux browser parity (different transport/runtime).
+5. `src/daemon.test.ts`, `src/stream-server.test.ts`, `test/serverless.test.ts`, `src/ios-manager.test.ts` -> out-of-scope for zerocmux browser parity (different transport/runtime).
 
 ### Implemented cmux Browser Suites
 
@@ -412,7 +412,7 @@ Planned verification commands at implementation completion:
 
 ## Decision Log (Locked - February 12, 2026)
 
-1. `cmux browser tab ...` maps to browser `surface` tabs only (no separate workspace-level tab meaning inside `browser` namespace).
+1. `zerocmux browser tab ...` maps to browser `surface` tabs only (no separate workspace-level tab meaning inside `browser` namespace).
 2. Default browser placement without explicit target is caller-relative: reuse the nearest right sibling pane; if none exists, split right from the caller pane.
 3. Deeply nested layouts use local split ancestry: choose the nearest right sibling leaf in the caller's subtree path and avoid reshuffling unrelated panes.
 4. Network parity target is full parity (not block-only phase).
@@ -432,4 +432,4 @@ Planned verification commands at implementation completion:
 ## Remaining Open Decisions
 
 1. Unsupported command policy: strict `not_supported` errors vs best-effort fallback for commands that cannot be implemented on `WKWebView` with correct semantics.
-2. Whether to expose protocol-only agent-browser actions in first public release of `cmux browser` or gate them behind a second rollout phase.
+2. Whether to expose protocol-only agent-browser actions in first public release of `zerocmux browser` or gate them behind a second rollout phase.

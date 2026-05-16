@@ -16,7 +16,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def v2_call(client: cmux, method: str, params: dict[str, Any] | None = None, request_id: str = "1") -> dict[str, Any]:

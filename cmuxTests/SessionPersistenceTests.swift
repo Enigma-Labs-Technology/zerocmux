@@ -223,11 +223,40 @@ final class SessionPersistenceTests: XCTestCase {
 
         XCTAssertNotNil(path)
         XCTAssertTrue(path?.path.contains("com.example_unsafe_id") == true)
+        XCTAssertTrue(path?.path.contains("/zerocmux/") == true)
+    }
+
+    func testLoadFallsBackToLegacyCmuxSessionSnapshot() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cmux-session-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let legacyURL = tempDir
+            .appendingPathComponent("cmux", isDirectory: true)
+            .appendingPathComponent("session-com.cmuxterm.app.debug.legacy-previous.json", isDirectory: false)
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(
+            SessionPersistenceStore.save(
+                makeSnapshot(version: SessionSnapshotSchema.currentVersion),
+                fileURL: legacyURL
+            )
+        )
+
+        let loaded = SessionPersistenceStore.loadReopenSessionSnapshot(
+            bundleIdentifier: "com.kernelalex.zerocmux.debug.legacy",
+            appSupportDirectory: tempDir
+        )
+
+        XCTAssertNotNil(loaded)
     }
 
     func testRestorePolicySkipsWhenLaunchHasExplicitArguments() {
         let shouldRestore = SessionRestorePolicy.shouldAttemptRestore(
-            arguments: ["/Applications/cmux.app/Contents/MacOS/cmux", "--window", "window:1"],
+            arguments: ["/Applications/zerocmux.app/Contents/MacOS/zerocmux", "--window", "window:1"],
             environment: [:]
         )
 
@@ -236,7 +265,7 @@ final class SessionPersistenceTests: XCTestCase {
 
     func testRestorePolicyAllowsFinderStyleLaunchArgumentsOnly() {
         let shouldRestore = SessionRestorePolicy.shouldAttemptRestore(
-            arguments: ["/Applications/cmux.app/Contents/MacOS/cmux", "-psn_0_12345"],
+            arguments: ["/Applications/zerocmux.app/Contents/MacOS/zerocmux", "-psn_0_12345"],
             environment: [:]
         )
 
@@ -245,7 +274,7 @@ final class SessionPersistenceTests: XCTestCase {
 
     func testRestorePolicySkipsWhenRunningUnderXCTest() {
         let shouldRestore = SessionRestorePolicy.shouldAttemptRestore(
-            arguments: ["/Applications/cmux.app/Contents/MacOS/cmux"],
+            arguments: ["/Applications/zerocmux.app/Contents/MacOS/zerocmux"],
             environment: ["XCTestConfigurationFilePath": "/tmp/xctest.xctestconfiguration"]
         )
 
@@ -1256,7 +1285,7 @@ final class SessionPersistenceTests: XCTestCase {
                 includeScrollback: false,
                 restorableAgentIndex: staleIndex
             )
-            XCTAssertEqual(initialSnapshot.panels.first?.terminal?.agent?.kind, scenario.kind)
+            XCTAssertEqual(initialSnapshot.panels.first?.terminal?.agent?.kind.rawValue, scenario.kind.rawValue)
 
             workspace.updatePanelShellActivityState(panelId: panelId, state: .promptIdle)
             workspace.updatePanelShellActivityState(panelId: panelId, state: .commandRunning)
@@ -1827,9 +1856,9 @@ final class SocketListenerAcceptPolicyTests: XCTestCase {
             workingDirectory: "/tmp/team repo",
             launchCommand: AgentLaunchCommandSnapshot(
                 launcher: "claudeTeams",
-                executablePath: "/Applications/cmux.app/Contents/Resources/bin/cmux",
+                executablePath: "/Applications/zerocmux.app/Contents/Resources/bin/zerocmux",
                 arguments: [
-                    "/Applications/cmux.app/Contents/Resources/bin/cmux",
+                    "/Applications/zerocmux.app/Contents/Resources/bin/zerocmux",
                     "claude-teams",
                     "--teammate-mode",
                     "auto",
@@ -1855,7 +1884,7 @@ final class SocketListenerAcceptPolicyTests: XCTestCase {
 
         XCTAssertEqual(
             snapshot.resumeCommand,
-            "cd '/tmp/team repo' && 'env' 'CMUX_CUSTOM_CLAUDE_PATH=/opt/Claude Code/bin/claude' '/Applications/cmux.app/Contents/Resources/bin/cmux' 'claude-teams' '--resume' 'claude-team-session' '--teammate-mode' 'auto' '--model' 'sonnet' '--remote-control-session-name-prefix' 'cmux-team' '--permission-mode' 'auto'"
+            "cd '/tmp/team repo' && 'env' 'CMUX_CUSTOM_CLAUDE_PATH=/opt/Claude Code/bin/claude' '/Applications/zerocmux.app/Contents/Resources/bin/zerocmux' 'claude-teams' '--resume' 'claude-team-session' '--teammate-mode' 'auto' '--model' 'sonnet' '--remote-control-session-name-prefix' 'cmux-team' '--permission-mode' 'auto'"
         )
     }
 

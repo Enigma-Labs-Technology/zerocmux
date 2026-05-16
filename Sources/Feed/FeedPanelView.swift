@@ -47,7 +47,7 @@ private extension WorkstreamExitPlanMode {
 /// full-width hover backgrounds, and control-bar pill buttons styled
 /// like `GroupingButton` in `SessionIndexView`.
 ///
-/// Pending items float above resolved; telemetry is hidden unless the
+/// Pending items float above resolved; non-actionable activity is hidden unless the
 /// user flips the Actionable / All filter. Rows receive immutable
 /// snapshots + closure action bundles only (snapshot-boundary rule).
 struct FeedPanelView: View {
@@ -998,7 +998,7 @@ struct FeedItemRow: View, Equatable {
     private var promptEcho: String? {
         // Prefer the real user prompt attached by the list view (walks
         // the same workstream for the most recent .userPrompt
-        // telemetry). Synthetic permission labels are intentionally
+        // non-actionable activity). Synthetic permission labels are intentionally
         // avoided here because the Feed should show real context only.
         if let echo = snapshot.userPromptEcho,
            !echo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1218,7 +1218,7 @@ struct FeedItemRow: View, Equatable {
                 onSend: { text in actions.sendText(snapshot.workstreamId, text) }
             )
         default:
-            TelemetryActionArea(snapshot: snapshot)
+            ActivityActionArea(snapshot: snapshot)
         }
     }
 
@@ -3625,7 +3625,7 @@ private struct StopActionArea: View {
     }
 }
 
-private struct TelemetryActionArea: View {
+private struct ActivityActionArea: View {
     let snapshot: FeedItemSnapshot
 
     var body: some View {

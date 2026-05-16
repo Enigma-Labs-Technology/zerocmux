@@ -7,7 +7,6 @@ import Combine
 import CoreText
 import Darwin
 import Carbon.HIToolbox
-import Sentry
 import Bonsplit
 import CMUXAgentLaunch
 import CMUXPasteboardFidelity
@@ -64,12 +63,12 @@ enum GhosttyStartupAppearancePreviewProfile: String, CaseIterable, Identifiable 
         case .realUserConfig:
             return String(
                 localized: "debug.startupAppearance.profile.realUserConfig.detail",
-                defaultValue: "Loads your actual Ghostty and cmux config files."
+                defaultValue: "Loads your actual Ghostty and zerocmux config files."
             )
         case .freshInstall:
             return String(
                 localized: "debug.startupAppearance.profile.freshInstall.detail",
-                defaultValue: "No user theme or terminal colors, so cmux applies its managed default colors."
+                defaultValue: "No user theme or terminal colors, so zerocmux applies its managed default colors."
             )
         case .userThemePair:
             return String(
@@ -1423,7 +1422,7 @@ class GhosttyApp {
     }
 
     static let shared = GhosttyApp()
-    private static let releaseBundleIdentifier = "com.cmuxterm.app"
+    private static let releaseBundleIdentifiers = ["com.kernelalex.zerocmux", "com.cmuxterm.app"]
     private static let fallbackAppearanceConfig = GhosttyConfig()
     private static let backgroundLogTimestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -1671,17 +1670,6 @@ class GhosttyApp {
                 lastReportedUptime: lastScrollLagReportUptime,
                 cooldown: scrollLagReportCooldownSeconds
             ) {
-                if TelemetrySettings.enabledForCurrentLaunch {
-                    SentrySDK.capture(message: "Scroll lag detected") { scope in
-                        scope.setLevel(.warning)
-                        scope.setContext(value: [
-                            "samples": samples,
-                            "avg_ms": String(format: "%.2f", avgLag),
-                            "max_ms": String(format: "%.2f", maxLag),
-                            "threshold_ms": threshold
-                        ], key: "scroll_lag")
-                    }
-                }
                 lastScrollLagReportUptime = nowUptime
             }
             // Reset stats
@@ -2064,8 +2052,8 @@ class GhosttyApp {
             keybind = super+shift+d=unbind
             """,
             into: config,
-            prefix: "cmux-owned-split-keybind-overrides",
-            logLabel: "cmux-owned split keybind overrides"
+            prefix: "zerocmux-owned-split-keybind-overrides",
+            logLabel: "zerocmux-owned split keybind overrides"
         )
     }
 
@@ -2500,18 +2488,20 @@ class GhosttyApp {
         )
         paths.append(contentsOf: appSupportConfigURLs.map(\.path))
 
-        let releaseDir = appSupportDirectory.appendingPathComponent(releaseBundleIdentifier, isDirectory: true)
-        let releaseLegacyConfig = releaseDir.appendingPathComponent("config", isDirectory: false)
-        let releaseConfig = releaseDir.appendingPathComponent("config.ghostty", isDirectory: false)
+        for releaseBundleIdentifier in releaseBundleIdentifiers {
+            let releaseDir = appSupportDirectory.appendingPathComponent(releaseBundleIdentifier, isDirectory: true)
+            let releaseLegacyConfig = releaseDir.appendingPathComponent("config", isDirectory: false)
+            let releaseConfig = releaseDir.appendingPathComponent("config.ghostty", isDirectory: false)
 
-        let releaseConfigSize = configFileSize(at: releaseConfig)
-        let releaseLegacyConfigSize = configFileSize(at: releaseLegacyConfig)
+            let releaseConfigSize = configFileSize(at: releaseConfig)
+            let releaseLegacyConfigSize = configFileSize(at: releaseLegacyConfig)
 
-        if shouldLoadLegacyGhosttyConfig(
-            newConfigFileSize: releaseConfigSize,
-            legacyConfigFileSize: releaseLegacyConfigSize
-        ), !paths.contains(releaseLegacyConfig.path) {
-            paths.append(releaseLegacyConfig.path)
+            if shouldLoadLegacyGhosttyConfig(
+                newConfigFileSize: releaseConfigSize,
+                legacyConfigFileSize: releaseLegacyConfigSize
+            ), !paths.contains(releaseLegacyConfig.path) {
+                paths.append(releaseLegacyConfig.path)
+            }
         }
 
         return paths
@@ -2536,7 +2526,7 @@ class GhosttyApp {
         return size.intValue
     }
 
-    /// Scans a single config file for font settings relevant to cmux's
+    /// Scans a single config file for font settings relevant to zerocmux's
     /// injected CJK fallback and updates the pending recursive config-file
     /// queue using Ghostty's repeatable path semantics.
     private static func scanFontConfigFile(
@@ -2741,7 +2731,7 @@ class GhosttyApp {
 
 #if DEBUG
         cmuxDebugLog(
-            "loaded cmux app support ghostty config from: \(urls.map(\.path).joined(separator: ", "))"
+            "loaded zerocmux app support ghostty config from: \(urls.map(\.path).joined(separator: ", "))"
         )
 #endif
         #endif
@@ -3776,7 +3766,7 @@ class GhosttyApp {
                 #endif
                 return false
             }
-            // Route markdown file URLs into the cmux viewer when the toggle is
+            // Route markdown file URLs into the zerocmux viewer when the toggle is
             // on AND the link is local. URL fragments/queries are stripped (the
             // panel only needs the file path), so links emitted by tools like
             // Claude Code (`foo.md#L42`) still route into the viewer. Anything
@@ -4903,7 +4893,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
            !inheritedClaudeConfigDir.isEmpty {
             env["CLAUDE_CONFIG_DIR"] = ClaudeConfigDirectoryPath.preferredPath(inheritedClaudeConfigDir)
         }
-        if let bundledCLIURL = Bundle.main.resourceURL?.appendingPathComponent("bin/cmux"),
+        if let bundledCLIURL = Bundle.main.resourceURL?.appendingPathComponent("bin/zerocmux"),
            FileManager.default.isExecutableFile(atPath: bundledCLIURL.path) {
             setManagedEnvironmentValue("CMUX_BUNDLED_CLI_PATH", bundledCLIURL.path)
         }
@@ -5410,10 +5400,10 @@ final class TerminalSurface: Identifiable, ObservableObject {
         _ = ghostty_surface_key(surface, keyEvent)
     }
 
-    func requestBackgroundSurfaceStartIfNeeded() {
+    func requestBackgroundSurfaceStartIfNeeded(allowDetachedView: Bool = false) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
-                self?.requestBackgroundSurfaceStartIfNeeded()
+                self?.requestBackgroundSurfaceStartIfNeeded(allowDetachedView: allowDetachedView)
             }
             return
         }
@@ -5428,7 +5418,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
             self.backgroundSurfaceStartQueued = false
             guard self.allowsRuntimeSurfaceCreation() else { return }
             guard self.surface == nil, let view = self.attachedView else { return }
-            guard view.window != nil else {
+            guard allowDetachedView || view.window != nil else {
                 #if DEBUG
                 cmuxDebugLog(
                     "surface.background_start.defer surface=\(self.id.uuidString.prefix(8)) reason=noWindow"
@@ -5814,7 +5804,7 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         NSPasteboard.PasteboardType(UTType.heif.identifier)
     ])
     private static let tabTransferPasteboardType = NSPasteboard.PasteboardType("com.splittabbar.tabtransfer")
-    private static let sidebarTabReorderPasteboardType = NSPasteboard.PasteboardType("com.cmux.sidebar-tab-reorder")
+    private static let sidebarTabReorderPasteboardType = NSPasteboard.PasteboardType("com.zerocmux.sidebar-tab-reorder")
 
     private enum WordPathResolutionSource: String {
         case quicklook
@@ -6086,7 +6076,18 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
     }
 
     func applyWindowBackgroundIfActive() {
-        guard let window else { return }
+        guard let window else {
+            if !suppressingReparentFocus {
+                desiredFocus = false
+                terminalSurface?.setFocus(false)
+#if DEBUG
+                cmuxDebugLog(
+                    "focus.windowDetach.yield surface=\(terminalSurface?.id.uuidString.prefix(5) ?? "nil")"
+                )
+#endif
+            }
+            return
+        }
         let appDelegate = AppDelegate.shared
         let owningManager = tabId.flatMap { appDelegate?.tabManagerFor(tabId: $0) }
         let owningSelectedTabId = owningManager?.selectedTabId
@@ -6527,7 +6528,11 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
     }
 
     private func requestInputRecoveryAfterSurfaceMiss(reason: String) {
-        terminalSurface?.requestBackgroundSurfaceStartIfNeeded()
+        if window == nil {
+            desiredFocus = false
+            terminalSurface?.setFocus(false)
+        }
+        terminalSurface?.requestBackgroundSurfaceStartIfNeeded(allowDetachedView: true)
 #if DEBUG
         cmuxDebugLog(
             "focus.input_recovery surface=\(terminalSurface?.id.uuidString.prefix(5) ?? "nil") " +
@@ -6788,6 +6793,22 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
     @IBAction func pasteAsPlainText(_ sender: Any?) {
         guard prepareSurfaceForPaste(reason: "pasteAsPlainText.missingSurface") else { return }
         _ = performBindingAction("paste_from_clipboard")
+    }
+
+    private func performStandardTerminalPasteShortcutFallback(for event: NSEvent) -> Bool {
+        let flags = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting([.numericPad, .function, .capsLock])
+        guard flags == [.command] || flags == [.command, .shift] else { return false }
+        guard event.keyCode == 9 || event.charactersIgnoringModifiers?.lowercased() == "v" else {
+            return false
+        }
+
+        let selector: Selector = flags.contains(.shift)
+            ? #selector(pasteAsPlainText(_:))
+            : #selector(paste(_:))
+        _ = perform(selector, with: nil)
+        return true
     }
 
     private func applyConfiguredMenuShortcut(_ shortcut: StoredShortcut, to item: NSMenuItem) {
@@ -7187,8 +7208,15 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
             }
 
             // For performable bindings where the menu didn't handle the event,
-            // fall through to keyDown so Ghostty can perform the action directly
-            // (e.g. paste when no menu item exists).
+            // keep standard paste shortcuts on the responder-action path when the
+            // menu was unavailable or missed. This preserves paste surface recovery
+            // and avoids replaying Cmd+V as a raw terminal key event.
+            if performStandardTerminalPasteShortcutFallback(for: event) {
+                return true
+            }
+
+            // Other performable bindings fall through to keyDown so Ghostty can
+            // perform the action directly when no menu item exists.
             keyDown(with: event)
             return true
         }
@@ -7288,6 +7316,18 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
         let ensureSurfaceStart = ProcessInfo.processInfo.systemUptime
 #endif
+#if DEBUG
+        let dismissNotificationStart = ProcessInfo.processInfo.systemUptime
+#endif
+        if let terminalSurface {
+            AppDelegate.shared?.tabManager?.dismissNotificationOnDirectInteraction(
+                tabId: terminalSurface.tabId,
+                surfaceId: terminalSurface.id
+            )
+        }
+#if DEBUG
+        dismissNotificationMs = (ProcessInfo.processInfo.systemUptime - dismissNotificationStart) * 1000.0
+#endif
         guard let surface = ensureSurfaceReadyForInput() else {
             requestInputRecoveryAfterSurfaceMiss(reason: "keyDown.missingSurface")
 #if DEBUG
@@ -7302,18 +7342,6 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         if let mode = RightSidebarMode.modeShortcut(for: event), let window, AppDelegate.shared?.shouldRouteRightSidebarModeShortcut(in: window) == true {
             _ = AppDelegate.shared?.focusRightSidebarInActiveMainWindow(mode: mode, focusFirstItem: true, preferredWindow: window)
             return
-        }
-        if let terminalSurface {
-#if DEBUG
-            let dismissNotificationStart = ProcessInfo.processInfo.systemUptime
-#endif
-            AppDelegate.shared?.tabManager?.dismissNotificationOnDirectInteraction(
-                tabId: terminalSurface.tabId,
-                surfaceId: terminalSurface.id
-            )
-#if DEBUG
-            dismissNotificationMs = (ProcessInfo.processInfo.systemUptime - dismissNotificationStart) * 1000.0
-#endif
         }
         let flags = ShortcutStroke.normalizedModifierFlags(from: event.modifierFlags)
         if !cmuxFindEventIsPlainEscape(event) { endFindEscapeSuppression() }
@@ -7543,7 +7571,8 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
             // These never have "composing" set to true because these are the
             // result of a composition.
             keyEvent.composing = false
-            for text in accumulatedText {
+            for rawText in accumulatedText {
+                let text = normalizedCommittedText(rawText, for: translationEvent)
                 if shouldSendText(text) {
                     shouldRefreshAfterTextInput = true
 #if DEBUG
@@ -7644,9 +7673,7 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
                         handled = sendGhosttyKey(surface, keyEvent)
                         #endif
                     }
-                    if handled {
-                        notePotentialDeferredNumpadIMECommit(text: text, event: event)
-                    }
+                    notePotentialDeferredNumpadIMECommit(text: text, event: event)
 #if DEBUG
                     ghosttySendMs += (ProcessInfo.processInfo.systemUptime - ghosttySendStart) * 1000.0
                     CmuxTypingTiming.logDuration(
@@ -7921,6 +7948,19 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
 
         return chars
+    }
+
+    private func normalizedCommittedText(_ text: String, for event: NSEvent) -> String {
+        guard text.count == 1,
+              text.unicodeScalars.first?.value == 0x1B else {
+            return text
+        }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == [.shift],
+           event.charactersIgnoringModifiers == "`" {
+            return "~"
+        }
+        return text
     }
 
     /// Get the unshifted codepoint for the key event
@@ -9517,7 +9557,7 @@ final class GhosttySurfaceScrollView: NSView {
     private var lastDragGeometryLogSignature: String?
     private var dragLayoutLogSequence: UInt64 = 0
     private static let tabTransferPasteboardType = NSPasteboard.PasteboardType("com.splittabbar.tabtransfer")
-    private static let sidebarTabReorderPasteboardType = NSPasteboard.PasteboardType("com.cmux.sidebar-tab-reorder")
+    private static let sidebarTabReorderPasteboardType = NSPasteboard.PasteboardType("com.zerocmux.sidebar-tab-reorder")
     private static var flashCounts: [UUID: Int] = [:]
     private static var drawCounts: [UUID: Int] = [:]
     private static var lastDrawTimes: [UUID: CFTimeInterval] = [:]
@@ -10610,38 +10650,67 @@ final class GhosttySurfaceScrollView: NSView {
     }
 
     private func canApplyMountedSearchFieldFocusRequest() -> Bool {
-        guard let terminalSurface = surfaceView.terminalSurface,
-              let app = AppDelegate.shared,
-              let manager = app.tabManagerFor(tabId: terminalSurface.tabId),
-              manager.selectedTabId == terminalSurface.tabId,
+        guard let terminalSurface = surfaceView.terminalSurface else {
+            return false
+        }
+
+        guard let app = AppDelegate.shared,
+              let manager = app.tabManagerFor(tabId: terminalSurface.tabId) else {
+            return window?.isKeyWindow == true &&
+                isActive &&
+                surfaceView.isVisibleInUI &&
+                !isHiddenOrHasHiddenAncestor &&
+                !surfaceView.isHiddenOrHasHiddenAncestor
+        }
+
+        guard manager.selectedTabId == terminalSurface.tabId,
               let workspace = manager.tabs.first(where: { $0.id == terminalSurface.tabId }) else {
             return false
         }
+
         return workspace.focusedPanelId == terminalSurface.id
     }
 
     private func requestMountedSearchFieldFocus(
         generation: UInt64,
         force: Bool,
-        attemptsRemaining: Int = 4
+        attemptsRemaining: Int = 40
     ) {
         guard searchOverlayMutationGeneration == generation else { return }
         guard force || searchFocusTarget == .searchField else { return }
-        guard canApplyMountedSearchFieldFocusRequest() else { return }
+        guard canApplyMountedSearchFieldFocusRequest() else {
+            retryMountedSearchFieldFocus(
+                generation: generation,
+                force: force,
+                attemptsRemaining: attemptsRemaining
+            )
+            return
+        }
         guard let overlay = searchOverlayHostingView,
               overlay.superview === self,
-              let window,
-              window.isKeyWindow else { return }
+              let window else {
+            retryMountedSearchFieldFocus(
+                generation: generation,
+                force: force,
+                attemptsRemaining: attemptsRemaining
+            )
+            return
+        }
+        guard window.isKeyWindow else {
+            retryMountedSearchFieldFocus(
+                generation: generation,
+                force: force,
+                attemptsRemaining: attemptsRemaining
+            )
+            return
+        }
 
         guard let field = findEditableSearchField(in: overlay) else {
-            guard attemptsRemaining > 0 else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-                self?.requestMountedSearchFieldFocus(
-                    generation: generation,
-                    force: force,
-                    attemptsRemaining: attemptsRemaining - 1
-                )
-            }
+            retryMountedSearchFieldFocus(
+                generation: generation,
+                force: force,
+                attemptsRemaining: attemptsRemaining
+            )
             return
         }
 
@@ -10660,6 +10729,21 @@ final class GhosttySurfaceScrollView: NSView {
 #endif
         guard !result, attemptsRemaining > 0 else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            self?.requestMountedSearchFieldFocus(
+                generation: generation,
+                force: force,
+                attemptsRemaining: attemptsRemaining - 1
+            )
+        }
+    }
+
+    private func retryMountedSearchFieldFocus(
+        generation: UInt64,
+        force: Bool,
+        attemptsRemaining: Int
+    ) {
+        guard attemptsRemaining > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.requestMountedSearchFieldFocus(
                 generation: generation,
                 force: force,
@@ -11712,6 +11796,7 @@ final class GhosttySurfaceScrollView: NSView {
             if let firstResponder = window.firstResponder,
                isCurrentSurfaceSearchFieldResponder(firstResponder) {
                 surfaceView.terminalSurface?.setFocus(false)
+                _ = cmuxFindTextFieldOwner(for: firstResponder)?.cmuxApplyRememberedSelectionIfEditing()
 #if DEBUG
                 cmuxDebugLog(
                     "find.restoreSearchFocus.skip surface=\(surfaceShort) target=searchField " +
@@ -11777,6 +11862,10 @@ final class GhosttySurfaceScrollView: NSView {
 
         surfaceView.terminalSurface?.setFocus(false)
 
+        if alreadyFocused {
+            _ = (field as? FindSelectionTrackingTextField)?.cmuxApplyRememberedSelectionIfEditing()
+        }
+
 #if DEBUG
         if alreadyFocused {
             cmuxDebugLog(
@@ -11788,6 +11877,9 @@ final class GhosttySurfaceScrollView: NSView {
         guard !alreadyFocused else { return true }
 
         let result = window.makeFirstResponder(field)
+        if result {
+            _ = (field as? FindSelectionTrackingTextField)?.cmuxApplyRememberedSelectionIfEditing()
+        }
         let ownsField = mountedSearchFieldOwnsResponder(window.firstResponder, field: field)
 
 #if DEBUG

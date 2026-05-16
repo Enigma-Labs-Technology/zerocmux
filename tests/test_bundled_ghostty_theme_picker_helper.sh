@@ -21,10 +21,10 @@ if [ -n "$APP_PATH" ]; then
 else
   case "$CONFIGURATION" in
     Debug)
-      APP_NAME="cmux DEV.app"
+      APP_NAME="zerocmux DEV.app"
       ;;
     Release)
-      APP_NAME="cmux.app"
+      APP_NAME="zerocmux.app"
       ;;
     *)
       echo "FAIL: unsupported configuration $CONFIGURATION" >&2
@@ -37,7 +37,7 @@ else
 
   xcodebuild \
     -project GhosttyTabs.xcodeproj \
-    -scheme cmux \
+    -scheme zerocmux \
     -configuration "$CONFIGURATION" \
     -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
     -disableAutomaticPackageResolution \
@@ -185,27 +185,27 @@ PY
 
 while IFS= read -r CONFIG_PATH; do
   if [ ! -f "$CONFIG_PATH" ]; then
-    echo "FAIL: Enter did not write the cmux theme override file at $CONFIG_PATH" >&2
+    echo "FAIL: Enter did not write the zerocmux theme override file at $CONFIG_PATH" >&2
     exit 1
   fi
 
-  if ! grep -qx '# cmux themes start' "$CONFIG_PATH"; then
-    echo "FAIL: cmux theme override start marker missing" >&2
+  if ! grep -qx '# zerocmux themes start' "$CONFIG_PATH"; then
+    echo "FAIL: zerocmux theme override start marker missing" >&2
     cat "$CONFIG_PATH" >&2
     exit 1
   fi
 
   if ! grep -Eq '^theme = light:.+,dark:.+$' "$CONFIG_PATH"; then
-    echo "FAIL: cmux theme override did not set both light and dark themes" >&2
+    echo "FAIL: zerocmux theme override did not set both light and dark themes" >&2
     cat "$CONFIG_PATH" >&2
     exit 1
   fi
 
-  if ! grep -qx '# cmux themes end' "$CONFIG_PATH"; then
-    echo "FAIL: cmux theme override end marker missing" >&2
+  if ! grep -qx '# zerocmux themes end' "$CONFIG_PATH"; then
+    echo "FAIL: zerocmux theme override end marker missing" >&2
     cat "$CONFIG_PATH" >&2
     exit 1
   fi
 done < "$RESULTS_PATH"
 
-echo "PASS: bundled Ghostty theme picker helper applies highlighted cmux theme on Enter"
+echo "PASS: bundled Ghostty theme picker helper applies highlighted zerocmux theme on Enter"

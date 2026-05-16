@@ -639,7 +639,8 @@ final class CmuxWebView: WKWebView {
             return finish(super.performKeyEquivalent(with: event))
         }
 
-        if AppDelegate.shared?.handleBrowserSurfaceKeyEquivalentBeforeMainMenu(event) == true {
+        if !cmuxIsLikelyWebInspectorResponder(window?.firstResponder),
+           AppDelegate.shared?.handleBrowserSurfaceKeyEquivalentBeforeMainMenu(event) == true {
             return finish(true)
         }
 
@@ -1976,7 +1977,7 @@ final class CmuxWebView: WKWebView {
         NSPasteboard.PasteboardType("public.text"),
         NSPasteboard.PasteboardType("public.plain-text"),
         NSPasteboard.PasteboardType("com.splittabbar.tabtransfer"),
-        NSPasteboard.PasteboardType("com.cmux.sidebar-tab-reorder"),
+        NSPasteboard.PasteboardType("com.zerocmux.sidebar-tab-reorder"),
     ]
 
     static func shouldRejectInternalPaneDrag(_ pasteboardTypes: [NSPasteboard.PasteboardType]?) -> Bool {

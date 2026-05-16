@@ -9,9 +9,6 @@ import LocalAuthentication
 #if canImport(Security)
 import Security
 #endif
-#if canImport(Sentry)
-import Sentry
-#endif
 
 struct CLIError: Error, CustomStringConvertible {
     let message: String
@@ -45,306 +42,24 @@ private enum CLISocketEnvironment {
     }
 }
 
-private final class CLISocketSentryTelemetry {
-    private struct PendingBreadcrumb {
-        let message: String
-        let data: [String: Any]
-    }
-
-    private let command: String
-    private let subcommand: String
-    private let socketPath: String
-    private let envSocketPath: String?
-    private let workspaceId: String?
-    private let surfaceId: String?
-    private let disabledByEnv: Bool
-    private var pendingBreadcrumbs: [PendingBreadcrumb] = []
-
-#if canImport(Sentry)
-    private static let startupLock = NSLock()
-    private static var started = false
-    private static let dsn = "https://ecba1ec90ecaee02a102fba931b6d2b3@o4507547940749312.ingest.us.sentry.io/4510796264636416"
-
-    private static func currentSentryReleaseName() -> String? {
-        guard let bundleIdentifier = currentSentryBundleIdentifier(),
-              let version = currentBundleVersionValue(forKey: "CFBundleShortVersionString"),
-              let build = currentBundleVersionValue(forKey: "CFBundleVersion")
-        else {
-            return nil
-        }
-        return "\(bundleIdentifier)@\(version)+\(build)"
-    }
-
-    private static func currentSentryBundleIdentifier() -> String? {
-        if let bundleIdentifier = ProcessInfo.processInfo.environment["CMUX_BUNDLE_ID"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !bundleIdentifier.isEmpty {
-            return bundleIdentifier
-        }
-
-        if let bundleIdentifier = currentSentryBundle()?.bundleIdentifier?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !bundleIdentifier.isEmpty {
-            return bundleIdentifier
-        }
-
-        return nil
-    }
-
-    private static func currentBundleVersionValue(forKey key: String) -> String? {
-        guard let value = currentSentryBundle()?.infoDictionary?[key] as? String else {
-            return nil
-        }
-
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
-            return nil
-        }
-        return trimmed
-    }
-
-    private static func currentSentryBundle() -> Bundle? {
-        if Bundle.main.bundleIdentifier?.isEmpty == false {
-            return Bundle.main
-        }
-
-        guard let executableURL = currentExecutableURL() else {
-            return Bundle.main
-        }
-
-        var current = executableURL.deletingLastPathComponent().standardizedFileURL
-        while true {
-            if current.pathExtension == "app", let bundle = Bundle(url: current) {
-                return bundle
-            }
-
-            if current.lastPathComponent == "Contents" {
-                let appURL = current.deletingLastPathComponent().standardizedFileURL
-                if appURL.pathExtension == "app", let bundle = Bundle(url: appURL) {
-                    return bundle
-                }
-            }
-
-            guard let parent = parentSearchURL(for: current) else {
-                break
-            }
-            current = parent
-        }
-
-        return Bundle.main
-    }
-
-    private static func currentExecutableURL() -> URL? {
-        var size: UInt32 = 0
-        _ = _NSGetExecutablePath(nil, &size)
-        if size > 0 {
-            var buffer = Array<CChar>(repeating: 0, count: Int(size))
-            if _NSGetExecutablePath(&buffer, &size) == 0 {
-                return URL(fileURLWithPath: String(cString: buffer)).standardizedFileURL
-            }
-        }
-
-        return Bundle.main.executableURL?.standardizedFileURL
-    }
-
-    private static func parentSearchURL(for url: URL) -> URL? {
-        let standardized = url.standardizedFileURL
-        let path = standardized.path
-        guard !path.isEmpty, path != "/" else {
-            return nil
-        }
-
-        let parent = standardized.deletingLastPathComponent().standardizedFileURL
-        guard parent.path != path else {
-            return nil
-        }
-        return parent
-    }
-#endif
-
+private final class CLISocketDiagnosticsReporter {
     init(command: String, commandArgs: [String], socketPath: String, processEnv: [String: String]) {
-        self.command = command.lowercased()
-        self.subcommand = commandArgs.first?.lowercased() ?? "help"
-        self.socketPath = socketPath
-        self.envSocketPath = CLISocketEnvironment.socketPathForTelemetry(in: processEnv)
-        self.workspaceId = processEnv["CMUX_WORKSPACE_ID"]
-        self.surfaceId = processEnv["CMUX_SURFACE_ID"]
-        self.disabledByEnv =
-            processEnv["CMUX_CLI_SENTRY_DISABLED"] == "1" ||
-            processEnv["CMUX_CLAUDE_HOOK_SENTRY_DISABLED"] == "1"
+        _ = command
+        _ = commandArgs
+        _ = socketPath
+        _ = processEnv
     }
 
     func breadcrumb(_ message: String, data: [String: Any] = [:]) {
-        guard shouldEmit else { return }
-#if canImport(Sentry)
-        pendingBreadcrumbs.append(PendingBreadcrumb(message: message, data: data))
-#endif
+        _ = message
+        _ = data
     }
 
     func captureError(stage: String, error: Error, data: [String: Any] = [:]) {
-        guard shouldEmit else { return }
-#if canImport(Sentry)
-        Self.ensureStarted()
-        flushPendingBreadcrumbs()
-        var context = baseContext()
-        context["stage"] = stage
-        context["error"] = String(describing: error)
-        for (key, value) in socketDiagnostics() {
-            context[key] = value
-        }
-        for (key, value) in data {
-            context[key] = value
-        }
-        let subcommand = self.subcommand
-        let command = self.command
-        _ = SentrySDK.capture(error: error) { scope in
-            scope.setLevel(.error)
-            scope.setTag(value: "cmux-cli", key: "component")
-            scope.setTag(value: command, key: "cli_command")
-            scope.setTag(value: subcommand, key: "cli_subcommand")
-            scope.setContext(value: context, key: "cli_socket")
-        }
-        SentrySDK.flush(timeout: 2.0)
-#endif
+        _ = stage
+        _ = error
+        _ = data
     }
-
-    private var shouldEmit: Bool {
-        !disabledByEnv
-    }
-
-#if canImport(Sentry)
-    private func flushPendingBreadcrumbs() {
-        for pending in pendingBreadcrumbs {
-            addBreadcrumb(message: pending.message, data: pending.data)
-        }
-        pendingBreadcrumbs.removeAll()
-    }
-
-    private func addBreadcrumb(message: String, data: [String: Any]) {
-        var payload = baseContext()
-        for (key, value) in data {
-            payload[key] = value
-        }
-        let crumb = Breadcrumb(level: .info, category: "cmux.cli")
-        crumb.message = message
-        crumb.data = payload
-        SentrySDK.addBreadcrumb(crumb)
-    }
-#endif
-
-    private func baseContext() -> [String: Any] {
-        var context: [String: Any] = [
-            "command": command,
-            "subcommand": subcommand,
-            "requested_socket_path": socketPath,
-            "env_socket_path": envSocketPath ?? "<unset>"
-        ]
-        if let workspaceId {
-            context["workspace_id"] = workspaceId
-        }
-        if let surfaceId {
-            context["surface_id"] = surfaceId
-        }
-        return context
-    }
-
-    private func socketDiagnostics() -> [String: Any] {
-        var context: [String: Any] = [
-            "cwd": FileManager.default.currentDirectoryPath,
-            "uid": Int(getuid()),
-            "euid": Int(geteuid())
-        ]
-
-        var st = stat()
-        if lstat(socketPath, &st) == 0 {
-            context["socket_exists"] = true
-            context["socket_mode"] = String(format: "%o", Int(st.st_mode & 0o7777))
-            context["socket_owner_uid"] = Int(st.st_uid)
-            context["socket_owner_gid"] = Int(st.st_gid)
-            context["socket_file_type"] = Self.fileTypeDescription(mode: st.st_mode)
-        } else {
-            let code = errno
-            context["socket_exists"] = false
-            context["socket_errno"] = Int(code)
-            context["socket_errno_description"] = String(cString: strerror(code))
-        }
-
-        let tmpSockets = Self.discoverSockets(in: "/tmp", limit: 10)
-        if !tmpSockets.isEmpty {
-            context["tmp_cmux_sockets"] = tmpSockets
-        }
-        let taggedSockets = tmpSockets.filter { $0 != CLISocketPathResolver.legacyDefaultSocketPath }
-        if CLISocketPathResolver.isImplicitDefaultPath(socketPath),
-           (envSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
-           !taggedSockets.isEmpty {
-            context["possible_root_cause"] = "CMUX_SOCKET_PATH missing while tagged sockets exist"
-        }
-
-        return context
-    }
-
-    private static func fileTypeDescription(mode: mode_t) -> String {
-        switch mode & mode_t(S_IFMT) {
-        case mode_t(S_IFSOCK):
-            return "socket"
-        case mode_t(S_IFREG):
-            return "regular"
-        case mode_t(S_IFDIR):
-            return "directory"
-        case mode_t(S_IFLNK):
-            return "symlink"
-        default:
-            return "other"
-        }
-    }
-
-    private static func discoverSockets(in directory: String, limit: Int) -> [String] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: directory) else {
-            return []
-        }
-        var sockets: [String] = []
-        for name in entries.sorted() {
-            guard name.hasPrefix("cmux"), name.hasSuffix(".sock") else { continue }
-            let fullPath = URL(fileURLWithPath: directory)
-                .appendingPathComponent(name, isDirectory: false)
-                .path
-            var st = stat()
-            guard lstat(fullPath, &st) == 0 else { continue }
-            guard (st.st_mode & mode_t(S_IFMT)) == mode_t(S_IFSOCK) else { continue }
-            sockets.append(fullPath)
-            if sockets.count >= limit {
-                break
-            }
-        }
-        return sockets
-    }
-
-#if canImport(Sentry)
-    private static func ensureStarted() {
-        startupLock.lock()
-        defer { startupLock.unlock() }
-        guard !started else { return }
-        SentrySDK.start { options in
-            options.dsn = dsn
-            options.releaseName = currentSentryReleaseName()
-#if DEBUG
-            options.environment = "development-cli"
-#else
-            options.environment = "production-cli"
-#endif
-            options.debug = false
-            options.sendDefaultPii = true
-            options.attachStacktrace = true
-            options.tracesSampleRate = 0.0
-            options.enableAppHangTracking = false
-            options.enableWatchdogTerminationTracking = false
-            options.enableAutoSessionTracking = false
-            options.enableCaptureFailedRequests = false
-            options.enableMetricKit = false
-        }
-        started = true
-    }
-#endif
 }
 
 struct WindowInfo {
@@ -613,9 +328,11 @@ enum CLIIDFormat: String {
 }
 
 enum SocketPasswordResolver {
-    private static let service = "com.cmuxterm.app.socket-control"
+    private static let service = "com.kernelalex.zerocmux.socket-control"
+    private static let legacyService = "com.cmuxterm.app.socket-control"
     private static let account = "local-socket-password"
-    private static let directoryName = "cmux"
+    private static let directoryName = "zerocmux"
+    private static let legacyDirectoryName = "cmux"
     private static let fileName = "socket-control-password"
 
     static func resolve(explicit: String?, socketPath: String) -> String? {
@@ -641,16 +358,18 @@ enum SocketPasswordResolver {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
-        let passwordURL = appSupport
-            .appendingPathComponent(directoryName, isDirectory: true)
-            .appendingPathComponent(fileName, isDirectory: false)
-        guard let data = try? Data(contentsOf: passwordURL) else {
-            return nil
+        for candidateDirectoryName in [Self.directoryName, Self.legacyDirectoryName] {
+            let passwordURL = appSupport
+                .appendingPathComponent(candidateDirectoryName, isDirectory: true)
+                .appendingPathComponent(fileName, isDirectory: false)
+            guard let data = try? Data(contentsOf: passwordURL),
+                  let value = String(data: data, encoding: .utf8),
+                  let password = normalized(value) else {
+                continue
+            }
+            return password
         }
-        guard let value = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return normalized(value)
+        return nil
     }
 
     static func keychainServices(
@@ -658,9 +377,9 @@ enum SocketPasswordResolver {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> [String] {
         guard let scope = keychainScope(socketPath: socketPath, environment: environment) else {
-            return [service]
+            return [service, legacyService]
         }
-        return ["\(service).\(scope)", service]
+        return ["\(service).\(scope)", service, "\(legacyService).\(scope)", legacyService]
     }
 
     private static func keychainScope(
@@ -675,7 +394,7 @@ enum SocketPasswordResolver {
         }
 
         let candidate = URL(fileURLWithPath: socketPath).lastPathComponent
-        let prefixes = ["cmux-debug-", "cmux-"]
+        let prefixes = ["zerocmux-debug-", "zerocmux-", "cmux-debug-", "cmux-"]
         for prefix in prefixes {
             guard candidate.hasPrefix(prefix), candidate.hasSuffix(".sock") else { continue }
             let start = candidate.index(candidate.startIndex, offsetBy: prefix.count)
@@ -744,12 +463,16 @@ private enum CLISocketPathSource {
 }
 
 private enum CLISocketPathResolver {
-    private static let appSupportDirectoryName = "cmux"
-    private static let stableSocketFileName = "cmux.sock"
+    private static let appSupportDirectoryName = "zerocmux"
+    private static let legacyAppSupportDirectoryName = "cmux"
+    private static let stableSocketFileName = "zerocmux.sock"
     private static let lastSocketPathFileName = "last-socket-path"
     static let legacyDefaultSocketPath = "/tmp/cmux.sock"
-    private static let fallbackSocketPath = "/tmp/cmux-debug.sock"
-    private static let stagingSocketPath = "/tmp/cmux-staging.sock"
+    private static let fallbackSocketPath = "/tmp/zerocmux-debug.sock"
+    private static let legacyFallbackSocketPath = "/tmp/cmux-debug.sock"
+    private static let stagingSocketPath = "/tmp/zerocmux-staging.sock"
+    private static let legacyStagingSocketPath = "/tmp/cmux-staging.sock"
+    private static let lastSocketPathFile = "/tmp/zerocmux-last-socket-path"
     private static let legacyLastSocketPathFile = "/tmp/cmux-last-socket-path"
 
     static var defaultSocketPath: String {
@@ -792,6 +515,8 @@ private enum CLISocketPathResolver {
 
         if let tag = normalized(environment["CMUX_TAG"]) {
             let slug = sanitizeTagSlug(tag)
+            candidates.append("/tmp/zerocmux-debug-\(slug).sock")
+            candidates.append("/tmp/zerocmux-\(slug).sock")
             candidates.append("/tmp/cmux-debug-\(slug).sock")
             candidates.append("/tmp/cmux-\(slug).sock")
         }
@@ -800,7 +525,9 @@ private enum CLISocketPathResolver {
         candidates.append(defaultSocketPath)
         candidates.append(legacyDefaultSocketPath)
         candidates.append(fallbackSocketPath)
+        candidates.append(legacyFallbackSocketPath)
         candidates.append(stagingSocketPath)
+        candidates.append(legacyStagingSocketPath)
         candidates.append(contentsOf: discoverTaggedSockets(limit: 12))
         if let last = readLastSocketPath() {
             candidates.append(last)
@@ -812,7 +539,15 @@ private enum CLISocketPathResolver {
         let primaryCandidate: String? = stableSocketDirectoryURL()?
             .appendingPathComponent(lastSocketPathFileName, isDirectory: false)
             .path
-        let candidates = [primaryCandidate, legacyLastSocketPathFile].compactMap { $0 }
+        let legacyAppSupportCandidate: String? = legacyStableSocketDirectoryURL()?
+            .appendingPathComponent(lastSocketPathFileName, isDirectory: false)
+            .path
+        let candidates = [
+            primaryCandidate,
+            legacyAppSupportCandidate,
+            lastSocketPathFile,
+            legacyLastSocketPathFile,
+        ].compactMap { $0 }
 
         for candidate in candidates {
             guard let data = try? String(contentsOfFile: candidate, encoding: .utf8) else {
@@ -832,14 +567,19 @@ private enum CLISocketPathResolver {
                 continue
             }
             discovered.reserveCapacity(min(limit, discovered.count + entries.count))
-            for name in entries where name.hasPrefix("cmux") && name.hasSuffix(".sock") {
+            for name in entries where (name.hasPrefix("zerocmux") || name.hasPrefix("cmux")) && name.hasSuffix(".sock") {
                 let path = URL(fileURLWithPath: directory)
                     .appendingPathComponent(name, isDirectory: false)
                     .path
                 var st = stat()
                 guard lstat(path, &st) == 0 else { continue }
                 guard (st.st_mode & mode_t(S_IFMT)) == mode_t(S_IFSOCK) else { continue }
-                if path == defaultSocketPath || path == legacyDefaultSocketPath || path == fallbackSocketPath || path == stagingSocketPath {
+                if path == defaultSocketPath ||
+                    path == legacyDefaultSocketPath ||
+                    path == fallbackSocketPath ||
+                    path == legacyFallbackSocketPath ||
+                    path == stagingSocketPath ||
+                    path == legacyStagingSocketPath {
                     continue
                 }
                 let modified = TimeInterval(st.st_mtimespec.tv_sec) + TimeInterval(st.st_mtimespec.tv_nsec) / 1_000_000_000
@@ -902,11 +642,20 @@ private enum CLISocketPathResolver {
         return appSupportDirectory.appendingPathComponent(appSupportDirectoryName, isDirectory: true)
     }
 
+    private static func legacyStableSocketDirectoryURL() -> URL? {
+        guard let appSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return appSupportDirectory.appendingPathComponent(legacyAppSupportDirectoryName, isDirectory: true)
+    }
+
     private static func socketDiscoveryDirectories() -> [String] {
         let appSupportSocketDirectory: String = stableSocketDirectoryURL()?.path ?? ""
+        let legacyAppSupportSocketDirectory: String = legacyStableSocketDirectoryURL()?.path ?? ""
         return dedupe([
             "/tmp",
             appSupportSocketDirectory,
+            legacyAppSupportSocketDirectory,
         ])
     }
 
@@ -1467,11 +1216,11 @@ final class SocketClient {
         }
 
         guard let watchDirectory = existingWatchDirectory(forPath: path) else {
-            throw CLIError(message: "cmux app did not start in time (socket not found at \(path))")
+            throw CLIError(message: "zerocmux app did not start in time (socket not found at \(path))")
         }
         let watchFD = open(watchDirectory, O_EVTONLY)
         guard watchFD >= 0 else {
-            throw CLIError(message: "cmux app did not start in time (socket not found at \(path))")
+            throw CLIError(message: "zerocmux app did not start in time (socket not found at \(path))")
         }
 
         let queue = DispatchQueue(label: "com.cmux.cli.socket-watch.\(UUID().uuidString)")
@@ -1505,7 +1254,7 @@ final class SocketClient {
         guard semaphore.wait(timeout: .now() + timeout) == .success else {
             source.cancel()
             client.close()
-            throw CLIError(message: "cmux app did not start in time (socket not found at \(path))")
+            throw CLIError(message: "zerocmux app did not start in time (socket not found at \(path))")
         }
 
         source.cancel()
@@ -1689,29 +1438,13 @@ final class SocketClient {
 struct CMUXCLI {
     let args: [String]
 
-    private static let debugLastSocketHintPath = "/tmp/cmux-last-socket-path"
-    private static let vmCreateIdempotencyTTLSeconds: TimeInterval = 10 * 60
-    private static let vmCreateResponseTimeoutSeconds: TimeInterval = 16 * 60
+    private static let debugLastSocketHintPaths = ["/tmp/zerocmux-last-socket-path", "/tmp/cmux-last-socket-path"]
     private static let vmAttachResponseTimeoutSeconds: TimeInterval = 16 * 60
 
-    private func captureSocketTransportError(telemetry: CLISocketSentryTelemetry, stage: String, error: Error, client: SocketClient) {
+    private func captureSocketTransportError(telemetry: CLISocketDiagnosticsReporter, stage: String, error: Error, client: SocketClient) {
         if client.hasUnfinishedOperationTelemetry() {
             telemetry.captureError(stage: stage, error: error, data: client.operationTelemetryContext())
         }
-    }
-
-    private struct VMCreateIdempotencyStore: Codable {
-        var records: [String: VMCreateIdempotencyRecord] = [:]
-    }
-
-    private struct VMCreateIdempotencyRecord: Codable {
-        let key: String
-        let createdAt: TimeInterval
-    }
-
-    private struct ActiveVMCreateIdempotency {
-        let signature: String
-        let key: String
     }
 
     private static func normalizedEnvValue(_ value: String?) -> String? {
@@ -1722,78 +1455,6 @@ struct CMUXCLI {
         return trimmed
     }
 
-    private static func vmCreateIdempotencySignature(image: String?, provider: String?) -> String {
-        let normalizedImage = image?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let normalizedProvider = provider?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
-        return "image=\(normalizedImage)\u{1f}provider=\(normalizedProvider)"
-    }
-
-    private static func normalizedVMProvider(_ provider: String?) throws -> String? {
-        guard let trimmed = provider?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !trimmed.isEmpty else {
-            return nil
-        }
-        let normalized = trimmed.lowercased()
-        guard normalized == "e2b" || normalized == "freestyle" else {
-            throw CLIError(message: "vm new: unsupported provider '\(trimmed)'. Expected e2b or freestyle.")
-        }
-        return normalized
-    }
-
-    private static func vmCreateIdempotencyStoreURL() -> URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cmuxterm", isDirectory: true)
-            .appendingPathComponent("vm-create-idempotency.json", isDirectory: false)
-    }
-
-    private static func loadVMCreateIdempotencyStore(from url: URL) -> VMCreateIdempotencyStore {
-        guard let data = try? Data(contentsOf: url),
-              let store = try? JSONDecoder().decode(VMCreateIdempotencyStore.self, from: data) else {
-            return VMCreateIdempotencyStore()
-        }
-        return store
-    }
-
-    private static func saveVMCreateIdempotencyStore(_ store: VMCreateIdempotencyStore, to url: URL) throws {
-        let directory = url.deletingLastPathComponent()
-        let fileManager = FileManager.default
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(store)
-        try data.write(to: url, options: .atomic)
-        try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-    }
-
-    private static func activeVMCreateIdempotency(image: String?, provider: String?) throws -> ActiveVMCreateIdempotency {
-        let url = vmCreateIdempotencyStoreURL()
-        let signature = vmCreateIdempotencySignature(image: image, provider: provider)
-        let now = Date().timeIntervalSince1970
-        var store = loadVMCreateIdempotencyStore(from: url)
-        store.records = store.records.filter { _, record in
-            !record.key.isEmpty && now - record.createdAt < vmCreateIdempotencyTTLSeconds
-        }
-        if let existing = store.records[signature] {
-            try saveVMCreateIdempotencyStore(store, to: url)
-            return ActiveVMCreateIdempotency(signature: signature, key: existing.key)
-        }
-        let key = UUID().uuidString.lowercased()
-        store.records[signature] = VMCreateIdempotencyRecord(key: key, createdAt: now)
-        try saveVMCreateIdempotencyStore(store, to: url)
-        return ActiveVMCreateIdempotency(signature: signature, key: key)
-    }
-
-    private static func clearVMCreateIdempotency(_ active: ActiveVMCreateIdempotency) {
-        let url = vmCreateIdempotencyStoreURL()
-        var store = loadVMCreateIdempotencyStore(from: url)
-        guard store.records[active.signature]?.key == active.key else { return }
-        store.records.removeValue(forKey: active.signature)
-        try? saveVMCreateIdempotencyStore(store, to: url)
-    }
-
     private static func pathIsSocket(_ path: String) -> Bool {
         var st = stat()
         guard lstat(path, &st) == 0 else { return false }
@@ -1802,16 +1463,17 @@ struct CMUXCLI {
 
     private static func debugSocketPathFromHintFile() -> String? {
 #if DEBUG
-        guard let raw = try? String(contentsOfFile: debugLastSocketHintPath, encoding: .utf8) else {
-            return nil
+        for path in debugLastSocketHintPaths {
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8),
+                  let hinted = normalizedEnvValue(raw),
+                  (hinted.hasPrefix("/tmp/zerocmux-debug") || hinted.hasPrefix("/tmp/cmux-debug")),
+                  hinted.hasSuffix(".sock"),
+                  pathIsSocket(hinted) else {
+                continue
+            }
+            return hinted
         }
-        guard let hinted = normalizedEnvValue(raw),
-              hinted.hasPrefix("/tmp/cmux-debug"),
-              hinted.hasSuffix(".sock"),
-              pathIsSocket(hinted) else {
-            return nil
-        }
-        return hinted
+        return nil
 #else
         return nil
 #endif
@@ -1825,14 +1487,14 @@ struct CMUXCLI {
         if let hinted = debugSocketPathFromHintFile() {
             return hinted
         }
-        return "/tmp/cmux-debug.sock"
+        return "/tmp/zerocmux-debug.sock"
 #else
-        return "/tmp/cmux.sock"
+        return "/tmp/zerocmux.sock"
 #endif
     }
 
     private static let browserDisabledDefaultsKey = "browserDisabledOverride"
-    private static let defaultBrowserSettingsDomain = "com.cmuxterm.app"
+    private static let defaultBrowserSettingsDomain = "com.kernelalex.zerocmux"
 
     private static func currentExecutableURL() -> URL? {
         var size: UInt32 = 0
@@ -1938,7 +1600,7 @@ struct CMUXCLI {
         } else if action == "status" || action == "browser-status" {
             print(disabled ? "disabled" : "enabled")
         } else {
-            print(disabled ? "cmux browser disabled" : "cmux browser enabled")
+            print(disabled ? "zerocmux browser disabled" : "zerocmux browser enabled")
         }
     }
 
@@ -2003,7 +1665,7 @@ struct CMUXCLI {
 
         guard index < args.count else {
             throw CLIError(
-                message: "Missing command. Usage: cmux <path>|<command> [options]. Run 'cmux --help' for the full command list.",
+                message: "Missing command. Usage: zerocmux <path>|<command> [options]. Run 'zerocmux --help' for the full command list.",
                 exitCode: 2
             )
         }
@@ -2025,13 +1687,13 @@ struct CMUXCLI {
             if dispatchSubcommandHelp(command: command, commandArgs: commandArgs) {
                 return
             }
-            print("Unknown command '\(command)'. Run 'cmux help' to see available commands.")
+            print("Unknown command '\(command)'. Run 'zerocmux help' to see available commands.")
             return
         }
 
         if command == "help" { print(usage()); return }
         if command == "remote-daemon-status" { try runRemoteDaemonStatus(commandArgs: commandArgs, jsonOutput: jsonOutput); return }
-        if command == "vm-pty-connect" { try runVMPtyConnect(commandArgs: commandArgs); return }
+        if command == "vm-pty-connect" { try hostedServicesUnavailable(jsonOutput: jsonOutput); return }
         if command == "docs" { try runDocsCommand(commandArgs: commandArgs, jsonOutput: jsonOutput); return }
         if command == "welcome" { printWelcome(); return }
 
@@ -2071,7 +1733,7 @@ struct CMUXCLI {
         } else {
             socketPathSource = .implicitDefault
         }
-        let cliTelemetry = CLISocketSentryTelemetry(
+        let cliTelemetry = CLISocketDiagnosticsReporter(
             command: command,
             commandArgs: commandArgs,
             socketPath: socketPath,
@@ -2121,16 +1783,6 @@ struct CMUXCLI {
         if command == "open" { try runOpenCommand(commandArgs: commandArgs, socketPath: resolvedSocketPath, explicitPassword: socketPasswordArg, jsonOutput: jsonOutput, idFormat: try resolvedIDFormat(jsonOutput: jsonOutput, raw: idFormatArg)); return }
         if command == "restore-session" {
             try runRestoreSession(
-                commandArgs: commandArgs,
-                socketPath: resolvedSocketPath,
-                explicitPassword: socketPasswordArg,
-                jsonOutput: jsonOutput
-            )
-            return
-        }
-
-        if command == "feedback" {
-            try runFeedback(
                 commandArgs: commandArgs,
                 socketPath: resolvedSocketPath,
                 explicitPassword: socketPasswordArg,
@@ -2197,7 +1849,7 @@ struct CMUXCLI {
         }
         if command == "setup-hooks" || command == "uninstall-hooks" { try runSetupHooks(uninstall: command == "uninstall-hooks"); return } // Backwards compatibility for old hook setup docs/scripts.
         if (command == "codex-hook" || command == "feed-hook"), processEnv["CMUX_SURFACE_ID"]?.isEmpty != false, processEnv["CMUX_WORKSPACE_ID"]?.isEmpty != false,
-           !commandArgs.contains(where: { $0 == "--workspace" || $0 == "--surface" || $0.hasPrefix("--workspace=") || $0.hasPrefix("--surface=") }) { print("{}"); return } // Backwards compatibility for old installed hooks outside cmux terminals.
+           !commandArgs.contains(where: { $0 == "--workspace" || $0 == "--surface" || $0.hasPrefix("--workspace=") || $0.hasPrefix("--surface=") }) { print("{}"); return } // Backwards compatibility for old installed hooks outside zerocmux terminals.
         if command == "hooks" {
             if try runHooksNoSocketCommand(commandArgs: commandArgs) {
                 return
@@ -2226,7 +1878,7 @@ struct CMUXCLI {
                 )
                 return
             case "help", "--help", "-h":
-                print("Usage: cmux feed tui [--opentui|--legacy]\n       cmux feed clear [--yes]")
+                print("Usage: zerocmux feed tui [--opentui|--legacy]\n       zerocmux feed clear [--yes]")
                 return
             default:
                 throw CLIError(message: "Unknown feed subcommand: \(sub)")
@@ -2314,260 +1966,15 @@ struct CMUXCLI {
             print(jsonString(formatIDs(response, mode: idFormat)))
 
         case "auth":
-            let sub = commandArgs.first?.lowercased() ?? "status"
-            switch sub {
-            case "status":
-                let response = try client.sendV2(method: "auth.status")
-                if jsonOutput {
-                    print(jsonString(response))
-                    break
-                }
-                let signedIn = (response["signed_in"] as? Bool) ?? false
-                if !signedIn {
-                    print("Not signed in.")
-                    print("Run: cmux auth login")
-                    break
-                }
-                let user = response["user"] as? [String: Any]
-                let email = user?["email"] as? String
-                let display = user?["display_name"] as? String
-                let userID = user?["id"] as? String
-                print("Signed in.")
-                if let email { print("  email:    \(email)") }
-                if let display { print("  name:     \(display)") }
-                if let userID { print("  user_id:  \(userID)") }
-                if let teamID = response["selected_team_id"] as? String {
-                    print("  team_id:  \(teamID)")
-                }
-
-            case "login":
-                let statusBefore = try client.sendV2(method: "auth.status")
-                if (statusBefore["signed_in"] as? Bool) == true {
-                    let email = (statusBefore["user"] as? [String: Any])?["email"] as? String
-                    print("Already signed in\(email.map { " as \($0)" } ?? ""). Use `cmux auth logout` to sign out first.")
-                    break
-                }
-                print("Opening sign-in popup on the cmux web app.")
-                // auth.begin_sign_in blocks on the server side until the
-                // popup completes (or 5min timeout). The response is the
-                // callback — no polling.
-                let result = try client.sendV2(method: "auth.begin_sign_in", responseTimeout: 305)
-                if (result["signed_in"] as? Bool) == true {
-                    let email = (result["user"] as? [String: Any])?["email"] as? String
-                    print("Signed in\(email.map { " as \($0)" } ?? "").")
-                } else if (result["timed_out"] as? Bool) == true {
-                    print("Timed out waiting for sign-in. Run `cmux auth status` once you've finished in the popup.")
-                } else {
-                    print("Sign-in did not complete. Run `cmux auth status` to check.")
-                }
-
-            case "logout":
-                let statusBefore = try client.sendV2(method: "auth.status")
-                if (statusBefore["signed_in"] as? Bool) != true {
-                    print("Already signed out.")
-                    break
-                }
-                // auth.sign_out awaits the token clear before replying.
-                let result = try client.sendV2(method: "auth.sign_out")
-                if (result["signed_in"] as? Bool) != true {
-                    print("Signed out.")
-                } else {
-                    print("Sign-out requested but state hasn't cleared yet. Run `cmux auth status` to confirm.")
-                }
-
-            default:
-                throw CLIError(message: "Usage: cmux auth <status|login|logout>")
-            }
+            try hostedServicesUnavailable(jsonOutput: jsonOutput)
 
         case "vm", "cloud":
-            let sub = commandArgs.first?.lowercased() ?? "ls"
-            let rest = Array(commandArgs.dropFirst())
-            switch sub {
-            case "ls", "list":
-                let response = try client.sendV2(method: "vm.list")
-                if jsonOutput {
-                    print(jsonString(response))
-                    break
-                }
-                let vms = (response["vms"] as? [[String: Any]]) ?? []
-                if vms.isEmpty {
-                    print("No cloud VMs. Try: cmux vm new")
-                    break
-                }
-                for vm in vms {
-                    let id = (vm["id"] as? String) ?? "?"
-                    let provider = (vm["provider"] as? String) ?? "?"
-                    let image = (vm["image"] as? String) ?? "?"
-                    print("\(id)  [\(provider)] \(image)")
-                }
-
-            case "new", "create":
-                let (imageOpt, rem0) = parseOption(rest, name: "--image")
-                let (providerOpt, rem1) = parseOption(rem0, name: "--provider")
-                let detach = hasFlag(rem1, name: "--detach") || hasFlag(rem1, name: "-d")
-                let remaining = rem1.filter { $0 != "--detach" && $0 != "-d" }
-                if let unknown = remaining.first(where: { $0.hasPrefix("--") }) {
-                    throw CLIError(message: "vm new: unknown flag '\(unknown)'. Known flags: --image, --provider, --detach/-d")
-                }
-                // Stray positional args (e.g. a typo like `cmux vm new myvm`) previously fell
-                // through and still provisioned a VM. That silently costs the user money and
-                // hides the typo. Reject them explicitly.
-                if let extra = remaining.first(where: { !$0.hasPrefix("--") && $0 != "-d" }) {
-                    throw CLIError(
-                        message: "vm new: unexpected argument '\(extra)'. vm new takes no positional args; use --image / --provider / --detach."
-                    )
-                }
-                let normalizedProvider = try Self.normalizedVMProvider(providerOpt)
-                var params: [String: Any] = [:]
-                if let imageOpt { params["image"] = imageOpt }
-                if let normalizedProvider { params["provider"] = normalizedProvider }
-                let idempotency = try Self.activeVMCreateIdempotency(image: imageOpt, provider: normalizedProvider)
-                params["idempotency_key"] = idempotency.key
-                let vmCreateStartedAt = Date()
-                let response = try client.sendV2(
-                    method: "vm.create",
-                    params: params,
-                    responseTimeout: Self.vmCreateResponseTimeoutSeconds
-                )
-                logVMTiming(
-                    "create",
-                    vmID: (response["id"] as? String) ?? "?",
-                    provider: (response["provider"] as? String) ?? normalizedProvider ?? "?",
-                    startedAt: vmCreateStartedAt
-                )
-                if jsonOutput {
-                    Self.clearVMCreateIdempotency(idempotency)
-                    print(jsonString(response))
-                    break
-                }
-                let id = (response["id"] as? String) ?? "?"
-                let provider = (response["provider"] as? String) ?? "?"
-                let image = (response["image"] as? String) ?? "?"
-                if detach {
-                    Self.clearVMCreateIdempotency(idempotency)
-                    print("OK \(id)")
-                    print("  provider: \(provider)")
-                    print("  image:    \(image)")
-                    break
-                }
-                // Create the VM then drop the user into a cmux-managed workspace. Freestyle
-                // attaches over SSH; E2B attaches over cmuxd-remote WebSocket PTY.
-                let shortId = String(id.prefix(8))
-                print("Created \(id)  [\(provider)]  \(image)")
-                try vmOpenShell(
-                    id: id,
-                    workspaceName: "vm:\(shortId)",
-                    client: client,
-                    jsonOutput: jsonOutput,
-                    idFormat: idFormat
-                )
-                Self.clearVMCreateIdempotency(idempotency)
-
-            case "shell", "attach":
-                guard let vmId = rest.first else {
-                    throw CLIError(message: "Usage: cmux \(command) shell <id>")
-                }
-                let shortId = String(vmId.prefix(8))
-                try vmOpenShell(
-                    id: vmId,
-                    workspaceName: "vm:\(shortId)",
-                    client: client,
-                    jsonOutput: jsonOutput,
-                    idFormat: idFormat
-                )
-
-            case "rm", "destroy", "delete":
-                guard let vmId = rest.first else {
-                    throw CLIError(message: "Usage: cmux vm rm <id>")
-                }
-                _ = try client.sendV2(method: "vm.destroy", params: ["id": vmId], responseTimeout: 60)
-                if jsonOutput {
-                    print("{\"ok\":true,\"id\":\"\(vmId)\"}")
-                } else {
-                    print("OK \(vmId)")
-                }
-
-            case "ssh-info", "ssh":
-                guard let vmId = rest.first else {
-                    throw CLIError(message: "Usage: cmux \(command) ssh <id>")
-                }
-                let response = try client.sendV2(method: "vm.ssh_info", params: ["id": vmId], responseTimeout: 60)
-                if jsonOutput {
-                    print(jsonString(response))
-                    break
-                }
-                let host = (response["host"] as? String) ?? "?"
-                let port = (response["port"] as? Int) ?? 22
-                let username = (response["username"] as? String) ?? "?"
-                let cred = (response["credential"] as? [String: Any]) ?? [:]
-                let credKind = (cred["kind"] as? String) ?? "?"
-                let credValue = (cred["value"] as? String) ?? "?"
-                if credKind == "password" {
-                    print("ssh \(username)@\(host) -p \(port)")
-                    print("")
-                    print("  host:      \(host)")
-                    print("  port:      \(port)")
-                    print("  username:  \(username)")
-                    print("  password:  \(credValue)")
-                } else {
-                    print("authorizedKey credential not yet supported by `cmux \(command) ssh`; raw response:")
-                    print(jsonString(response))
-                }
-
-            case "ssh-attach":
-                try runVMSSHAttach(commandArgs: rest, client: client)
-
-            case "exec":
-                guard let vmId = rest.first else {
-                    throw CLIError(message: "Usage: cmux vm exec <id> -- <command...>")
-                }
-                var commandArgsForVM: [String] = Array(rest.dropFirst())
-                // Consume a leading "--" separator if present.
-                if commandArgsForVM.first == "--" {
-                    commandArgsForVM.removeFirst()
-                }
-                guard !commandArgsForVM.isEmpty else {
-                    throw CLIError(message: "Usage: cmux vm exec <id> -- <command...>")
-                }
-                // Shell-quote each argv element before joining. Plain-space join previously
-                // dropped quoting so `cmux vm exec <id> -- printf '%s\n' "a b"` reached the
-                // VM as `printf %s\n a b`, changing semantics for any non-trivial command
-                // (Codex P2).
-                let command = commandArgsForVM.map(shellQuote).joined(separator: " ")
-                let response = try client.sendV2(
-                    method: "vm.exec",
-                    params: ["id": vmId, "command": command],
-                    responseTimeout: 35
-                )
-                let stdout = (response["stdout"] as? String) ?? ""
-                let stderr = (response["stderr"] as? String) ?? ""
-                let exitCode = (response["exit_code"] as? Int) ?? -1
-                if jsonOutput {
-                    print(jsonString(response))
-                    if exitCode != 0 {
-                        throw CLIError(message: "exit \(exitCode)")
-                    }
-                    break
-                }
-                if !stdout.isEmpty { print(stdout, terminator: stdout.hasSuffix("\n") ? "" : "\n") }
-                if !stderr.isEmpty {
-                    FileHandle.standardError.write(Data(stderr.utf8))
-                    if !stderr.hasSuffix("\n") {
-                        FileHandle.standardError.write(Data("\n".utf8))
-                    }
-                }
-                if exitCode != 0 {
-                    throw CLIError(message: "exit \(exitCode)")
-                }
-
-            default:
-                throw CLIError(message: "Usage: cmux \(command) <ls|new|shell|rm|exec|ssh> [args...]")
-            }
+            try hostedServicesUnavailable(jsonOutput: jsonOutput)
 
         case "rpc":
             guard let method = commandArgs.first?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !method.isEmpty else {
-                throw CLIError(message: "Usage: cmux rpc <method> [json-params]")
+                throw CLIError(message: "Usage: zerocmux rpc <method> [json-params]")
             }
             let params = try parseRPCParams(Array(commandArgs.dropFirst()))
             let response = try client.sendV2(method: method, params: params)
@@ -2725,11 +2132,9 @@ struct CMUXCLI {
         case "ssh-session-end":
             try runSSHSessionEnd(commandArgs: commandArgs, client: client)
         case "vm-pty-attach":
-            try runVMPtyAttach(commandArgs: commandArgs, client: client)
+            try hostedServicesUnavailable(jsonOutput: jsonOutput)
         case "vm-ssh-attach":
-            // Hidden compatibility alias for workspaces created before the split helper was
-            // nested under `cmux vm`.
-            try runVMSSHAttach(commandArgs: commandArgs, client: client)
+            try hostedServicesUnavailable(jsonOutput: jsonOutput)
 
         case "new-workspace":
             let (commandOpt, rem0) = parseOption(commandArgs, name: "--command")
@@ -3542,31 +2947,31 @@ struct CMUXCLI {
             if let first = args.first, first.hasPrefix("-") {
                 throw CLIError(
                     message:
-                        "markdown open: unknown flag '\(first)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
+                        "markdown open: unknown flag '\(first)'. Usage: zerocmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
                 )
             } else if let first = args.first, looksLikePath(first) || first.contains(".") {
                 subArgs = args
             } else if let first = args.first {
-                throw CLIError(message: "Unknown markdown subcommand: \(first). Usage: cmux markdown open <path>")
+                throw CLIError(message: "Unknown markdown subcommand: \(first). Usage: zerocmux markdown open <path>")
             } else {
                 subArgs = []
             }
         }
 
         guard let rawPath = subArgs.first, !rawPath.isEmpty else {
-            throw CLIError(message: "markdown open requires a file path. Usage: cmux markdown open <path>")
+            throw CLIError(message: "markdown open requires a file path. Usage: zerocmux markdown open <path>")
         }
         let trailingArgs = Array(subArgs.dropFirst())
         if let unknownFlag = trailingArgs.first(where: { $0.hasPrefix("-") }) {
             throw CLIError(
                 message:
-                    "markdown open: unknown flag '\(unknownFlag)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
+                    "markdown open: unknown flag '\(unknownFlag)'. Usage: zerocmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
             )
         }
         if let extraArg = trailingArgs.first {
             throw CLIError(
                 message:
-                    "markdown open: unexpected argument '\(extraArg)'. Usage: cmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
+                    "markdown open: unexpected argument '\(extraArg)'. Usage: zerocmux markdown open <path> [--workspace <id|ref|index>] [--surface <id|ref|index>] [--window <id|ref|index>] [--direction right|down|left|up] [--focus <true|false>]"
             )
         }
 
@@ -3613,7 +3018,7 @@ struct CMUXCLI {
         return false
     }
 
-    /// Open a path in cmux by creating a new workspace with the given directory.
+    /// Open a path in zerocmux by creating a new workspace with the given directory.
     /// Launches the app if it isn't already running.
     private func openPath(_ path: String, socketPath: String) throws {
         let resolved = resolvePath(path)
@@ -3657,68 +3062,6 @@ struct CMUXCLI {
 
         // Bring the app to front
         try activateApp()
-    }
-
-    private func runFeedback(
-        commandArgs: [String],
-        socketPath: String,
-        explicitPassword: String?,
-        jsonOutput: Bool
-    ) throws {
-        let (emailOpt, rem0) = parseOption(commandArgs, name: "--email")
-        let (bodyOpt, rem1) = parseOption(rem0, name: "--body")
-        let (imagePaths, rem2) = parseRepeatedOption(rem1, name: "--image")
-        let remaining = rem2.filter { $0 != "--" }
-
-        if let unknown = remaining.first {
-            throw CLIError(message: "feedback: unknown flag '\(unknown)'. Known flags: --email <email>, --body <text>, --image <path>")
-        }
-
-        let client = try connectClient(
-            socketPath: socketPath,
-            explicitPassword: explicitPassword,
-            launchIfNeeded: true
-        )
-        defer { client.close() }
-
-        if emailOpt == nil && bodyOpt == nil && imagePaths.isEmpty {
-            var params: [String: Any] = [:]
-            let env = ProcessInfo.processInfo.environment
-            if let workspaceId = env["CMUX_WORKSPACE_ID"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !workspaceId.isEmpty {
-                params["workspace_id"] = workspaceId
-                params["activate"] = false
-            } else {
-                params["activate"] = true
-            }
-            let response = try client.sendV2(method: "feedback.open", params: params)
-            if jsonOutput {
-                print(jsonString(response))
-            } else {
-                print("OK")
-            }
-            return
-        }
-
-        guard let email = emailOpt?.trimmingCharacters(in: .whitespacesAndNewlines),
-              email.isEmpty == false else {
-            throw CLIError(message: "feedback requires --email <email> when sending feedback")
-        }
-        guard let body = bodyOpt, body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            throw CLIError(message: "feedback requires --body <text> when sending feedback")
-        }
-
-        let resolvedImages = imagePaths.map(resolvePath)
-        let response = try client.sendV2(method: "feedback.submit", params: [
-            "email": email,
-            "body": body,
-            "image_paths": resolvedImages,
-        ])
-        if jsonOutput {
-            print(jsonString(response))
-        } else {
-            print("OK")
-        }
     }
 
     private func runRestoreSession(
@@ -3809,7 +3152,7 @@ struct CMUXCLI {
     private func launchApp() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-a", "cmux"]
+        process.arguments = ["-a", "zerocmux"]
         try process.run()
         process.waitUntilExit()
     }
@@ -3817,7 +3160,7 @@ struct CMUXCLI {
     private func activateApp() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-a", "cmux"]
+        process.arguments = ["-a", "zerocmux"]
         try process.run()
         process.waitUntilExit()
     }
@@ -4591,7 +3934,7 @@ struct CMUXCLI {
         let localSocketPath: String
         let remoteRelayPort: Int
         /// True when the remote is a cloud VM with cmuxd-remote pre-baked in the image.
-        /// Set by `cmux vm new/shell/attach`; false for plain `cmux ssh`.
+        /// Set by `zerocmux vm new/shell/attach`; false for plain `zerocmux ssh`.
         let skipDaemonBootstrap: Bool
 
         init(
@@ -4709,8 +4052,8 @@ struct CMUXCLI {
     }
 
     /// Generic "open a workspace, SSH into the remote, bootstrap cmuxd-remote, forward socket,
-    /// drop the user in a shell" pipeline. The inner loop of `cmux ssh`; also called from
-    /// `cmux vm new`/`shell`/`attach` so cloud VMs reuse the exact same bootstrap.
+    /// drop the user in a shell" pipeline. The inner loop of `zerocmux ssh`; also called from
+    /// `zerocmux vm new`/`shell`/`attach` so cloud VMs reuse the exact same bootstrap.
     private func runSSHWithOptions(
         _ sshOptions: SSHCommandOptions,
         relayID: String,
@@ -4819,7 +4162,7 @@ struct CMUXCLI {
         let reusableTerminalStartupCommand: String
         if let vmIDForSplitAttach,
            sshOptions.skipDaemonBootstrap {
-            let executablePath = resolvedExecutableURL()?.path ?? (args.first ?? "cmux")
+            let executablePath = resolvedExecutableURL()?.path ?? (args.first ?? "zerocmux")
             let splitAttachCommand = "\(shellQuote(executablePath)) vm ssh-attach --id \(shellQuote(vmIDForSplitAttach))"
             reusableTerminalStartupCommand = buildReusableSSHStartupCommand(
                 sshCommand: splitAttachCommand,
@@ -4907,7 +4250,7 @@ struct CMUXCLI {
             if let workspaceWindowId, !workspaceWindowId.isEmpty {
                 selectParams["window_id"] = workspaceWindowId
             }
-            // `cmux ssh` is an explicit "open this remote workspace now" action,
+            // `zerocmux ssh` is an explicit "open this remote workspace now" action,
             // so we intentionally select the newly created workspace after wiring
             // up the remote connection — unless --no-focus is passed.
             if !sshOptions.noFocus {
@@ -5043,7 +4386,7 @@ struct CMUXCLI {
         }
 
         guard let destination else {
-            throw CLIError(message: "ssh requires a destination (example: cmux ssh user@host)")
+            throw CLIError(message: "ssh requires a destination (example: zerocmux ssh user@host)")
         }
         return SSHCommandOptions(
             destination: destination,
@@ -5164,7 +4507,12 @@ struct CMUXCLI {
             "cmux_remote_bootstrap_b64=\(shellQuote(encodedBootstrapScript))",
             "cmux_remote_bootstrap=\"$(printf %s \"$cmux_remote_bootstrap_b64\" | base64 -d 2>/dev/null || printf %s \"$cmux_remote_bootstrap_b64\" | base64 -D 2>/dev/null)\"",
             "cmux_remote_bootstrap=\"$(printf '%s' \"$cmux_remote_bootstrap\" | sed \"s/__CMUX_WORKSPACE_ID__/$cmux_workspace_id/g; s/__CMUX_SURFACE_ID__/$cmux_surface_id/g\")\"",
-            "if ! printf '%s' \"$cmux_remote_bootstrap\" | command \(installSSHPrefix) -T \(shellQuote(options.destination)) \(shellQuote(remoteBootstrapInstallCommand)); then",
+            "printf '%s' \"$cmux_remote_bootstrap\" | command \(installSSHPrefix) -T \(shellQuote(options.destination)) \(shellQuote(remoteBootstrapInstallCommand))",
+            "cmux_bootstrap_status=$?",
+            "if [ \"$cmux_bootstrap_status\" -ne 0 ]; then",
+            "  case \"$cmux_bootstrap_status\" in",
+            "    129|130|143) cmux_ssh_signal_exit \"$cmux_bootstrap_status\" ;;",
+            "  esac",
             "  exit 1",
             "fi",
             "cmux_remote_command_template=\(shellQuote(remoteCommandTemplate))",
@@ -5233,8 +4581,8 @@ struct CMUXCLI {
 
         if includeRelayRPC {
             lines += [
-                "  cmux_relay_cli=\"$HOME/.cmux/bin/cmux\"",
-                "  if [ ! -x \"$cmux_relay_cli\" ]; then cmux_relay_cli=\"$(command -v cmux 2>/dev/null || true)\"; fi",
+                "  cmux_relay_cli=\"$HOME/.cmux/bin/zerocmux\"",
+                "  if [ ! -x \"$cmux_relay_cli\" ]; then cmux_relay_cli=\"$(command -v zerocmux 2>/dev/null || command -v cmux 2>/dev/null || true)\"; fi",
                 "  if [ -n \"$cmux_relay_cli\" ]; then",
                 "    cmux_relay_report_tty='{\"workspace_id\":\"__CMUX_WORKSPACE_ID__\",\"tty_name\":\"'$cmux_bootstrap_tty'\"}'",
                 "    cmux_relay_ports_kick='{\"workspace_id\":\"__CMUX_WORKSPACE_ID__\",\"reason\":\"command\"}'",
@@ -5280,7 +4628,7 @@ struct CMUXCLI {
         commonShellExportLines.append(contentsOf: remoteLocaleLines)
         commonShellExportLines.append(contentsOf: remoteEnvExportLines)
         commonShellExportLines.append("export PATH=\"$HOME/.cmux/bin:$PATH\"")
-        commonShellExportLines.append("export CMUX_BUNDLED_CLI_PATH=\"$HOME/.cmux/bin/cmux\"")
+        commonShellExportLines.append("export CMUX_BUNDLED_CLI_PATH=\"$HOME/.cmux/bin/zerocmux\"")
         commonShellExportLines.append("export CMUX_SHELL_INTEGRATION_DIR=\"\(shellStateDir)\"")
         if let relaySocket {
             commonShellExportLines.append("export CMUX_SOCKET_PATH=\(relaySocket)")
@@ -5511,8 +4859,8 @@ struct CMUXCLI {
             return []
         }
         return [
-            "cmux_relay_cli=\"${CMUX_BUNDLED_CLI_PATH:-$HOME/.cmux/bin/cmux}\"",
-            "if [ ! -x \"$cmux_relay_cli\" ]; then cmux_relay_cli=\"$(command -v cmux 2>/dev/null || true)\"; fi",
+            "cmux_relay_cli=\"${CMUX_BUNDLED_CLI_PATH:-$HOME/.cmux/bin/zerocmux}\"",
+            "if [ ! -x \"$cmux_relay_cli\" ]; then cmux_relay_cli=\"$(command -v zerocmux 2>/dev/null || command -v cmux 2>/dev/null || true)\"; fi",
             "cmux_relay_tty=\"${CMUX_BOOTSTRAP_TTY:-}\"",
             "if [ -z \"$cmux_relay_tty\" ]; then cmux_relay_tty=\"$(tty 2>/dev/null || true)\"; fi",
             "cmux_relay_tty=\"${cmux_relay_tty##*/}\"",
@@ -5722,9 +5070,9 @@ struct CMUXCLI {
             // after the startup command exits, and a dead VM looks identical to "I never
             // SSH'd" — the surface shows `Last login: ... on ttys072` + a local prompt.
             "if [ \"$cmux_ssh_status\" -ne 0 ]; then",
-            "  printf '\\n\\033[31m[cmux] ssh exited with status %s.\\033[0m\\n' \"$cmux_ssh_status\" >&2",
-            "  printf '\\033[2m[cmux] the remote VM may have been paused, destroyed, or lost network.\\033[0m\\n' >&2",
-            "  printf '\\033[2m[cmux] press Enter to close this pane.\\033[0m\\n' >&2",
+            "  printf '\\n\\033[31m[zerocmux] ssh exited with status %s.\\033[0m\\n' \"$cmux_ssh_status\" >&2",
+            "  printf '\\033[2m[zerocmux] the remote VM may have been paused, destroyed, or lost network.\\033[0m\\n' >&2",
+            "  printf '\\033[2m[zerocmux] press Enter to close this pane.\\033[0m\\n' >&2",
             "  IFS= read -r _cmux_dismiss_key 2>/dev/null || true",
             "fi",
             "exit $cmux_ssh_status",
@@ -5760,7 +5108,7 @@ struct CMUXCLI {
             "cmux_status=$?",
             "trap - EXIT HUP INT TERM",
             "cmux_cleanup",
-            "unset cmux_tmp cmux_status",
+            "unset cmux_tmp",
             "unset -f cmux_cleanup 2>/dev/null || true",
             "exit $cmux_status",
         ].joined(separator: "\n")
@@ -5775,17 +5123,14 @@ struct CMUXCLI {
             "&& [ -n \"${CMUX_WORKSPACE_ID:-}\" ]",
             "&& [ -n \"${CMUX_SURFACE_ID:-}\" ]; then",
             "\"${CMUX_BUNDLED_CLI_PATH}\" --socket \"${CMUX_SOCKET_PATH}\" ssh-session-end --relay-port \(remoteRelayPort) --workspace \"${CMUX_WORKSPACE_ID}\" --surface \"${CMUX_SURFACE_ID}\" >/dev/null 2>&1 || true;",
-            "elif command -v cmux >/dev/null 2>&1",
+            "elif command -v zerocmux >/dev/null 2>&1",
             "&& [ -n \"${CMUX_WORKSPACE_ID:-}\" ]",
             "&& [ -n \"${CMUX_SURFACE_ID:-}\" ]; then",
-            "cmux ssh-session-end --relay-port \(remoteRelayPort) --workspace \"${CMUX_WORKSPACE_ID}\" --surface \"${CMUX_SURFACE_ID}\" >/dev/null 2>&1 || true;",
+            "zerocmux ssh-session-end --relay-port \(remoteRelayPort) --workspace \"${CMUX_WORKSPACE_ID}\" --surface \"${CMUX_SURFACE_ID}\" >/dev/null 2>&1 || true;",
             "fi",
         ].joined(separator: " ")
     }
 
-    /// Open an interactive cmux-managed shell on a cloud VM. Freestyle uses the existing SSH
-    /// workspace path. E2B uses the cmuxd-remote WebSocket PTY path because E2B does not expose
-    /// raw TCP/22.
     private func logVMTiming(
         _ stage: String,
         vmID: String,
@@ -5878,7 +5223,7 @@ struct CMUXCLI {
         guard kind == "password" else {
             if kind == "authorizedKey" {
                 throw CLIError(
-                    message: "authorizedKey credentials aren't supported by `cmux vm shell` yet; received from server."
+                    message: "authorizedKey credentials aren't supported by `zerocmux vm shell` yet; received from server."
                 )
             }
             throw CLIError(message: "vm.attach_info returned unknown credential kind: \(kind)")
@@ -5927,11 +5272,11 @@ struct CMUXCLI {
             throw CLIError(message: "vm ssh-attach: unknown flag '\(unknown)'")
         }
         guard remaining.isEmpty else {
-            throw CLIError(message: "Usage: cmux vm ssh-attach --id <vm-id>")
+            throw CLIError(message: "Usage: zerocmux vm ssh-attach --id <vm-id>")
         }
         guard let vmID = vmIDOpt?.trimmingCharacters(in: .whitespacesAndNewlines),
               !vmID.isEmpty else {
-            throw CLIError(message: "Usage: cmux vm ssh-attach --id <vm-id>")
+            throw CLIError(message: "Usage: zerocmux vm ssh-attach --id <vm-id>")
         }
 
         let attachInfoStartedAt = Date()
@@ -6132,7 +5477,7 @@ struct CMUXCLI {
             throw CLIError(message: "vm-pty-connect: unknown flag '\(unknown)'")
         }
         guard let configPath else {
-            throw CLIError(message: "Usage: cmux vm-pty-connect --config <path>")
+            throw CLIError(message: "Usage: zerocmux vm-pty-connect --config <path>")
         }
         let configURL = URL(fileURLWithPath: (configPath as NSString).expandingTildeInPath)
         let data = try Data(contentsOf: configURL)
@@ -6155,11 +5500,11 @@ struct CMUXCLI {
             throw CLIError(message: "vm-pty-attach: unknown flag '\(unknown)'")
         }
         guard remaining.isEmpty else {
-            throw CLIError(message: "Usage: cmux vm-pty-attach --id <vm-id>")
+            throw CLIError(message: "Usage: zerocmux vm-pty-attach --id <vm-id>")
         }
         guard let vmID = vmIDOpt?.trimmingCharacters(in: .whitespacesAndNewlines),
               !vmID.isEmpty else {
-            throw CLIError(message: "Usage: cmux vm-pty-attach --id <vm-id>")
+            throw CLIError(message: "Usage: zerocmux vm-pty-attach --id <vm-id>")
         }
 
         let startedAt = Date()
@@ -6487,13 +5832,13 @@ struct CMUXCLI {
         let downloadURL = entry?.downloadURL ?? "unknown"
         let checksumsAssetName = manifest?.checksumsAssetName ?? "unknown"
         let checksumsURL = manifest?.checksumsURL ?? "unknown"
-        let downloadCommand = "gh release download \(releaseTag) --repo manaflow-ai/cmux --pattern \(assetName)"
-        let downloadChecksumsCommand = "gh release download \(releaseTag) --repo manaflow-ai/cmux --pattern \(checksumsAssetName)"
+        let downloadCommand = "gh release download \(releaseTag) --repo kernelalex/zerocmux --pattern \(assetName)"
+        let downloadChecksumsCommand = "gh release download \(releaseTag) --repo kernelalex/zerocmux --pattern \(checksumsAssetName)"
         let checksumVerifyCommand = "shasum -a 256 -c \(checksumsAssetName) --ignore-missing"
         let signerWorkflow = releaseTag == "nightly"
-            ? "manaflow-ai/cmux/.github/workflows/nightly.yml"
-            : "manaflow-ai/cmux/.github/workflows/release.yml"
-        let verifyCommand = "gh attestation verify ./\(assetName) --repo manaflow-ai/cmux --signer-workflow \(signerWorkflow)"
+            ? "kernelalex/zerocmux/.github/workflows/nightly.yml"
+            : "kernelalex/zerocmux/.github/workflows/release.yml"
+        let verifyCommand = "gh attestation verify ./\(assetName) --repo kernelalex/zerocmux --signer-workflow \(signerWorkflow)"
 
         let payload: [String: Any] = [
             "app_version": remoteDaemonVersionString(from: info),
@@ -6663,10 +6008,10 @@ struct CMUXCLI {
             preferredCLIPath.map { "cmux_reconnect_cli=\(shellQuote($0));" } ?? "cmux_reconnect_cli=\"\";",
             "cmux_reconnect_socket=\"${CMUX_SOCKET_PATH:-${CMUX_SOCKET:-}}\";",
             "if [ -z \"$cmux_reconnect_cli\" ] && [ -n \"${CMUX_BUNDLED_CLI_PATH:-}\" ]; then cmux_reconnect_cli=\"$CMUX_BUNDLED_CLI_PATH\"; fi;",
-            "if [ ! -x \"$cmux_reconnect_cli\" ]; then cmux_reconnect_cli=\"$(command -v cmux 2>/dev/null || true)\"; fi;",
+            "if [ ! -x \"$cmux_reconnect_cli\" ]; then cmux_reconnect_cli=\"$(command -v zerocmux 2>/dev/null || command -v cmux 2>/dev/null || true)\"; fi;",
             "if [ -n \"${CMUX_WORKSPACE_ID:-}\" ]; then",
-            "if [ -z \"$cmux_reconnect_socket\" ]; then printf '%s\\n' 'cmux: deferred SSH reconnect skipped, local cmux socket not found' >&2;",
-            "elif [ -z \"$cmux_reconnect_cli\" ] || [ ! -x \"$cmux_reconnect_cli\" ]; then printf '%s\\n' 'cmux: deferred SSH reconnect skipped, local cmux CLI not found' >&2;",
+            "if [ -z \"$cmux_reconnect_socket\" ]; then printf '%s\\n' 'zerocmux: deferred SSH reconnect skipped, local socket not found' >&2;",
+            "elif [ -z \"$cmux_reconnect_cli\" ] || [ ! -x \"$cmux_reconnect_cli\" ]; then printf '%s\\n' 'zerocmux: deferred SSH reconnect skipped, local CLI not found' >&2;",
             "else",
             "cmux_reconnect_payload=\"{\\\"workspace_id\\\":\\\"$CMUX_WORKSPACE_ID\\\",\\\"foreground_auth_token\\\":\\\"\(escapedForegroundAuthToken)\\\"}\";",
             "\"$cmux_reconnect_cli\" --socket \"$cmux_reconnect_socket\" rpc workspace.remote.foreground_auth_ready \"$cmux_reconnect_payload\" >/dev/null 2>&1 || true;",
@@ -6926,7 +6271,7 @@ struct CMUXCLI {
                 lines.append("ready_state: \(readyState)")
             }
             if url.isEmpty || url == "about:blank" {
-                lines.append("hint: run 'cmux browser <surface> get url' to verify navigation")
+                lines.append("hint: run 'zerocmux browser <surface> get url' to verify navigation")
             }
 
             return lines.joined(separator: "\n")
@@ -8262,26 +7607,37 @@ struct CMUXCLI {
         throw CLIError(message: "Unable to resolve surface ID")
     }
 
+    private func hostedServicesUnavailable(jsonOutput: Bool) throws {
+        let message = "Hosted auth and Cloud VM services are not available in zerocmux because the web backend has been removed."
+        if jsonOutput {
+            print(jsonString([
+                "available": false,
+                "reason": message,
+            ]))
+        }
+        throw CLIError(message: message)
+    }
+
     /// Return the help/usage text for a subcommand, or nil if the command is unknown.
     private func subcommandUsage(_ command: String) -> String? {
         switch command {
         case "ping":
             return """
-            Usage: cmux ping
+            Usage: zerocmux ping
 
-            Check connectivity to the cmux socket server.
+            Check connectivity to the zerocmux socket server.
             """
         case "capabilities":
             return """
-            Usage: cmux capabilities
+            Usage: zerocmux capabilities
 
             Print server capabilities as JSON.
             """
         case "events":
             return """
-            Usage: cmux events [options]
+            Usage: zerocmux events [options]
 
-            Stream cmux events as newline-delimited JSON.
+            Stream zerocmux events as newline-delimited JSON.
 
             Options:
               --after <seq>          Replay retained events after this sequence
@@ -8294,61 +7650,37 @@ struct CMUXCLI {
               --no-heartbeat         Do not print heartbeat frames
 
             Examples:
-              cmux events --category notification
-              cmux events --cursor-file ~/.cache/cmux/events.seq --reconnect
-              cmux events --after 42 --name feed.item.received
+              zerocmux events --category notification
+              zerocmux events --cursor-file ~/.cache/zerocmux/events.seq --reconnect
+              zerocmux events --after 42 --name feed.item.received
             """
         case "auth":
             return """
-            Usage: cmux auth <status|login|logout>
+            Usage: zerocmux auth <status|login|logout>
 
-            status   Print whether the user is signed in (add `cmux --json` for JSON).
-            login    Open the sign-in popup on the cmux web app and wait for it to finish.
-            logout   Clear the current session.
+            Hosted auth is unavailable in zerocmux because the web backend has
+            been removed.
             """
         case "vm", "cloud":
             return """
-            Usage: cmux \(command) <new|ls|rm|exec|shell|attach|ssh> [args...]
+            Usage: zerocmux \(command) <new|ls|rm|exec|shell|attach|ssh> [args...]
 
-            Manage cloud VMs. `cloud` is an alias for `vm`. Requires `cmux auth login`.
-
-            Subcommands:
-              ls                        List your cloud VMs.
-              new [--image <template>] [--provider <e2b|freestyle>] [--detach|-d]
-                                        Create a new VM. By default drops you into a shell on
-                                        the VM (like `docker run -it`). Pass --detach/-d to
-                                        just print the id and exit (scripting primitive).
-              shell <id>                Drop into an interactive shell on an existing VM.
-                                        Alias: `attach <id>`.
-              rm <id>                   Destroy a VM.
-              exec <id> -- <command...> Run a shell command inside the VM and print stdout.
-              ssh <id>                  Print a ready-to-paste SSH one-liner when the VM
-                                        provider exposes SSH.
-
-            Env:
-              CMUX_VM_API_BASE_URL       Override the backend origin (default: the cmux website).
-                                         `bun run dev` derives this from CMUX_PORT/PORT for
-                                         local testing from the web worktree.
-
-            Example:
-              cmux vm new
-              cmux vm ls
-              cmux cloud exec <id> -- echo hello
-              cmux vm rm <id>
+            Hosted Cloud VM commands are unavailable in zerocmux because the web
+            backend has been removed. Use `zerocmux ssh` for remote workspaces.
             """
         case "rpc":
             return """
-            Usage: cmux rpc <method> [json-params]
+            Usage: zerocmux rpc <method> [json-params]
 
             Call a raw v2 method with an optional JSON object for params.
             Example: cmux rpc surface.report_tty '{"workspace_id":"...","surface_id":"...","tty_name":"ttys001"}'
             """
         case "help":
             return """
-            Usage: cmux help
+            Usage: zerocmux help
 
             Show top-level CLI usage and command list.
-            Also works without a running cmux app or socket.
+            Also works without a running zerocmux app or socket.
             """
         case "docs":
             return docsUsage()
@@ -8358,67 +7690,49 @@ struct CMUXCLI {
             return configUsage()
         case "welcome":
             return """
-            Usage: cmux welcome
+            Usage: zerocmux welcome
 
             Show a welcome screen with the cmux logo and useful shortcuts.
             Auto-runs once on first launch.
             """
         case "shortcuts":
             return """
-            Usage: cmux shortcuts
+            Usage: zerocmux shortcuts
 
             Open the Settings window to Keyboard Shortcuts.
             """
         case "disable-browser":
             return """
-            Usage: cmux disable-browser [--json]
+            Usage: zerocmux disable-browser [--json]
 
-            Disable cmux browser creation and link interception. This overrides
-            browser settings from cmux.json until re-enabled.
+            Disable zerocmux browser creation and link interception. This overrides
+            browser settings from zerocmux.json until re-enabled.
             """
         case "enable-browser":
             return """
-            Usage: cmux enable-browser [--json]
+            Usage: zerocmux enable-browser [--json]
 
-            Re-enable cmux browser creation and link interception.
+            Re-enable zerocmux browser creation and link interception.
             """
         case "browser-status":
             return """
-            Usage: cmux browser-status [--json]
+            Usage: zerocmux browser-status [--json]
 
-            Print whether cmux browser creation and link interception are enabled.
+            Print whether zerocmux browser creation and link interception are enabled.
             """
         case "restore-session":
             return """
-            Usage: cmux restore-session
+            Usage: zerocmux restore-session
 
-            Reopen the previous saved cmux session.
+            Reopen the previous saved zerocmux session.
 
             If the app is already running, this restores the last saved session into the current app.
-            If the app is not running, this launches cmux and lets startup restore reopen the saved session.
-            """
-        case "feedback":
-            return """
-            Usage: cmux feedback
-                   cmux feedback --email <email> --body <text> [--image <path> ...]
-
-            Without args, open the Send Feedback modal in the running app.
-
-            With args, submit feedback through the app using the same feedback pipeline as the modal.
-
-            Flags:
-              --email <email>   Contact email for follow-up
-              --body <text>     Feedback body
-              --image <path>    Attach an image file, repeat for multiple images
-
-            Coding agents:
-              Double check with the end user before sending anything. Review the message and attachments for secrets,
-              private code, credentials, tokens, and other sensitive information first.
+            If the app is not running, this launches zerocmux and lets startup restore reopen the saved session.
             """
         case "feed":
             return """
-            Usage: cmux feed tui [--opentui|--legacy]
-                   cmux feed clear [--yes|-y]
+            Usage: zerocmux feed tui [--opentui|--legacy]
+                   zerocmux feed clear [--yes|-y]
 
             Open the keyboard-first Feed TUI or manage persisted Feed workstream history.
 
@@ -8428,15 +7742,15 @@ struct CMUXCLI {
             """
         case "hooks":
             return """
-            Usage: cmux hooks setup [agent] [--agent <name>] [--yes|-y]
-                   cmux hooks uninstall [agent] [--agent <name>] [--yes|-y]
-                   cmux hooks <agent> install [--yes|-y] (opencode supports --project)
-                   cmux hooks <agent> uninstall [--yes|-y] (opencode supports --project)
-                   cmux hooks <agent> <event> [flags]
-                   cmux hooks feed --source <agent> [--event <event>]
+            Usage: zerocmux hooks setup [agent] [--agent <name>] [--yes|-y]
+                   zerocmux hooks uninstall [agent] [--agent <name>] [--yes|-y]
+                   zerocmux hooks <agent> install [--yes|-y] (opencode supports --project)
+                   zerocmux hooks <agent> uninstall [--yes|-y] (opencode supports --project)
+                   zerocmux hooks <agent> <event> [flags]
+                   zerocmux hooks feed --source <agent> [--event <event>]
 
-            Manage and run cmux agent hooks without adding one top-level command per
-            agent. Claude Code hooks are injected automatically by the cmux Claude wrapper.
+            Manage and run zerocmux agent hooks without adding one top-level command per
+            agent. Claude Code hooks are injected automatically by the zerocmux Claude wrapper.
 
             Agents:
               codex, opencode, pi, cursor, gemini, rovodev (alias: rovo), hermes-agent, copilot, codebuddy, factory, qoder
@@ -8450,33 +7764,33 @@ struct CMUXCLI {
               feed               Internal Feed decision bridge
 
             Generated files:
-              ~/.config/opencode/plugins/cmux-session.js
-              ~/.config/opencode/plugins/cmux-feed.js
-              ~/.pi/agent/extensions/cmux-session.ts
+              ~/.config/opencode/plugins/zerocmux-session.js
+              ~/.config/opencode/plugins/zerocmux-feed.js
+              ~/.pi/agent/extensions/zerocmux-session.ts
               See docs/agent-hooks.md for the full integration matrix.
 
             Examples:
-              cmux hooks setup
-              cmux hooks setup --agent codex
-              cmux hooks setup rovo
-              cmux hooks uninstall rovo
-              cmux hooks codex install
-              cmux hooks opencode install --project
-              cmux hooks uninstall
+              zerocmux hooks setup
+              zerocmux hooks setup --agent codex
+              zerocmux hooks setup rovo
+              zerocmux hooks uninstall rovo
+              zerocmux hooks codex install
+              zerocmux hooks opencode install --project
+              zerocmux hooks uninstall
             """
         case "themes":
             return """
-            Usage: cmux themes
+            Usage: zerocmux themes
                    cmux themes list
                    cmux themes set <theme>
                    cmux themes set --light <theme> [--dark <theme>]
                    cmux themes set --dark <theme> [--light <theme>]
                    cmux themes clear
 
-            When run in a TTY, `cmux themes` opens an interactive theme picker with
-            live app preview. Use `cmux themes list` for a plain listing.
+            When run in a TTY, `zerocmux themes` opens an interactive theme picker with
+            live app preview. Use `zerocmux themes list` for a plain listing.
 
-            The picker previews the selected theme across the running cmux app and
+            The picker previews the selected theme across the running zerocmux app and
             lets you apply it to the light theme, dark theme, or both defaults.
 
             Commands:
@@ -8495,83 +7809,83 @@ struct CMUXCLI {
             """
         case "claude-teams":
             return String(localized: "cli.claude-teams.usage", defaultValue: """
-            Usage: cmux claude-teams [claude-args...]
+            Usage: zerocmux claude-teams [claude-args...]
 
             Launch Claude Code with agent teams enabled.
 
             This command:
               - defaults Claude teammate mode to auto
-              - sets a tmux-like environment so Claude auto mode uses cmux splits
+              - sets a tmux-like environment so Claude auto mode uses zerocmux splits
               - sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
               - prepends a private tmux shim to PATH
               - forwards all remaining arguments to claude
 
-            The tmux shim translates supported tmux window/pane commands into cmux
-            workspace and split operations in the current cmux session.
+            The tmux shim translates supported tmux window/pane commands into zerocmux
+            workspace and split operations in the current zerocmux session.
 
             Examples:
-              cmux claude-teams
-              cmux claude-teams --continue
-              cmux claude-teams --model sonnet
+              zerocmux claude-teams
+              zerocmux claude-teams --continue
+              zerocmux claude-teams --model sonnet
             """)
         case "omo":
             return String(localized: "cli.omo.usage", defaultValue: """
-            Usage: cmux omo [opencode-args...]
+            Usage: zerocmux omo [opencode-args...]
 
-            Launch OpenCode with oh-my-openagent in a cmux-aware environment.
+            Launch OpenCode with oh-my-openagent in a zerocmux-aware environment.
 
             oh-my-openagent orchestrates multiple AI models as specialized agents in
             parallel. This command sets up a tmux shim so agent panes become native
-            cmux splits with sidebar metadata and notifications.
+            zerocmux splits with sidebar metadata and notifications.
 
             This command:
-              - sets a tmux-like environment so oh-my-openagent uses cmux splits
+              - sets a tmux-like environment so oh-my-openagent uses zerocmux splits
               - prepends a private tmux shim to PATH
               - forwards all remaining arguments to opencode
 
-            The tmux shim translates tmux window/pane commands into cmux workspace
-            and split operations in the current cmux session.
+            The tmux shim translates tmux window/pane commands into zerocmux workspace
+            and split operations in the current zerocmux session.
 
             Examples:
-              cmux omo
-              cmux omo --continue
-              cmux omo --model claude-sonnet-4-6
+              zerocmux omo
+              zerocmux omo --continue
+              zerocmux omo --model claude-sonnet-4-6
             """)
         case "omx":
             return String(localized: "cli.omx.usage", defaultValue: """
-            Usage: cmux omx [omx-args...]
+            Usage: zerocmux omx [omx-args...]
 
-            Launch Oh My Codex (OMX) with native cmux pane integration.
+            Launch Oh My Codex (OMX) with native zerocmux pane integration.
 
             OMX is a multi-agent orchestration layer for OpenAI Codex CLI. This
             command sets up a tmux shim so OMX team mode, HUD, and agent panes
-            become native cmux splits.
+            become native zerocmux splits.
 
             This command:
-              - sets a tmux-like environment so OMX uses cmux splits
+              - sets a tmux-like environment so OMX uses zerocmux splits
               - prepends a private tmux shim to PATH
               - forwards all remaining arguments to omx
 
             Install: npm install -g oh-my-codex
 
             Examples:
-              cmux omx
-              cmux omx --madmax --high
-              cmux omx team
+              zerocmux omx
+              zerocmux omx --madmax --high
+              zerocmux omx team
             """)
         case "omc":
             return String(localized: "cli.omc.usage", defaultValue: """
-            Usage: cmux omc [omc-args...]
+            Usage: zerocmux omc [omc-args...]
 
-            Launch Oh My Claude Code (OMC) with native cmux pane integration.
+            Launch Oh My Claude Code (OMC) with native zerocmux pane integration.
 
             OMC is a multi-agent orchestration system for Claude Code with
             specialized agents, smart model routing, and team pipelines. This
             command sets up a tmux shim so OMC team mode and agent panes become
-            native cmux splits.
+            native zerocmux splits.
 
             This command:
-              - sets a tmux-like environment so OMC uses cmux splits
+              - sets a tmux-like environment so OMC uses zerocmux splits
               - prepends a private tmux shim to PATH
               - injects NODE_OPTIONS restore module for Claude compatibility
               - forwards all remaining arguments to omc
@@ -8579,13 +7893,13 @@ struct CMUXCLI {
             Install: npm install -g oh-my-claude-sisyphus
 
             Examples:
-              cmux omc
-              cmux omc team 3:claude "implement feature"
-              cmux omc --watch
+              zerocmux omc
+              zerocmux omc team 3:claude "implement feature"
+              zerocmux omc --watch
             """)
         case "identify":
             return """
-            Usage: cmux identify [--workspace <id|ref|index>] [--surface <id|ref|index>] [--no-caller]
+            Usage: zerocmux identify [--workspace <id|ref|index>] [--surface <id|ref|index>] [--no-caller]
 
             Print server identity and caller context details.
 
@@ -8596,19 +7910,19 @@ struct CMUXCLI {
             """
         case "list-windows":
             return """
-            Usage: cmux list-windows
+            Usage: zerocmux list-windows
 
             List open windows.
             """
         case "current-window":
             return """
-            Usage: cmux current-window
+            Usage: zerocmux current-window
 
             Print the currently selected window ID.
             """
         case "new-window":
             return """
-            Usage: cmux new-window
+            Usage: zerocmux new-window
 
             Create a new window.
 
@@ -8617,7 +7931,7 @@ struct CMUXCLI {
             """
         case "focus-window":
             return """
-            Usage: cmux focus-window --window <id|ref|index>
+            Usage: zerocmux focus-window --window <id|ref|index>
 
             Focus (bring to front) the specified window.
 
@@ -8630,7 +7944,7 @@ struct CMUXCLI {
             """
         case "close-window":
             return """
-            Usage: cmux close-window --window <id|ref|index>
+            Usage: zerocmux close-window --window <id|ref|index>
 
             Close the specified window.
 
@@ -8643,7 +7957,7 @@ struct CMUXCLI {
             """
         case "move-workspace-to-window":
             return """
-            Usage: cmux move-workspace-to-window --workspace <id|ref|index> --window <id|ref|index>
+            Usage: zerocmux move-workspace-to-window --workspace <id|ref|index> --window <id|ref|index>
 
             Move a workspace to a different window.
 
@@ -8656,7 +7970,7 @@ struct CMUXCLI {
             """
         case "move-surface":
             return """
-            Usage: cmux move-surface [--surface <id|ref|index> | <id|ref|index>] [flags]
+            Usage: zerocmux move-surface [--surface <id|ref|index> | <id|ref|index>] [flags]
 
             Move a surface to a different pane, workspace, or window.
 
@@ -8680,7 +7994,7 @@ struct CMUXCLI {
             """
         case "reorder-surface":
             return """
-            Usage: cmux reorder-surface [--surface <id|ref|index> | <id|ref|index>] [flags]
+            Usage: zerocmux reorder-surface [--surface <id|ref|index> | <id|ref|index>] [flags]
 
             Reorder a surface within its pane.
 
@@ -8702,7 +8016,7 @@ struct CMUXCLI {
             """
         case "reorder-workspace":
             return """
-            Usage: cmux reorder-workspace [--workspace <id|ref|index> | <id|ref|index>] [flags]
+            Usage: zerocmux reorder-workspace [--workspace <id|ref|index> | <id|ref|index>] [flags]
 
             Reorder a workspace within its window.
 
@@ -8723,7 +8037,7 @@ struct CMUXCLI {
             """
         case "workspace-action":
             return """
-            Usage: cmux workspace-action --action <name> [flags]
+            Usage: zerocmux workspace-action --action <name> [flags]
 
             Perform workspace context-menu actions from CLI/socket.
 
@@ -8748,19 +8062,19 @@ struct CMUXCLI {
               Blue, Navy, Indigo, Purple, Magenta, Rose, Brown, Charcoal
 
             Example:
-              cmux workspace-action --workspace workspace:2 --action pin
-              cmux workspace-action --action rename --title "infra"
-              cmux workspace-action close-others
-              cmux workspace-action --action set-color --color blue
-              cmux workspace-action --action set-color --color "#C0392B"
-              cmux workspace-action set-color Amber
-              cmux workspace-action --action set-description --description "Ship checklist"
-              cmux workspace-action --action set-description $'Ship checklist\n- verify build\n- post notes'
-              cmux workspace-action clear-color
+              zerocmux workspace-action --workspace workspace:2 --action pin
+              zerocmux workspace-action --action rename --title "infra"
+              zerocmux workspace-action close-others
+              zerocmux workspace-action --action set-color --color blue
+              zerocmux workspace-action --action set-color --color "#C0392B"
+              zerocmux workspace-action set-color Amber
+              zerocmux workspace-action --action set-description --description "Ship checklist"
+              zerocmux workspace-action --action set-description $'Ship checklist\n- verify build\n- post notes'
+              zerocmux workspace-action clear-color
             """
         case "tab-action":
             return """
-            Usage: cmux tab-action --action <name> [flags]
+            Usage: zerocmux tab-action --action <name> [flags]
 
             Perform horizontal tab context-menu actions from CLI/socket.
 
@@ -8792,7 +8106,7 @@ struct CMUXCLI {
             return Self.moveTabToNewWorkspaceCommandHelp
         case "rename-tab":
             return """
-            Usage: cmux rename-tab [--workspace <id|ref>] [--tab <id|ref>] [--surface <id|ref>] [--] <title>
+            Usage: zerocmux rename-tab [--workspace <id|ref>] [--tab <id|ref>] [--surface <id|ref>] [--] <title>
 
             Compatibility alias for tab-action rename.
 
@@ -8809,13 +8123,13 @@ struct CMUXCLI {
               --title <text>         Explicit title (or use trailing positional title)
 
             Examples:
-              cmux rename-tab "build logs"
-              cmux rename-tab --tab tab:3 "staging server"
-              cmux rename-tab --workspace workspace:2 --surface surface:5 --title "agent run"
+              zerocmux rename-tab "build logs"
+              zerocmux rename-tab --tab tab:3 "staging server"
+              zerocmux rename-tab --workspace workspace:2 --surface surface:5 --title "agent run"
             """
         case "new-workspace":
             return """
-            Usage: cmux new-workspace [--name <title>] [--description <text>] [--cwd <path>] [--command <text>] [--layout <json>] [--focus <true|false>]
+            Usage: zerocmux new-workspace [--name <title>] [--description <text>] [--cwd <path>] [--command <text>] [--layout <json>] [--focus <true|false>]
 
             Create a new workspace in the current window.
 
@@ -8839,7 +8153,7 @@ struct CMUXCLI {
             """
         case "list-workspaces":
             return """
-            Usage: cmux list-workspaces
+            Usage: zerocmux list-workspaces
 
             List workspaces in the current window.
 
@@ -8848,7 +8162,7 @@ struct CMUXCLI {
             """
         case "ssh":
             return """
-            Usage: cmux ssh <destination> [flags] [-- <remote-command-args>]
+            Usage: zerocmux ssh <destination> [flags] [-- <remote-command-args>]
 
             Create a new workspace, mark it as remote-SSH, and start an SSH session in that workspace.
             cmux will also establish a local SSH proxy endpoint so browser traffic can egress from the remote host.
@@ -8861,13 +8175,13 @@ struct CMUXCLI {
               --no-focus              Create workspace without switching to it
 
             Example:
-              cmux ssh dev@my-host
-              cmux ssh dev@my-host --name "gpu-box" --port 2222 --identity ~/.ssh/id_ed25519
-              cmux ssh dev@my-host --ssh-option UserKnownHostsFile=/dev/null --ssh-option StrictHostKeyChecking=no
+              zerocmux ssh dev@my-host
+              zerocmux ssh dev@my-host --name "gpu-box" --port 2222 --identity ~/.ssh/id_ed25519
+              zerocmux ssh dev@my-host --ssh-option UserKnownHostsFile=/dev/null --ssh-option StrictHostKeyChecking=no
             """
         case "remote-daemon-status":
             return """
-            Usage: cmux remote-daemon-status [--os <darwin|linux>] [--arch <arm64|amd64>]
+            Usage: zerocmux remote-daemon-status [--os <darwin|linux>] [--arch <arm64|amd64>]
 
             Show the embedded cmuxd-remote release manifest, local cache status, checksum verification state,
             and the GitHub attestation verification command for a target platform.
@@ -8878,7 +8192,7 @@ struct CMUXCLI {
             """
         case "new-split":
             return """
-            Usage: cmux new-split <left|right|up|down> [flags]
+            Usage: zerocmux new-split <left|right|up|down> [flags]
 
             Split the current pane in the given direction.
 
@@ -8894,7 +8208,7 @@ struct CMUXCLI {
             """
         case "list-panes":
             return """
-            Usage: cmux list-panes [--workspace <id|ref>]
+            Usage: zerocmux list-panes [--workspace <id|ref>]
 
             List panes in a workspace.
 
@@ -8907,7 +8221,7 @@ struct CMUXCLI {
             """
         case "list-pane-surfaces":
             return """
-            Usage: cmux list-pane-surfaces [--workspace <id|ref>] [--pane <id|ref>]
+            Usage: zerocmux list-pane-surfaces [--workspace <id|ref>] [--pane <id|ref>]
 
             List surfaces in a pane.
 
@@ -8921,7 +8235,7 @@ struct CMUXCLI {
             """
         case "tree":
             return """
-            Usage: cmux tree [flags]
+            Usage: zerocmux tree [flags]
 
             Print the hierarchy of windows, workspaces, panes, and surfaces.
 
@@ -8933,7 +8247,7 @@ struct CMUXCLI {
             Output:
               Text mode prints a box-drawing tree with markers:
               - ◀ active (true focused window/workspace/pane/surface path)
-              - ◀ here (caller surface where `cmux tree` was invoked)
+              - ◀ here (caller surface where `zerocmux tree` was invoked)
               - workspace [selected]
               - pane [focused]
               - surface [selected]
@@ -8947,7 +8261,7 @@ struct CMUXCLI {
             """
         case "top":
             return """
-            Usage: cmux top [flags]
+            Usage: zerocmux top [flags]
 
             Print CPU and RAM usage by cmux window, workspace, pane, surface, status tag, and browser webview.
 
@@ -8970,7 +8284,7 @@ struct CMUXCLI {
             """
         case "focus-pane":
             return """
-            Usage: cmux focus-pane [--pane <id|ref> | <id|ref>] [flags]
+            Usage: zerocmux focus-pane [--pane <id|ref> | <id|ref>] [flags]
 
             Focus the specified pane.
 
@@ -8985,7 +8299,7 @@ struct CMUXCLI {
             """
         case "new-pane":
             return """
-            Usage: cmux new-pane [flags]
+            Usage: zerocmux new-pane [flags]
 
             Create a new pane in the workspace.
 
@@ -9002,7 +8316,7 @@ struct CMUXCLI {
             """
         case "new-surface":
             return """
-            Usage: cmux new-surface [flags]
+            Usage: zerocmux new-surface [flags]
 
             Create a new surface (tab) in a pane.
 
@@ -9019,7 +8333,7 @@ struct CMUXCLI {
             """
         case "close-surface":
             return """
-            Usage: cmux close-surface [flags]
+            Usage: zerocmux close-surface [flags]
 
             Close a surface. Defaults to the focused surface if none specified.
 
@@ -9034,7 +8348,7 @@ struct CMUXCLI {
             """
         case "drag-surface-to-split":
             return """
-            Usage: cmux drag-surface-to-split --surface <id|ref|index> <left|right|up|down> [flags]
+            Usage: zerocmux drag-surface-to-split --surface <id|ref|index> <left|right|up|down> [flags]
 
             Drag a surface into a new split in the given direction.
 
@@ -9050,7 +8364,7 @@ struct CMUXCLI {
             """
         case "split-off":
             return """
-            Usage: cmux split-off --surface <id|ref|index> <left|right|up|down> [flags]
+            Usage: zerocmux split-off --surface <id|ref|index> <left|right|up|down> [flags]
 
             Move an existing surface into a new split without changing focus by default.
 
@@ -9066,23 +8380,23 @@ struct CMUXCLI {
             """
         case "refresh-surfaces":
             return """
-            Usage: cmux refresh-surfaces
+            Usage: zerocmux refresh-surfaces
 
             Refresh surface snapshots for the focused workspace.
             """
         case "reload-config":
             return """
-            Usage: cmux reload-config
+            Usage: zerocmux reload-config
 
             Run the same configuration reload as the Reload Configuration shortcut.
             This reloads Ghostty config, re-reads ~/.config/cmux/cmux.json, and refreshes terminals.
 
             Example:
-              cmux reload-config
+              zerocmux reload-config
             """
         case "surface-health":
             return """
-            Usage: cmux surface-health [--workspace <id|ref>]
+            Usage: zerocmux surface-health [--workspace <id|ref>]
 
             List health details for surfaces in a workspace.
 
@@ -9095,14 +8409,14 @@ struct CMUXCLI {
             """
         case "debug-terminals":
             return """
-            Usage: cmux debug-terminals
+            Usage: zerocmux debug-terminals
 
             Print live Ghostty terminal runtime metadata across all windows and workspaces.
             Intended for debugging stray or detached terminal views.
             """
         case "trigger-flash":
             return """
-            Usage: cmux trigger-flash [--workspace <id|ref>] [--surface <id|ref>] [--panel <id|ref>]
+            Usage: zerocmux trigger-flash [--workspace <id|ref>] [--surface <id|ref>] [--panel <id|ref>]
 
             Trigger the unread flash indicator for a surface.
 
@@ -9117,7 +8431,7 @@ struct CMUXCLI {
             """
         case "list-panels":
             return """
-            Usage: cmux list-panels [--workspace <id|ref>]
+            Usage: zerocmux list-panels [--workspace <id|ref>]
 
             List surfaces (panels) in a workspace.
 
@@ -9130,7 +8444,7 @@ struct CMUXCLI {
             """
         case "focus-panel":
             return """
-            Usage: cmux focus-panel --panel <id|ref> [--workspace <id|ref>]
+            Usage: zerocmux focus-panel --panel <id|ref> [--workspace <id|ref>]
 
             Focus a specific panel (surface).
 
@@ -9144,7 +8458,7 @@ struct CMUXCLI {
             """
         case "close-workspace":
             return """
-            Usage: cmux close-workspace --workspace <id|ref|index>
+            Usage: zerocmux close-workspace --workspace <id|ref|index>
 
             Close the specified workspace.
 
@@ -9156,7 +8470,7 @@ struct CMUXCLI {
             """
         case "select-workspace":
             return """
-            Usage: cmux select-workspace --workspace <id|ref|index>
+            Usage: zerocmux select-workspace --workspace <id|ref|index>
 
             Select (switch to) the specified workspace.
 
@@ -9169,7 +8483,7 @@ struct CMUXCLI {
             """
         case "rename-workspace", "rename-window":
             return """
-            Usage: cmux rename-workspace [--workspace <id|ref|index>] [--] <title>
+            Usage: zerocmux rename-workspace [--workspace <id|ref|index>] [--] <title>
 
             Rename a workspace. Defaults to the current workspace.
             tmux-compatible alias: rename-window
@@ -9178,18 +8492,18 @@ struct CMUXCLI {
               --workspace <id|ref|index>   Workspace to rename (default: current/$CMUX_WORKSPACE_ID)
 
             Example:
-              cmux rename-workspace "backend logs"
-              cmux rename-window --workspace workspace:2 "agent run"
+              zerocmux rename-workspace "backend logs"
+              zerocmux rename-window --workspace workspace:2 "agent run"
             """
         case "current-workspace":
             return """
-            Usage: cmux current-workspace
+            Usage: zerocmux current-workspace
 
             Print the currently selected workspace ID.
             """
         case "capture-pane":
             return """
-            Usage: cmux capture-pane [--workspace <id|ref>] [--surface <id|ref>] [--scrollback] [--lines <n>]
+            Usage: zerocmux capture-pane [--workspace <id|ref>] [--surface <id|ref>] [--scrollback] [--lines <n>]
 
             tmux-compatible alias for reading terminal text from a pane.
 
@@ -9204,7 +8518,7 @@ struct CMUXCLI {
             """
         case "resize-pane":
             return """
-            Usage: cmux resize-pane [--pane <id|ref>] [--workspace <id|ref>] [-L|-R|-U|-D] [--amount <n>]
+            Usage: zerocmux resize-pane [--pane <id|ref>] [--workspace <id|ref>] [-L|-R|-U|-D] [--amount <n>]
 
             tmux-compatible pane resize command.
 
@@ -9216,7 +8530,7 @@ struct CMUXCLI {
             """
         case "pipe-pane":
             return """
-            Usage: cmux pipe-pane [--workspace <id|ref>] [--surface <id|ref>] [--command <shell-command> | <shell-command>]
+            Usage: zerocmux pipe-pane [--workspace <id|ref>] [--surface <id|ref>] [--command <shell-command> | <shell-command>]
 
             Capture pane text and pipe it to a shell command via stdin.
 
@@ -9227,7 +8541,7 @@ struct CMUXCLI {
             """
         case "wait-for":
             return """
-            Usage: cmux wait-for [-S|--signal] <name> [--timeout <seconds>]
+            Usage: zerocmux wait-for [-S|--signal] <name> [--timeout <seconds>]
 
             Wait for or signal a named synchronization token.
 
@@ -9237,7 +8551,7 @@ struct CMUXCLI {
             """
         case "swap-pane":
             return """
-            Usage: cmux swap-pane --pane <id|ref> --target-pane <id|ref> [--workspace <id|ref>] [--focus <true|false>]
+            Usage: zerocmux swap-pane --pane <id|ref> --target-pane <id|ref> [--workspace <id|ref>] [--focus <true|false>]
 
             Swap two panes.
 
@@ -9249,7 +8563,7 @@ struct CMUXCLI {
             """
         case "break-pane":
             return """
-            Usage: cmux break-pane [--workspace <id|ref>] [--pane <id|ref>] [--surface <id|ref>] [--focus <true|false>] [--no-focus]
+            Usage: zerocmux break-pane [--workspace <id|ref>] [--pane <id|ref>] [--surface <id|ref>] [--focus <true|false>] [--no-focus]
 
             Move a pane/surface out into its own pane context.
 
@@ -9262,7 +8576,7 @@ struct CMUXCLI {
             """
         case "join-pane":
             return """
-            Usage: cmux join-pane --target-pane <id|ref> [--workspace <id|ref>] [--pane <id|ref>] [--surface <id|ref>] [--focus <true|false>] [--no-focus]
+            Usage: zerocmux join-pane --target-pane <id|ref> [--workspace <id|ref>] [--pane <id|ref>] [--surface <id|ref>] [--focus <true|false>] [--no-focus]
 
             Join a pane/surface into another pane.
 
@@ -9276,13 +8590,13 @@ struct CMUXCLI {
             """
         case "next-window", "previous-window", "last-window":
             return """
-            Usage: cmux \(command)
+            Usage: zerocmux \(command)
 
             Switch workspace selection (next/previous/last) in the current window.
             """
         case "last-pane":
             return """
-            Usage: cmux last-pane [--workspace <id|ref>]
+            Usage: zerocmux last-pane [--workspace <id|ref>]
 
             Focus the previously focused pane in a workspace.
 
@@ -9291,7 +8605,7 @@ struct CMUXCLI {
             """
         case "find-window":
             return """
-            Usage: cmux find-window [--content] [--select] [query]
+            Usage: zerocmux find-window [--content] [--select] [query]
 
             Find workspaces by title (and optionally terminal content).
 
@@ -9301,7 +8615,7 @@ struct CMUXCLI {
             """
         case "clear-history":
             return """
-            Usage: cmux clear-history [--workspace <id|ref>] [--surface <id|ref>]
+            Usage: zerocmux clear-history [--workspace <id|ref>] [--surface <id|ref>]
 
             Clear terminal scrollback history.
 
@@ -9311,7 +8625,7 @@ struct CMUXCLI {
             """
         case "set-hook":
             return """
-            Usage: cmux set-hook [--list] [--unset <event>] | <event> <command>
+            Usage: zerocmux set-hook [--list] [--unset <event>] | <event> <command>
 
             Manage tmux-compat hook definitions.
 
@@ -9321,19 +8635,19 @@ struct CMUXCLI {
             """
         case "popup":
             return """
-            Usage: cmux popup
+            Usage: zerocmux popup
 
             tmux compatibility placeholder. This command is currently not supported.
             """
         case "bind-key", "unbind-key", "copy-mode":
             return """
-            Usage: cmux \(command)
+            Usage: zerocmux \(command)
 
             tmux compatibility placeholder. This command is currently not supported.
             """
         case "set-buffer":
             return """
-            Usage: cmux set-buffer [--name <name>] [--] <text>
+            Usage: zerocmux set-buffer [--name <name>] [--] <text>
 
             Save text into a named tmux-compat buffer.
 
@@ -9342,7 +8656,7 @@ struct CMUXCLI {
             """
         case "paste-buffer":
             return """
-            Usage: cmux paste-buffer [--name <name>] [--workspace <id|ref>] [--surface <id|ref>]
+            Usage: zerocmux paste-buffer [--name <name>] [--workspace <id|ref>] [--surface <id|ref>]
 
             Paste a named tmux-compat buffer into a surface.
 
@@ -9353,13 +8667,13 @@ struct CMUXCLI {
             """
         case "list-buffers":
             return """
-            Usage: cmux list-buffers
+            Usage: zerocmux list-buffers
 
             List tmux-compat buffers.
             """
         case "respawn-pane":
             return """
-            Usage: cmux respawn-pane [--workspace <id|ref>] [--surface <id|ref>] [--command <cmd> | <cmd>]
+            Usage: zerocmux respawn-pane [--workspace <id|ref>] [--surface <id|ref>] [--command <cmd> | <cmd>]
 
             Send a command (or default shell restart command) to a surface.
 
@@ -9370,7 +8684,7 @@ struct CMUXCLI {
             """
         case "display-message":
             return """
-            Usage: cmux display-message [-p|--print] <text>
+            Usage: zerocmux display-message [-p|--print] <text>
 
             Print text (or show it via notification bridge in parity mode).
 
@@ -9379,7 +8693,7 @@ struct CMUXCLI {
             """
         case "read-screen":
             return """
-            Usage: cmux read-screen [flags]
+            Usage: zerocmux read-screen [flags]
 
             Read terminal text from a surface as plain text.
 
@@ -9390,12 +8704,12 @@ struct CMUXCLI {
               --lines <n>            Limit to the last n lines (implies --scrollback)
 
             Example:
-              cmux read-screen
-              cmux read-screen --surface surface:2 --scrollback --lines 200
+              zerocmux read-screen
+              zerocmux read-screen --surface surface:2 --scrollback --lines 200
             """
         case "send":
             return """
-            Usage: cmux send [flags] [--] <text>
+            Usage: zerocmux send [flags] [--] <text>
 
             Send text to a terminal surface. Escape sequences: \\n and \\r send Enter, \\t sends Tab.
 
@@ -9409,7 +8723,7 @@ struct CMUXCLI {
             """
         case "send-key":
             return """
-            Usage: cmux send-key [flags] [--] <key>
+            Usage: zerocmux send-key [flags] [--] <key>
 
             Send a key event to a terminal surface.
 
@@ -9423,7 +8737,7 @@ struct CMUXCLI {
             """
         case "send-panel":
             return """
-            Usage: cmux send-panel --panel <id|ref> [flags] [--] <text>
+            Usage: zerocmux send-panel --panel <id|ref> [flags] [--] <text>
 
             Send text to a specific panel (surface). Escape sequences: \\n and \\r send Enter, \\t sends Tab.
 
@@ -9436,7 +8750,7 @@ struct CMUXCLI {
             """
         case "send-key-panel":
             return """
-            Usage: cmux send-key-panel --panel <id|ref> [flags] [--] <key>
+            Usage: zerocmux send-key-panel --panel <id|ref> [flags] [--] <key>
 
             Send a key event to a specific panel (surface).
 
@@ -9450,7 +8764,7 @@ struct CMUXCLI {
             """
         case "notify":
             return """
-            Usage: cmux notify [flags]
+            Usage: zerocmux notify [flags]
 
             Send a notification to a workspace/surface.
 
@@ -9462,24 +8776,24 @@ struct CMUXCLI {
               --surface <id|ref>     Target surface (default: $CMUX_SURFACE_ID)
 
             Example:
-              cmux notify --title "Build done" --body "All tests passed"
-              cmux notify --title "Error" --subtitle "test.swift" --body "Line 42: syntax error"
+              zerocmux notify --title "Build done" --body "All tests passed"
+              zerocmux notify --title "Error" --subtitle "test.swift" --body "Line 42: syntax error"
             """
         case "list-notifications":
             return """
-            Usage: cmux list-notifications
+            Usage: zerocmux list-notifications
 
             List queued notifications.
             """
         case "clear-notifications":
             return """
-            Usage: cmux clear-notifications
+            Usage: zerocmux clear-notifications
 
             Clear all queued notifications.
             """
         case "set-status":
             return """
-            Usage: cmux set-status <key> <value> [flags]
+            Usage: zerocmux set-status <key> <value> [flags]
 
             Set a sidebar status entry for a workspace. Status entries appear as
             pills in the sidebar tab row. Use a unique key so different tools
@@ -9496,7 +8810,7 @@ struct CMUXCLI {
             """
         case "clear-status":
             return """
-            Usage: cmux clear-status <key> [flags]
+            Usage: zerocmux clear-status <key> [flags]
 
             Remove a sidebar status entry by key.
 
@@ -9508,7 +8822,7 @@ struct CMUXCLI {
             """
         case "list-status":
             return """
-            Usage: cmux list-status [flags]
+            Usage: zerocmux list-status [flags]
 
             List all sidebar status entries for a workspace.
 
@@ -9521,7 +8835,7 @@ struct CMUXCLI {
             """
         case "set-progress":
             return """
-            Usage: cmux set-progress <0.0-1.0> [flags]
+            Usage: zerocmux set-progress <0.0-1.0> [flags]
 
             Set a progress bar in the sidebar for a workspace.
 
@@ -9535,7 +8849,7 @@ struct CMUXCLI {
             """
         case "clear-progress":
             return """
-            Usage: cmux clear-progress [flags]
+            Usage: zerocmux clear-progress [flags]
 
             Clear the sidebar progress bar for a workspace.
 
@@ -9547,7 +8861,7 @@ struct CMUXCLI {
             """
         case "log":
             return """
-            Usage: cmux log [flags] [--] <message>
+            Usage: zerocmux log [flags] [--] <message>
 
             Append a log entry to the sidebar for a workspace.
 
@@ -9563,7 +8877,7 @@ struct CMUXCLI {
             """
         case "clear-log":
             return """
-            Usage: cmux clear-log [flags]
+            Usage: zerocmux clear-log [flags]
 
             Clear all sidebar log entries for a workspace.
 
@@ -9575,7 +8889,7 @@ struct CMUXCLI {
             """
         case "list-log":
             return """
-            Usage: cmux list-log [flags]
+            Usage: zerocmux list-log [flags]
 
             List sidebar log entries for a workspace.
 
@@ -9589,7 +8903,7 @@ struct CMUXCLI {
             """
         case "sidebar-state":
             return """
-            Usage: cmux sidebar-state [flags]
+            Usage: zerocmux sidebar-state [flags]
 
             Dump all sidebar metadata for a workspace (cwd, git branch, ports,
             status entries, progress, log entries).
@@ -9603,7 +8917,7 @@ struct CMUXCLI {
             """
         case "set-app-focus":
             return """
-            Usage: cmux set-app-focus <active|inactive|clear>
+            Usage: zerocmux set-app-focus <active|inactive|clear>
 
             Override app focus state for notification routing tests.
 
@@ -9613,13 +8927,13 @@ struct CMUXCLI {
             """
         case "simulate-app-active":
             return """
-            Usage: cmux simulate-app-active
+            Usage: zerocmux simulate-app-active
 
             Trigger the app-active handler used by notification focus tests.
             """
         case "claude-hook":
             return """
-            Usage: cmux claude-hook <session-start|active|stop|idle|notification|notify|prompt-submit> [flags]
+            Usage: zerocmux claude-hook <session-start|active|stop|idle|notification|notify|prompt-submit> [flags]
 
             Hook for Claude Code integration. Reads JSON from stdin.
 
@@ -9642,17 +8956,17 @@ struct CMUXCLI {
             """
         case "codex":
             return """
-            Usage: cmux codex <install-hooks|uninstall-hooks>
+            Usage: zerocmux codex <install-hooks|uninstall-hooks>
 
             Manage Codex CLI hooks integration.
 
             Subcommands:
-              install-hooks     Install cmux hooks into ~/.codex/hooks.json
-              uninstall-hooks   Remove cmux hooks from ~/.codex/hooks.json
+              install-hooks     Install zerocmux hooks into ~/.codex/hooks.json
+              uninstall-hooks   Remove zerocmux hooks from ~/.codex/hooks.json
             """
         case "browser":
             return """
-            Usage: cmux browser [--surface <id|ref|index> | <surface>] <subcommand> [args]
+            Usage: zerocmux browser [--surface <id|ref|index> | <surface>] <subcommand> [args]
 
             Browser automation commands. Most subcommands require a surface handle.
             A surface can be passed as `--surface <handle>` or as the first positional token.
@@ -9711,32 +9025,32 @@ struct CMUXCLI {
               identify [--surface <id|ref|index>]
 
             Example:
-              cmux browser open https://example.com
-              cmux browser surface:1 navigate https://google.com
-              cmux browser --surface surface:1 snapshot --interactive
+              zerocmux browser open https://example.com
+              zerocmux browser surface:1 navigate https://google.com
+              zerocmux browser --surface surface:1 snapshot --interactive
             """
-        // Legacy browser aliases — point users to `cmux browser --help`
+        // Legacy browser aliases — point users to `zerocmux browser --help`
         case "open-browser":
-            return "Legacy alias for 'cmux browser open'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser open'. Run 'zerocmux browser --help' for details."
         case "navigate":
-            return "Legacy alias for 'cmux browser navigate'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser navigate'. Run 'zerocmux browser --help' for details."
         case "browser-back":
-            return "Legacy alias for 'cmux browser back'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser back'. Run 'zerocmux browser --help' for details."
         case "browser-forward":
-            return "Legacy alias for 'cmux browser forward'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser forward'. Run 'zerocmux browser --help' for details."
         case "browser-reload":
-            return "Legacy alias for 'cmux browser reload'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser reload'. Run 'zerocmux browser --help' for details."
         case "get-url":
-            return "Legacy alias for 'cmux browser get-url'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser get-url'. Run 'zerocmux browser --help' for details."
         case "focus-webview":
-            return "Legacy alias for 'cmux browser focus-webview'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser focus-webview'. Run 'zerocmux browser --help' for details."
         case "is-webview-focused":
-            return "Legacy alias for 'cmux browser is-webview-focused'. Run 'cmux browser --help' for details."
+            return "Legacy alias for 'zerocmux browser is-webview-focused'. Run 'zerocmux browser --help' for details."
         case "open": return openSubcommandUsage()
         case "markdown":
             return """
-            Usage: cmux markdown open <path> [options]
-                   cmux markdown <path>       (shorthand for 'open')
+            Usage: zerocmux markdown open <path> [options]
+                   zerocmux markdown <path>       (shorthand for 'open')
 
             Open a markdown file in a formatted viewer panel with live file watching.
             The file is rendered with rich formatting (headings, code blocks, tables,
@@ -9750,10 +9064,10 @@ struct CMUXCLI {
               --focus <true|false>         Focus the markdown panel (default: false)
 
             Examples:
-              cmux markdown open plan.md
-              cmux markdown ~/project/CHANGELOG.md
-              cmux markdown open ./docs/design.md --workspace 0
-              cmux markdown open plan.md --direction down
+              zerocmux markdown open plan.md
+              zerocmux markdown ~/project/CHANGELOG.md
+              zerocmux markdown open ./docs/design.md --workspace 0
+              zerocmux markdown open plan.md --direction down
             """
         default:
             return nil
@@ -9764,7 +9078,7 @@ struct CMUXCLI {
     private func dispatchSubcommandHelp(command: String, commandArgs: [String]) -> Bool {
         guard commandArgs.contains("--help") || commandArgs.contains("-h") else { return false }
         guard let text = subcommandUsage(command) else { return false }
-        print("cmux \(command)")
+        print("zerocmux \(command)")
         print("")
         print(text)
         return true
@@ -10080,7 +9394,7 @@ struct CMUXCLI {
         do {
             return try client.sendV2(method: "system.top", params: params, responseTimeout: responseTimeout)
         } catch let error as CLIError where error.message.hasPrefix("method_not_found:") {
-            throw CLIError(message: "cmux top requires a running cmux build with system.top support")
+            throw CLIError(message: "zerocmux top requires a running cmux build with system.top support")
         }
     }
 
@@ -11752,7 +11066,7 @@ struct CMUXCLI {
     }
 
     private func createOMOShimDirectory() throws -> URL {
-        // tmux shim: redirects tmux commands to cmux __tmux-compat
+        // tmux shim: redirects tmux commands to zerocmux __tmux-compat
         // Handle -V locally (no socket needed) since __tmux-compat requires a connection.
         let tmuxScript = """
         #!/usr/bin/env bash
@@ -11769,11 +11083,11 @@ struct CMUXCLI {
             tmuxShimScript: tmuxScript
         )
 
-        // terminal-notifier shim: intercepts macOS notifications and routes to cmux notify
+        // terminal-notifier shim: intercepts macOS notifications and routes to zerocmux notify
         let notifierURL = root.appendingPathComponent("terminal-notifier", isDirectory: false)
         let notifierScript = """
         #!/usr/bin/env bash
-        # Intercept terminal-notifier calls and route through cmux notify.
+        # Intercept terminal-notifier calls and route through zerocmux notify.
         # oh-my-openagent calls: terminal-notifier -title <t> -message <m> [-activate <id>]
         TITLE="" BODY=""
         while [[ $# -gt 0 ]]; do
@@ -11826,7 +11140,7 @@ struct CMUXCLI {
     }
 
     private static let omoPluginName = "oh-my-opencode"
-    private static let openCodeSessionPluginConfigSpec = "./plugins/cmux-session.js"
+    private static let openCodeSessionPluginConfigSpec = "./plugins/zerocmux-session.js"
 
     private func resolveExecutableInPath(_ name: String) -> String? {
         let entries = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":").map(String.init) ?? []
@@ -12564,7 +11878,7 @@ struct CMUXCLI {
                 boolFlags: ["-A", "-d", "-P"]
             )
             if parsed.hasFlag("-A") {
-                throw CLIError(message: "new-session -A is not supported in cmux claude-teams mode")
+                throw CLIError(message: "new-session -A is not supported in zerocmux claude-teams mode")
             }
             var params: [String: Any] = ["focus": false]
             if let cwd = parsed.value("-c") {
@@ -12601,7 +11915,7 @@ struct CMUXCLI {
                 boolFlags: ["-d", "-P"]
             )
             if parsed.value("-t") != nil {
-                throw CLIError(message: "new-window -t is not supported in cmux claude-teams mode")
+                throw CLIError(message: "new-window -t is not supported in zerocmux claude-teams mode")
             }
             var params: [String: Any] = ["focus": false]
             if let cwd = parsed.value("-c") {
@@ -13631,10 +12945,10 @@ struct CMUXCLI {
             print("OK")
 
         case "popup":
-            throw CLIError(message: "popup is not supported yet in cmux CLI parity mode")
+            throw CLIError(message: "popup is not supported yet in zerocmux CLI parity mode")
 
         case "bind-key", "unbind-key", "copy-mode":
-            throw CLIError(message: "\(command) is not supported yet in cmux CLI parity mode")
+            throw CLIError(message: "\(command) is not supported yet in zerocmux CLI parity mode")
 
         case "set-buffer":
             let (nameArg, rem0) = parseOption(commandArgs, name: "--name")
@@ -13720,7 +13034,7 @@ struct CMUXCLI {
     private func runClaudeHook(
         commandArgs: [String],
         client: SocketClient,
-        telemetry: CLISocketSentryTelemetry
+        telemetry: CLISocketDiagnosticsReporter
     ) throws {
         let subcommand = commandArgs.first?.lowercased() ?? "help"
         let hookArgs = Array(commandArgs.dropFirst())
@@ -14068,9 +13382,11 @@ struct CMUXCLI {
         client: SocketClient
     ) throws -> String {
         if let preferred = nonEmptyClaudeHookIdentifier(preferred) {
+            if isUUID(preferred) { return preferred }
             return try resolveWorkspaceIdForClaudeHook(preferred, client: client)
         }
         if let fallback = nonEmptyClaudeHookIdentifier(fallback) {
+            if isUUID(fallback) { return fallback }
             return try resolveWorkspaceIdForClaudeHook(fallback, client: client)
         }
         return try resolveWorkspaceIdForClaudeHook(nil, client: client)
@@ -14083,9 +13399,11 @@ struct CMUXCLI {
         client: SocketClient
     ) throws -> String {
         if let preferred = nonEmptyClaudeHookIdentifier(preferred) {
+            if isUUID(preferred) { return preferred }
             return try resolveSurfaceIdForClaudeHook(preferred, workspaceId: workspaceId, client: client)
         }
         if let fallback = nonEmptyClaudeHookIdentifier(fallback) {
+            if isUUID(fallback) { return fallback }
             return try resolveSurfaceIdForClaudeHook(fallback, workspaceId: workspaceId, client: client)
         }
         return try resolveSurfaceIdForClaudeHook(nil, workspaceId: workspaceId, client: client)
@@ -14243,7 +13561,9 @@ struct CMUXCLI {
            !raw.isEmpty,
            let candidate = try? resolveSurfaceId(raw, workspaceId: workspaceId, client: client),
            let listed = try? client.sendV2(method: "surface.list", params: ["workspace_id": workspaceId]) {
-            let items = listed["surfaces"] as? [[String: Any]] ?? []
+            guard let items = listed["surfaces"] as? [[String: Any]] else {
+                return candidate
+            }
             if items.contains(where: {
                 ($0["id"] as? String) == candidate || ($0["ref"] as? String) == candidate
             }) {
@@ -15127,7 +14447,7 @@ struct CMUXCLI {
             monitorArgs += ["--cwd", cwd]
         }
         process.arguments = monitorArgs
-        process.environment = env.merging(["CMUX_CLI_SENTRY_DISABLED": "1"], uniquingKeysWith: { _, new in new })
+        process.environment = env
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
@@ -15412,11 +14732,11 @@ struct CMUXCLI {
 
     // MARK: - Codex hooks
 
-    /// The hooks.json content that cmux installs into ~/.codex/.
-    /// Each hook calls `cmux hooks codex <event>` which gracefully no-ops
-    /// when not running inside cmux. The command checks for cmux on PATH
-    /// first so it silently succeeds even when cmux is not installed
-    /// (e.g. user opened codex in a non-cmux terminal).
+    /// The hooks.json content that zerocmux installs into ~/.codex/.
+    /// Each hook calls `zerocmux hooks codex <event>` which gracefully no-ops
+    /// when not running inside zerocmux. The command checks for zerocmux on PATH
+    /// first so it silently succeeds even when zerocmux is not installed
+    /// (e.g. user opened codex in a non-zerocmux terminal).
 
     // MARK: - Agent PID inference
 
@@ -15637,13 +14957,13 @@ struct CMUXCLI {
         let configDirEnvOverride: String? // e.g. "CODEX_HOME" overrides configDir
         let sessionStoreSuffix: String // e.g. "cursor" -> ~/.cmuxterm/cursor-hook-sessions.json
         let disableEnvVar: String   // e.g. "CMUX_CURSOR_HOOKS_DISABLED"
-        let hookMarker: String      // Marker in commands: "cmux hooks cursor"
+        let hookMarker: String      // Marker in commands: "zerocmux hooks cursor"
         let binaryName: String
         let format: HookFormat
         let events: [HookEvent]
         let aliases: Set<String>
         /// Feed-hook events. Each entry installs a second hook for
-        /// `agentEvent` that invokes `cmux hooks feed --source <name>`
+        /// `agentEvent` that invokes `zerocmux hooks feed --source <name>`
         /// with a 120s timeout so the socket reply wait doesn't trip the
         /// agent's default hook timeout when the user takes time to
         /// approve/deny a permission / plan / question.
@@ -15726,7 +15046,7 @@ struct CMUXCLI {
             name: "codex", displayName: "Codex", statusKey: "codex",
             configDir: ".codex", configFile: "hooks.json", configDirEnvOverride: "CODEX_HOME",
             sessionStoreSuffix: "codex", disableEnvVar: "CMUX_CODEX_HOOKS_DISABLED",
-            hookMarker: "cmux hooks codex", format: .nested(timeoutMs: 5000),
+            hookMarker: "zerocmux hooks codex", format: .nested(timeoutMs: 5000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "UserPromptSubmit", cmuxSubcommand: "prompt-submit"),
@@ -15737,23 +15057,23 @@ struct CMUXCLI {
         ),
         AgentHookDef(
             name: "opencode", displayName: "OpenCode", statusKey: "opencode",
-            configDir: ".config/opencode", configFile: "plugins/cmux-session.js", configDirEnvOverride: "OPENCODE_CONFIG_DIR",
+            configDir: ".config/opencode", configFile: "plugins/zerocmux-session.js", configDirEnvOverride: "OPENCODE_CONFIG_DIR",
             sessionStoreSuffix: "opencode", disableEnvVar: "CMUX_OPENCODE_HOOKS_DISABLED",
-            hookMarker: "cmux hooks opencode", format: .flat,
+            hookMarker: "zerocmux hooks opencode", format: .flat,
             events: []
         ),
         AgentHookDef(
             name: "pi", displayName: "Pi", statusKey: "pi",
-            configDir: ".pi/agent", configFile: "extensions/cmux-session.ts", configDirEnvOverride: "PI_CODING_AGENT_DIR",
+            configDir: ".pi/agent", configFile: "extensions/zerocmux-session.ts", configDirEnvOverride: "PI_CODING_AGENT_DIR",
             sessionStoreSuffix: "pi", disableEnvVar: "CMUX_PI_HOOKS_DISABLED",
-            hookMarker: "cmux hooks pi", format: .flat,
+            hookMarker: "zerocmux hooks pi", format: .flat,
             events: []
         ),
         AgentHookDef(
             name: "cursor", displayName: "Cursor", statusKey: "cursor",
             configDir: ".cursor", configFile: "hooks.json", binaryName: "cursor-agent",
             sessionStoreSuffix: "cursor", disableEnvVar: "CMUX_CURSOR_HOOKS_DISABLED",
-            hookMarker: "cmux hooks cursor", format: .flat,
+            hookMarker: "zerocmux hooks cursor", format: .flat,
             events: [
                 .init(agentEvent: "beforeSubmitPrompt", cmuxSubcommand: "prompt-submit"),
                 .init(agentEvent: "stop", cmuxSubcommand: "stop"),
@@ -15767,7 +15087,7 @@ struct CMUXCLI {
             name: "gemini", displayName: "Gemini", statusKey: "gemini",
             configDir: ".gemini", configFile: "settings.json",
             sessionStoreSuffix: "gemini", disableEnvVar: "CMUX_GEMINI_HOOKS_DISABLED",
-            hookMarker: "cmux hooks gemini", format: .nested(timeoutMs: 10000),
+            hookMarker: "zerocmux hooks gemini", format: .nested(timeoutMs: 10000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "BeforeAgent", cmuxSubcommand: "prompt-submit"),
@@ -15780,7 +15100,7 @@ struct CMUXCLI {
             name: "rovodev", displayName: "Rovo Dev", statusKey: "rovodev",
             configDir: ".rovodev", configFile: "config.yml", binaryName: "acli",
             sessionStoreSuffix: "rovodev", disableEnvVar: "CMUX_ROVODEV_HOOKS_DISABLED",
-            hookMarker: "cmux hooks rovodev", format: .rovoDevYAML,
+            hookMarker: "zerocmux hooks rovodev", format: .rovoDevYAML,
             events: [
                 .init(agentEvent: "on_complete", cmuxSubcommand: "stop"),
                 .init(agentEvent: "on_error", cmuxSubcommand: "stop"),
@@ -15793,7 +15113,7 @@ struct CMUXCLI {
             configDir: ".hermes", configFile: "config.yaml", configDirEnvOverride: "HERMES_HOME",
             binaryName: "hermes",
             sessionStoreSuffix: "hermes-agent", disableEnvVar: "CMUX_HERMES_AGENT_HOOKS_DISABLED",
-            hookMarker: "cmux hooks hermes-agent", format: .hermesAgentYAML,
+            hookMarker: "zerocmux hooks hermes-agent", format: .hermesAgentYAML,
             events: [
                 .init(agentEvent: "on_session_start", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "pre_llm_call", cmuxSubcommand: "prompt-submit"),
@@ -15808,7 +15128,7 @@ struct CMUXCLI {
             name: "copilot", displayName: "Copilot", statusKey: "copilot",
             configDir: ".copilot", configFile: "config.json", configDirEnvOverride: "COPILOT_HOME",
             sessionStoreSuffix: "copilot", disableEnvVar: "CMUX_COPILOT_HOOKS_DISABLED",
-            hookMarker: "cmux hooks copilot", format: .nested(timeoutMs: 5000),
+            hookMarker: "zerocmux hooks copilot", format: .nested(timeoutMs: 5000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "Stop", cmuxSubcommand: "stop"),
@@ -15821,7 +15141,7 @@ struct CMUXCLI {
             name: "codebuddy", displayName: "CodeBuddy", statusKey: "codebuddy",
             configDir: ".codebuddy", configFile: "settings.json", configDirEnvOverride: "CODEBUDDY_CONFIG_DIR",
             sessionStoreSuffix: "codebuddy", disableEnvVar: "CMUX_CODEBUDDY_HOOKS_DISABLED",
-            hookMarker: "cmux hooks codebuddy", format: .nested(timeoutMs: 5000),
+            hookMarker: "zerocmux hooks codebuddy", format: .nested(timeoutMs: 5000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "Stop", cmuxSubcommand: "stop"),
@@ -15834,7 +15154,7 @@ struct CMUXCLI {
             name: "factory", displayName: "Factory", statusKey: "factory",
             configDir: ".factory", configFile: "settings.json", binaryName: "droid",
             sessionStoreSuffix: "factory", disableEnvVar: "CMUX_FACTORY_HOOKS_DISABLED",
-            hookMarker: "cmux hooks factory", format: .nested(timeoutMs: 5000),
+            hookMarker: "zerocmux hooks factory", format: .nested(timeoutMs: 5000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "Stop", cmuxSubcommand: "stop"),
@@ -15847,7 +15167,7 @@ struct CMUXCLI {
             name: "qoder", displayName: "Qoder", statusKey: "qoder",
             configDir: ".qoder", configFile: "settings.json", configDirEnvOverride: "QODER_CONFIG_DIR", binaryName: "qodercli",
             sessionStoreSuffix: "qoder", disableEnvVar: "CMUX_QODER_HOOKS_DISABLED",
-            hookMarker: "cmux hooks qoder", format: .nested(timeoutMs: 5000),
+            hookMarker: "zerocmux hooks qoder", format: .nested(timeoutMs: 5000),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "Stop", cmuxSubcommand: "stop"),
@@ -15865,14 +15185,14 @@ struct CMUXCLI {
     private static func hookMarkers(for def: AgentHookDef) -> [String] {
         var markers = [def.hookMarker]
         if def.name == "codex" {
-            markers.append("cmux codex-hook")
+            markers.append("zerocmux codex-hook")
         }
         return markers
     }
 
     // MARK: Generic hook install/uninstall
     func hookCommand(for def: AgentHookDef, event: AgentHookDef.HookEvent) -> String {
-        "[ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && command -v cmux >/dev/null 2>&1 && cmux hooks \(def.name) \(event.cmuxSubcommand) || echo '{}'"
+        "[ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && command -v zerocmux >/dev/null 2>&1 && zerocmux hooks \(def.name) \(event.cmuxSubcommand) || echo '{}'"
     }
 
     /// Shell command the agent runs for a Feed bridge event. 120s timeout
@@ -15880,15 +15200,15 @@ struct CMUXCLI {
     /// nested hook config (see `buildHooksDict`); the shell command
     /// itself just dispatches.
     func feedHookCommand(for def: AgentHookDef, agentEvent: String) -> String {
-        "[ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && command -v cmux >/dev/null 2>&1 && cmux hooks feed --source \(def.name) --event \(agentEvent) || echo '{}'"
+        "[ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && command -v zerocmux >/dev/null 2>&1 && zerocmux hooks feed --source \(def.name) --event \(agentEvent) || echo '{}'"
     }
 
     /// Marker substrings used when removing / upgrading our own Feed bridge
     /// entries on reinstall or uninstall.
     private static func feedHookMarkers(for def: AgentHookDef) -> [String] {
-        var markers = ["cmux hooks feed --source"]
+        var markers = ["zerocmux hooks feed --source"]
         if def.name == "codex" {
-            markers.append("cmux feed-hook --source")
+            markers.append("zerocmux feed-hook --source")
         }
         return markers
     }
@@ -15936,13 +15256,13 @@ struct CMUXCLI {
         return result
     }
 
-    private static let openCodeSessionPluginMarker = "cmux-opencode-session-plugin-marker"
-    private static let openCodeSessionPluginFilename = "cmux-session.js"
+    private static let openCodeSessionPluginMarker = "zerocmux-opencode-session-plugin-marker"
+    private static let openCodeSessionPluginFilename = "zerocmux-session.js"
     private static let openCodeSessionPluginSource = #"""
-// cmux-opencode-session-plugin-marker v1
-// Bridges OpenCode session lifecycle events into cmux's restorable session store.
-// Installed by `cmux hooks opencode install` or `cmux hooks setup`.
-// DO NOT EDIT MANUALLY. cmux upgrades this file in place.
+// zerocmux-opencode-session-plugin-marker v1
+// Bridges OpenCode session lifecycle events into zerocmux's restorable session store.
+// Installed by `zerocmux hooks opencode install` or `zerocmux hooks setup`.
+// DO NOT EDIT MANUALLY. zerocmux upgrades this file in place.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -16071,7 +15391,7 @@ function sendHook(subcommand, ctx, event, extra = {}) {
     hook_event_name: event && event.type,
     ...extra,
   };
-  const cmux = process.env.CMUX_OPENCODE_CMUX_BIN || "cmux";
+  const cmux = process.env.CMUX_OPENCODE_CMUX_BIN || "zerocmux";
   try {
     spawnSync(cmux, ["hooks", "opencode", subcommand], {
       input: JSON.stringify(payload),
@@ -16156,8 +15476,11 @@ export default CMUXSessionRestore;
             if allowVersionSuffix, value.hasPrefix("\(spec)@") { return true }
             if spec == Self.openCodeSessionPluginConfigSpec {
                 return value == "./plugins/\(Self.openCodeSessionPluginFilename)"
+                    || value == "./plugins/cmux-session.js"
                     || value.hasSuffix("/plugins/\(Self.openCodeSessionPluginFilename)")
                     || value.hasSuffix("/\(Self.openCodeSessionPluginFilename)")
+                    || value.hasSuffix("/plugins/cmux-session.js")
+                    || value.hasSuffix("/cmux-session.js")
             }
             return false
         }
@@ -16170,9 +15493,13 @@ export default CMUXSessionRestore;
             }
             return value != Self.openCodeSessionPluginConfigSpec
                 && value != "cmux-session"
+                && value != "zerocmux-session"
                 && value != "./plugins/\(Self.openCodeSessionPluginFilename)"
+                && value != "./plugins/cmux-session.js"
                 && !value.hasSuffix("/plugins/\(Self.openCodeSessionPluginFilename)")
                 && !value.hasSuffix("/\(Self.openCodeSessionPluginFilename)")
+                && !value.hasSuffix("/plugins/cmux-session.js")
+                && !value.hasSuffix("/cmux-session.js")
         }
     }
 
@@ -16204,9 +15531,9 @@ export default CMUXSessionRestore;
             print(try updateOpenCodePluginRegistration(configDir: configDir, shouldInstall: true) ? "OpenCode hooks installed at \(pluginURL.path)" : "OpenCode hooks already up to date at \(pluginURL.path)")
             return
         }
-        if !existing.isEmpty, !existing.contains(Self.openCodeSessionPluginMarker) { throw CLIError(message: "\(pluginURL.path) exists and is not a cmux plugin; leaving it alone") }
+        if !existing.isEmpty, !existing.contains(Self.openCodeSessionPluginMarker) { throw CLIError(message: "\(pluginURL.path) exists and is not a zerocmux plugin; leaving it alone") }
         if !skipConfirm {
-            print("Will write OpenCode cmux plugin to \(pluginURL.path):")
+            print("Will write OpenCode zerocmux plugin to \(pluginURL.path):")
             print(Self.openCodeSessionPluginSource)
             print("\nProceed? [y/N] ", terminator: "")
             guard readLine()?.lowercased().hasPrefix("y") == true else {
@@ -16223,12 +15550,12 @@ export default CMUXSessionRestore;
         let fm = FileManager.default
         let pluginURL = openCodeSessionPluginURL(for: def)
         guard fm.fileExists(atPath: pluginURL.path) else {
-            print("No OpenCode cmux plugin found at \(pluginURL.path)")
+            print("No OpenCode zerocmux plugin found at \(pluginURL.path)")
             return
         }
         let existing = (try? String(contentsOf: pluginURL, encoding: .utf8)) ?? ""
         guard existing.contains(Self.openCodeSessionPluginMarker) else {
-            print("Refusing to remove \(pluginURL.path): missing cmux marker")
+            print("Refusing to remove \(pluginURL.path): missing zerocmux marker")
             return
         }
         try fm.removeItem(at: pluginURL)
@@ -16236,16 +15563,16 @@ export default CMUXSessionRestore;
             configDir: URL(fileURLWithPath: def.resolvedConfigDir(), isDirectory: true),
             shouldInstall: false
         )
-        print("Removed OpenCode cmux plugin from \(pluginURL.path)")
+        print("Removed OpenCode zerocmux plugin from \(pluginURL.path)")
     }
 
-    private static let piExtensionMarker = "cmux-pi-session-extension-marker"
-    private static let piExtensionFilename = "cmux-session.ts"
+    private static let piExtensionMarker = "zerocmux-pi-session-extension-marker"
+    private static let piExtensionFilename = "zerocmux-session.ts"
     private static let piExtensionSource = #"""
-// cmux-pi-session-extension-marker v1
-// Bridges Pi session lifecycle events into cmux's restorable session store.
-// Installed by `cmux hooks pi install` or `cmux hooks setup`.
-// DO NOT EDIT MANUALLY. cmux upgrades this file in place.
+// zerocmux-pi-session-extension-marker v1
+// Bridges Pi session lifecycle events into zerocmux's restorable session store.
+// Installed by `zerocmux hooks pi install` or `zerocmux hooks setup`.
+// DO NOT EDIT MANUALLY. zerocmux upgrades this file in place.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -16371,7 +15698,7 @@ function sendHook(subcommand: string, ctx: ExtensionContext, extra: Record<strin
     event: eventName(subcommand),
     ...extra,
   };
-  const cmux = process.env.CMUX_PI_CMUX_BIN || "cmux";
+  const cmux = process.env.CMUX_PI_CMUX_BIN || "zerocmux";
   try {
     spawnSync(cmux, ["hooks", "pi", subcommand], {
       input: JSON.stringify(payload),
@@ -16414,7 +15741,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             return
         }
         if !existing.isEmpty, !existing.contains(Self.piExtensionMarker) {
-            throw CLIError(message: "\(extensionURL.path) exists and is not a cmux extension; leaving it alone")
+            throw CLIError(message: "\(extensionURL.path) exists and is not a zerocmux extension; leaving it alone")
         }
         if !skipConfirm {
             Self.printInstallPreview(
@@ -16441,16 +15768,16 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let extensionURL = piExtensionURL(for: def)
         let fm = FileManager.default
         guard fm.fileExists(atPath: extensionURL.path) else {
-            print("No Pi cmux extension found at \(extensionURL.path)")
+            print("No Pi zerocmux extension found at \(extensionURL.path)")
             return
         }
         let existing = (try? String(contentsOf: extensionURL, encoding: .utf8)) ?? ""
         guard existing.contains(Self.piExtensionMarker) else {
-            print("Refusing to remove \(extensionURL.path): missing cmux marker")
+            print("Refusing to remove \(extensionURL.path): missing zerocmux marker")
             return
         }
         try fm.removeItem(at: extensionURL)
-        print("Removed Pi cmux extension from \(extensionURL.path)")
+        print("Removed Pi zerocmux extension from \(extensionURL.path)")
     }
 
     private func installRovoDevHooks(_ def: AgentHookDef) throws {
@@ -16502,11 +15829,11 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let oldString = try readAgentHookConfig(filePath: filePath, displayName: def.displayName)
         let newString = try rovoDevHooksContent(existing: oldString, def: def, shouldInstall: false)
         guard oldString != newString else {
-            print("Removed 0 cmux hook(s) from \(filePath)")
+            print("Removed 0 zerocmux hook(s) from \(filePath)")
             return
         }
         try newString.write(toFile: filePath, atomically: true, encoding: .utf8)
-        print("Removed Rovo Dev cmux hooks from \(filePath)")
+        print("Removed Rovo Dev zerocmux hooks from \(filePath)")
     }
 
     func readAgentHookConfig(filePath: String, displayName: String) throws -> String {
@@ -16576,10 +15903,10 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         var hooks = existing["hooks"] as? [String: Any] ?? [:]
         let newHooks = buildHooksDict(for: def)
 
-        // Remove existing cmux-owned entries (both the per-agent hook
-        // dispatcher and the Feed bridge). Non-cmux entries are
+        // Remove existing zerocmux-owned entries (both the per-agent hook
+        // dispatcher and the Feed bridge). Non-zerocmux entries are
         // always preserved — even when the user mixed them into the
-        // same group as a cmux hook, we only prune our own entries
+        // same group as a zerocmux hook, we only prune our own entries
         // within that group so the user's stays put.
         let isCmuxOwnedCommand: (String) -> Bool = { cmd in
             Self.hookMarkers(for: def).contains { cmd.contains($0) }
@@ -16603,7 +15930,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                     }
                     hookList.removeAll { isCmuxOwnedCommand($0["command"] as? String ?? "") }
                     if hookList.isEmpty {
-                        // Fully cmux-owned group → drop it entirely.
+                        // Fully zerocmux-owned group → drop it entirely.
                         continue
                     }
                     group["hooks"] = hookList
@@ -16615,7 +15942,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             }
         }
 
-        // Add new cmux entries
+        // Add new zerocmux entries
         for (event, value) in newHooks {
             switch def.format {
             case .flat:
@@ -16782,7 +16109,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         json["hooks"] = hooks
         let newData = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
         try newData.write(to: URL(fileURLWithPath: filePath), options: .atomic)
-        print("Removed \(removed) cmux hook(s) from \(filePath)")
+        print("Removed \(removed) zerocmux hook(s) from \(filePath)")
 
         // Post-uninstall actions
         if let action = def.postInstallAction {
@@ -16823,7 +16150,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         return normalizedHookValue(env["CMUX_SURFACE_ID"]) ?? ""
     }
 
-    private func runGenericAgentHook(def: AgentHookDef, commandArgs: [String], client: SocketClient, telemetry: CLISocketSentryTelemetry) throws {
+    private func runGenericAgentHook(def: AgentHookDef, commandArgs: [String], client: SocketClient, telemetry: CLISocketDiagnosticsReporter) throws {
         let env = ProcessInfo.processInfo.environment
         let subcommand = commandArgs.first?.lowercased() ?? ""
         let hookArgs = Array(commandArgs.dropFirst())
@@ -17004,7 +16331,8 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                 }
 
                 let payload = notificationPayload(title: def.displayName, subtitle: subtitle, body: body)
-                _ = try? sendV1Command("notify_target_async \(workspaceId) \(surfaceId) \(payload)", client: client)
+                let notificationCommand = codexFailure == nil ? "notify_target_async" : "notify_target"
+                _ = try? sendV1Command("\(notificationCommand) \(workspaceId) \(surfaceId) \(payload)", client: client)
                 if let codexFailure {
                     _ = try? sendV1Command("set_status \(def.statusKey) \(codexFailure.statusValue) --icon=exclamationmark.triangle.fill --color=#FF453A --priority=100 --tab=\(workspaceId)", client: client)
                 } else {
@@ -17968,7 +17296,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             try runOpenTUIFeedTUI(socketPath: socketPath, socketPassword: resolvedSocketPassword)
         } catch {
             fputs(
-                "cmux feed tui: OpenTUI unavailable (\(error)); falling back to legacy TUI.\n",
+                "zerocmux feed tui: OpenTUI unavailable (\(error)); falling back to legacy TUI.\n",
                 stderr
             )
             try runLegacyFeedTUI(socketPath: socketPath, socketPassword: resolvedSocketPassword)
@@ -17981,19 +17309,19 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             switch argument {
             case "--opentui":
                 guard implementation != .legacy else {
-                    throw CLIError(message: "cmux feed tui: choose only one TUI implementation")
+                    throw CLIError(message: "zerocmux feed tui: choose only one TUI implementation")
                 }
                 implementation = .openTUI
             case "--legacy":
                 guard implementation != .openTUI else {
-                    throw CLIError(message: "cmux feed tui: choose only one TUI implementation")
+                    throw CLIError(message: "zerocmux feed tui: choose only one TUI implementation")
                 }
                 implementation = .legacy
             case "--help", "-h":
-                print("Usage: cmux feed tui [--opentui|--legacy]")
+                print("Usage: zerocmux feed tui [--opentui|--legacy]")
                 return .help
             default:
-                throw CLIError(message: "cmux feed tui: unknown argument \(argument)")
+                throw CLIError(message: "zerocmux feed tui: unknown argument \(argument)")
             }
         }
         return implementation
@@ -18001,17 +17329,17 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func runOpenTUIFeedTUI(socketPath: String, socketPassword: String?) throws {
         guard isatty(STDIN_FILENO) == 1, isatty(STDOUT_FILENO) == 1 else {
-            throw CLIError(message: "cmux feed tui requires an interactive terminal")
+            throw CLIError(message: "zerocmux feed tui requires an interactive terminal")
         }
         guard let bunPath = resolveBunExecutable() else {
             throw CLIError(message: "Bun is required for the OpenTUI Feed")
         }
 
-        fputs("cmux feed tui: preparing OpenTUI Feed...\n", stderr)
+        fputs("zerocmux feed tui: preparing OpenTUI Feed...\n", stderr)
         fflush(stderr)
         let appDirectory = try prepareOpenTUIFeedApp(bunPath: bunPath)
         let sourceURL = appDirectory.appendingPathComponent("index.ts", isDirectory: false)
-        fputs("cmux feed tui: starting OpenTUI Feed.\n", stderr)
+        fputs("zerocmux feed tui: starting OpenTUI Feed.\n", stderr)
         fflush(stderr)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: bunPath)
@@ -18058,7 +17386,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let previousHandler = signal(SIGTTOU, SIG_IGN)
         defer { _ = signal(SIGTTOU, previousHandler) }
         guard tcsetpgrp(STDIN_FILENO, processGroup) == 0 else {
-            throw CLIError(message: "cmux feed tui: failed to foreground OpenTUI process: \(String(cString: strerror(errno)))")
+            throw CLIError(message: "zerocmux feed tui: failed to foreground OpenTUI process: \(String(cString: strerror(errno)))")
         }
     }
 
@@ -18115,7 +17443,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             .appendingPathComponent("package.json", isDirectory: false)
         if !fileManager.fileExists(atPath: installedPackageURL.path)
             || installedOpenTUIVersion(at: installedPackageURL) != Self.openTUIFeedCoreVersion {
-            fputs("cmux feed tui: installing @opentui/core \(Self.openTUIFeedCoreVersion)...\n", stderr)
+            fputs("zerocmux feed tui: installing @opentui/core \(Self.openTUIFeedCoreVersion)...\n", stderr)
             fflush(stderr)
             try installOpenTUIFeedDependencies(bunPath: bunPath, appDirectory: appDirectory)
         }
@@ -18202,7 +17530,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func runLegacyFeedTUI(socketPath: String, socketPassword: String?) throws {
         guard isatty(STDIN_FILENO) == 1, isatty(STDOUT_FILENO) == 1 else {
-            throw CLIError(message: "cmux feed tui requires an interactive terminal")
+            throw CLIError(message: "zerocmux feed tui requires an interactive terminal")
         }
 
         let client = SocketClient(path: socketPath)
@@ -18406,7 +17734,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
         print("\u{001B}[2J\u{001B}[H", terminator: "")
         print(feedTUILine(
-            "cmux Dock Feed  latest first  \(pendingCount) pending  \(items.count) total  \(visibleStart)-\(visibleEnd)",
+            "zerocmux Dock Feed  latest first  \(pendingCount) pending  \(items.count) total  \(visibleStart)-\(visibleEnd)",
             width: width
         ))
         print(feedTUILine(
@@ -18923,12 +18251,12 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     // MARK: - OpenCode plugin install
 
-    /// Marker matching the `// cmux-feed-plugin-marker` line emitted at
+    /// Marker matching the `// zerocmux-feed-plugin-marker` line emitted at
     /// the top of the generated plugin JS. Lets us detect our own
     /// plugin file and upgrade/uninstall without touching user plugins.
-    private static let openCodePluginMarker = "cmux-feed-plugin-marker"
+    private static let openCodePluginMarker = "zerocmux-feed-plugin-marker"
 
-    private static let openCodePluginFileName = "cmux-feed.js"
+    private static let openCodePluginFileName = "zerocmux-feed.js"
 
     private func openCodeConfigDirPath() -> String {
         if let override = ProcessInfo.processInfo.environment["OPENCODE_CONFIG_DIR"],
@@ -18950,7 +18278,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func bundledOpenCodePluginSource() throws -> String {
         // The plugin JS is bundled into the .app via `Resources/opencode-plugin.js`.
-        // The `cmux` CLI is often launched from `Contents/Resources/bin/cmux`,
+        // The `zerocmux` CLI is often launched from `Contents/Resources/bin/zerocmux`,
         // where Bundle.main can be the CLI executable rather than the containing
         // app. Search the real executable path before falling back to repo dev
         // paths used by `swift run`-style local builds.
@@ -19013,14 +18341,14 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let source = try bundledOpenCodePluginSource()
         let path = openCodePluginPath(projectLocal: projectLocal)
         let fm = FileManager.default
-        // If an existing non-cmux plugin lives at the same path, refuse
+        // If an existing non-zerocmux plugin lives at the same path, refuse
         // to overwrite. Users can delete it manually or pick a different
         // name; we never clobber user content.
         let existing = fm.fileExists(atPath: path)
             ? ((try? String(contentsOfFile: path, encoding: .utf8)) ?? "")
             : ""
         if !existing.isEmpty, !existing.contains(Self.openCodePluginMarker) {
-            throw CLIError(message: "\(path) exists and is not a cmux plugin; leaving it alone")
+            throw CLIError(message: "\(path) exists and is not a zerocmux plugin; leaving it alone")
         }
         let parent = (path as NSString).deletingLastPathComponent
         try fm.createDirectory(
@@ -19057,7 +18385,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             guard let existing = try? String(contentsOfFile: path, encoding: .utf8),
                   existing.contains(Self.openCodePluginMarker)
             else {
-                print("Skipping \(path) (no cmux marker)")
+                print("Skipping \(path) (no zerocmux marker)")
                 continue
             }
             try fm.removeItem(atPath: path)
@@ -19068,14 +18396,14 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
     // MARK: - Feed (workstream) hook bridge
 
     /// Reads an agent hook JSON payload from stdin, forwards it to the
-    /// running cmux app via the `feed.push` V2 socket verb, and (for
+    /// running zerocmux app via the `feed.push` V2 socket verb, and (for
     /// actionable events: ExitPlanMode, AskUserQuestion, permission-
     /// requiring tools) blocks until the user resolves the item. The
     /// decision JSON is emitted on stdout in the agent's expected format
     /// so the agent honors the user's choice.
     ///
     /// Usage:
-    ///   echo "<hook_json>" | cmux hooks feed --source <claude|codex|...>
+    ///   echo "<hook_json>" | zerocmux hooks feed --source <claude|codex|...>
     ///
     /// Designed so agents and wrappers can point a native decision hook
     /// at it and have permission/plan/question events surface in the
@@ -19086,16 +18414,16 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
     private func runFeedHook(
         commandArgs: [String],
         client: SocketClient,
-        telemetry: CLISocketSentryTelemetry
+        telemetry: CLISocketDiagnosticsReporter
     ) throws {
         _ = client
         _ = telemetry
         let source = optionValue(commandArgs, name: "--source") ?? ""
         guard !source.isEmpty else {
-            throw CLIError(message: "cmux hooks feed requires --source <agent-name>")
+            throw CLIError(message: "zerocmux hooks feed requires --source <agent-name>")
         }
 
-        // Outside a cmux terminal (no CMUX_SURFACE_ID) → silently no-op.
+        // Outside a zerocmux terminal (no CMUX_SURFACE_ID) → silently no-op.
         // Also matches the graceful-fallback pattern of the other hooks.
         guard ProcessInfo.processInfo.environment["CMUX_SURFACE_ID"]?.isEmpty == false else {
             print("{}")
@@ -19399,7 +18727,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         ) -> [String: Any] {
             var inner: [String: Any] = ["behavior": behavior]
             if behavior == "deny" {
-                inner["message"] = message ?? "User denied permission via cmux Feed."
+                inner["message"] = message ?? "User denied permission via zerocmux Feed."
             }
             if let updatedInput, !updatedInput.isEmpty {
                 inner["updatedInput"] = updatedInput
@@ -19465,7 +18793,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                 if mode == "deny" {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
-                        message: "User denied permission via cmux Feed."
+                        message: "User denied permission via zerocmux Feed."
                     ))
                 }
                 var updatedPermissions: [[String: Any]]?
@@ -19481,26 +18809,26 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                 if mode == "deny" {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
-                        message: "User denied permission via cmux Feed."
+                        message: "User denied permission via zerocmux Feed."
                     ))
                 }
                 return encode(permissionRequestHookDecision(behavior: "allow"))
             }
             if source == "hermes-agent" {
                 if mode == "deny" {
-                    return hermesAgentBlock("User denied permission via cmux Feed.")
+                    return hermesAgentBlock("User denied permission via zerocmux Feed.")
                 }
                 return "{}"
             }
             if mode == "deny" {
                 return encode(nonClaudePreToolDecision(
                     permission: "deny",
-                    reason: "User denied permission via cmux Feed."
+                    reason: "User denied permission via zerocmux Feed."
                 ))
             }
-            var reasonText = "User approved via cmux Feed."
+            var reasonText = "User approved via zerocmux Feed."
             if mode == "always" || mode == "all" || mode == "bypass" {
-                reasonText = "User granted \(mode) permission via cmux Feed. Reduce subsequent approval prompts for similar calls."
+                reasonText = "User granted \(mode) permission via zerocmux Feed. Reduce subsequent approval prompts for similar calls."
             }
             return encode(nonClaudePreToolDecision(
                 permission: "allow",
@@ -19515,19 +18843,19 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                 if let feedback, !feedback.isEmpty {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
-                        message: "User rejected the plan via cmux Feed and wants this change: \(feedback)"
+                        message: "User rejected the plan via zerocmux Feed and wants this change: \(feedback)"
                     ))
                 }
                 if mode == "deny" {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
-                        message: "User rejected the plan via cmux Feed."
+                        message: "User rejected the plan via zerocmux Feed."
                     ))
                 }
                 if mode == "ultraplan" {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
-                        message: "User chose Ultraplan via cmux Feed. Refine this plan with Ultraplan on Claude Code on the web."
+                        message: "User chose Ultraplan via zerocmux Feed. Refine this plan with Ultraplan on Claude Code on the web."
                     ))
                 }
                 var updatedPermissions: [[String: Any]]?
@@ -19546,15 +18874,15 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             }
             if source == "hermes-agent" {
                 if let feedback, !feedback.isEmpty {
-                    return hermesAgentBlock("User rejected the plan via cmux Feed and wants this change: \(feedback)")
+                    return hermesAgentBlock("User rejected the plan via zerocmux Feed and wants this change: \(feedback)")
                 }
                 if mode == "deny" {
-                    return hermesAgentBlock("User rejected the plan via cmux Feed.")
+                    return hermesAgentBlock("User rejected the plan via zerocmux Feed.")
                 }
                 return "{}"
             }
             if let feedback, !feedback.isEmpty {
-                let reason = "User rejected the plan via cmux Feed and wants this change: \(feedback)"
+                let reason = "User rejected the plan via zerocmux Feed and wants this change: \(feedback)"
                 return encode(nonClaudePreToolDecision(
                     permission: "deny",
                     reason: reason,
@@ -19564,11 +18892,11 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             if mode == "deny" {
                 return encode(nonClaudePreToolDecision(
                     permission: "deny",
-                    reason: "User rejected the plan via cmux Feed."
+                    reason: "User rejected the plan via zerocmux Feed."
                 ))
             }
             if mode == "ultraplan" {
-                let reason = "User chose Ultraplan via cmux Feed. Refine this plan with Ultraplan if available."
+                let reason = "User chose Ultraplan via zerocmux Feed. Refine this plan with Ultraplan if available."
                 return encode(nonClaudePreToolDecision(
                     permission: "deny",
                     reason: reason,
@@ -19584,7 +18912,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
             default:
                 modeText = "manual-approval mode (approve each edit)"
             }
-            let ctx = "User accepted this plan via cmux Feed with \(modeText). Exit plan mode now and proceed to implement without re-entering ExitPlanMode. Do not ask again."
+            let ctx = "User accepted this plan via zerocmux Feed with \(modeText). Exit plan mode now and proceed to implement without re-entering ExitPlanMode. Do not ask again."
             return encode(nonClaudePreToolDecision(
                 permission: "deny",
                 reason: ctx,
@@ -19594,7 +18922,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         case "question":
             let selections = decision["selections"] as? [String] ?? []
             if selections == [Self.skipInterviewAndPlanAnswer] {
-                let message = "User chose Skip interview and plan immediately via cmux Feed. Do not ask more interview questions. Write the plan now."
+                let message = "User chose Skip interview and plan immediately via zerocmux Feed. Do not ask more interview questions. Write the plan now."
                 if source == "claude" {
                     return encode(permissionRequestHookDecision(
                         behavior: "deny",
@@ -19640,7 +18968,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
                     .joined(separator: "\n")
                 body = "The user answered:\n\(lines)"
             }
-            let ctx = "[cmux Feed] \(body). Treat these as the user's response to your AskUserQuestion prompt; do not call AskUserQuestion again for the same question."
+            let ctx = "[zerocmux Feed] \(body). Treat these as the user's response to your AskUserQuestion prompt; do not call AskUserQuestion again for the same question."
             return encode(nonClaudePreToolDecision(
                 permission: "deny",
                 reason: ctx,
@@ -19690,13 +19018,13 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func runCursorInstallHooks() throws { try installAgentHooks(Self.agentDef(named: "cursor")!) }
     private func runCursorUninstallHooks() throws { try uninstallAgentHooks(Self.agentDef(named: "cursor")!) }
-    private func runCursorHook(commandArgs: [String], client: SocketClient, telemetry: CLISocketSentryTelemetry) throws {
+    private func runCursorHook(commandArgs: [String], client: SocketClient, telemetry: CLISocketDiagnosticsReporter) throws {
         try runGenericAgentHook(def: Self.agentDef(named: "cursor")!, commandArgs: commandArgs, client: client, telemetry: telemetry)
     }
 
     private func runGeminiInstallHooks() throws { try installAgentHooks(Self.agentDef(named: "gemini")!) }
     private func runGeminiUninstallHooks() throws { try uninstallAgentHooks(Self.agentDef(named: "gemini")!) }
-    private func runGeminiHook(commandArgs: [String], client: SocketClient, telemetry: CLISocketSentryTelemetry) throws {
+    private func runGeminiHook(commandArgs: [String], client: SocketClient, telemetry: CLISocketDiagnosticsReporter) throws {
         try runGenericAgentHook(def: Self.agentDef(named: "gemini")!, commandArgs: commandArgs, client: client, telemetry: telemetry)
     }
 
@@ -19704,13 +19032,13 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func runHooksNoSocketCommand(commandArgs: [String]) throws -> Bool {
         guard let first = commandArgs.first?.lowercased() else {
-            print(subcommandUsage("hooks") ?? "Usage: cmux hooks <setup|uninstall|agent>")
+            print(subcommandUsage("hooks") ?? "Usage: zerocmux hooks <setup|uninstall|agent>")
             return true
         }
 
         switch first {
         case "help", "--help", "-h":
-            print(subcommandUsage("hooks") ?? "Usage: cmux hooks <setup|uninstall|agent>")
+            print(subcommandUsage("hooks") ?? "Usage: zerocmux hooks <setup|uninstall|agent>")
             return true
 
         case "setup":
@@ -19737,7 +19065,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
             let rest = Array(commandArgs.dropFirst())
             guard let action = rest.first?.lowercased() else {
-                print(subcommandUsage("hooks") ?? "Usage: cmux hooks <setup|uninstall|agent>")
+                print(subcommandUsage("hooks") ?? "Usage: zerocmux hooks <setup|uninstall|agent>")
                 return true
             }
             let actionArgs = Array(rest.dropFirst())
@@ -19796,10 +19124,10 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
     private func runHooksSocketCommand(
         commandArgs: [String],
         client: SocketClient,
-        telemetry: CLISocketSentryTelemetry
+        telemetry: CLISocketDiagnosticsReporter
     ) throws {
         guard let first = commandArgs.first?.lowercased() else {
-            throw CLIError(message: "Usage: cmux hooks <setup|uninstall|feed|claude|agent>")
+            throw CLIError(message: "Usage: zerocmux hooks <setup|uninstall|feed|claude|agent>")
         }
         let rest = Array(commandArgs.dropFirst())
 
@@ -19898,7 +19226,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let fm = FileManager.default
         let verb = isUninstall ? "uninstalling" : "installing"
 
-        print("cmux hooks \(isUninstall ? "uninstall" : "setup"): \(verb) agent hooks")
+        print("zerocmux hooks \(isUninstall ? "uninstall" : "setup"): \(verb) agent hooks")
         if !isUninstall {
             print("  (Claude Code hooks are injected automatically via the claude wrapper)")
         }
@@ -19962,13 +19290,13 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         let commit = info["CMUXCommit"].flatMap { normalizedCommitHash($0) }
         let baseSummary: String
         if let version = info["CFBundleShortVersionString"], let build = info["CFBundleVersion"] {
-            baseSummary = "cmux \(version) (\(build))"
+            baseSummary = "zerocmux \(version) (\(build))"
         } else if let version = info["CFBundleShortVersionString"] {
-            baseSummary = "cmux \(version)"
+            baseSummary = "zerocmux \(version)"
         } else if let build = info["CFBundleVersion"] {
-            baseSummary = "cmux build \(build)"
+            baseSummary = "zerocmux build \(build)"
         } else {
-            baseSummary = "cmux version unknown"
+            baseSummary = "zerocmux version unknown"
         }
         guard let commit else { return baseSummary }
         return "\(baseSummary) [\(commit)]"
@@ -20031,14 +19359,12 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
         print()
         print(shortcuts)
         print()
-        print("  \(bold)Docs\(reset)\(subdued)                https://cmux.com/docs\(reset)")
-        print("  \(bold)Discord\(reset)\(subdued)             https://discord.gg/xsgFEVrWCZ\(reset)")
-        print("  \(bold)GitHub\(reset)\(subdued)              https://github.com/manaflow-ai/cmux (please leave a star ⭐)\(reset)")
-        print("  \(bold)Email\(reset)\(subdued)               founders@manaflow.com\(reset)")
+        print("  \(bold)Docs\(reset)\(subdued)                https://github.com/kernelalex/zerocmux#readme\(reset)")
+        print("  \(bold)GitHub\(reset)\(subdued)              https://github.com/kernelalex/zerocmux\(reset)")
+        print("  \(bold)Issues\(reset)\(subdued)              https://github.com/kernelalex/zerocmux/issues\(reset)")
         print()
-        print("  \(subdued)Run \(reset)\(bold)cmux --help\(reset)\(subdued) for all commands.\(reset)")
-        print("  \(subdued)Run \(reset)\(bold)cmux shortcuts\(reset)\(subdued) to edit shortcuts.\(reset)")
-        print("  \(subdued)Run \(reset)\(bold)cmux feedback\(reset)\(subdued) to report a bug.\(reset)")
+        print("  \(subdued)Run \(reset)\(bold)zerocmux --help\(reset)\(subdued) for all commands.\(reset)")
+        print("  \(subdued)Run \(reset)\(bold)zerocmux shortcuts\(reset)\(subdued) to edit shortcuts.\(reset)")
         print()
     }
 
@@ -20319,11 +19645,11 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
 
     private func usage() -> String {
         return """
-        cmux - control cmux via Unix socket
+        zerocmux - control zerocmux via Unix socket
 
         Usage:
-          cmux <path>                Open a directory in a new workspace (launches cmux if needed)
-          cmux [global-options] <command> [options]
+          zerocmux <path>                Open a directory in a new workspace (launches zerocmux if needed)
+          zerocmux [global-options] <command> [options]
 
         Handle Inputs:
           Use UUIDs, short refs (window:1/workspace:2/pane:3/surface:4), or indexes where commands accept window, workspace, pane, or surface inputs.
@@ -20334,7 +19660,7 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
           --password takes precedence, then CMUX_SOCKET_PASSWORD env var, then password saved in Settings.
 
         Agent Help:
-          To change cmux settings, run `cmux docs settings` and `cmux settings path`; to add Dock controls, run `cmux docs dock`.
+          To change zerocmux settings, run `zerocmux docs settings` and `zerocmux settings path`; to add Dock controls, run `zerocmux docs dock`.
           Back up any existing cmux.json file to a timestamped .bak copy before editing.
           Use printed curl commands to fetch the latest docs/schema, and prefer Ghostty config for terminal behavior Ghostty already supports.
 
@@ -20346,7 +19672,6 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
           shortcuts
           disable-browser | enable-browser | browser-status
           restore-session
-          feedback [--email <email> --body <text> [--image <path> ...]]
           feed tui|clear
           themes [list|set|clear]
           claude-teams [claude-args...]
@@ -20484,12 +19809,13 @@ export default function cmuxPiSessionExtension(pi: ExtensionAPI) {
           help
 
         Environment:
-          CMUX_WORKSPACE_ID   Auto-set in cmux terminals. Used as default --workspace for
+          CMUX_WORKSPACE_ID   Auto-set in zerocmux terminals. Used as default --workspace for
                               ALL commands (send, list-panels, new-split, notify, etc.).
           CMUX_TAB_ID         Optional alias used by `tab-action`/`rename-tab` as default --tab.
-          CMUX_SURFACE_ID     Auto-set in cmux terminals. Used as default --surface.
+          CMUX_SURFACE_ID     Auto-set in zerocmux terminals. Used as default --surface.
           CMUX_SOCKET_PATH    Override the Unix socket path. Without this, the CLI defaults
-                              to ~/Library/Application Support/cmux/cmux.sock and auto-discovers tagged/debug sockets.
+                              to ~/Library/Application Support/zerocmux/zerocmux.sock and auto-discovers
+                              tagged/debug sockets, including legacy cmux socket paths.
         """
     }
 

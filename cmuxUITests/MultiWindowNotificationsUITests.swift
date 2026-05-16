@@ -315,7 +315,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
         }
 
         guard let bundledCLIPath = resolveCmuxCLIPaths(strategy: .bundledOnly).first else {
-            XCTFail("Failed to locate bundled cmux CLI for notify regression test")
+            XCTFail("Failed to locate bundled zerocmux CLI for notify regression test")
             return
         }
 
@@ -330,7 +330,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
             try notifyScript.write(toFile: commandScriptPath, atomically: true, encoding: .utf8)
         } catch {
             XCTFail(
-                "Failed to write delayed bundled `cmux notify` script. " +
+                "Failed to write delayed bundled `zerocmux notify` script. " +
                 "path=\(commandScriptPath) error=\(error)"
             )
             return
@@ -343,7 +343,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
         finder.activate()
         XCTAssertTrue(
             waitForAppToLeaveForeground(app, timeout: 8.0),
-            "Expected cmux to move to background before delayed notify command runs. state=\(app.state.rawValue)"
+            "Expected zerocmux to move to background before delayed notify command runs. state=\(app.state.rawValue)"
         )
 
         XCTAssertTrue(
@@ -352,7 +352,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
                 app: app,
                 timeout: 15.0
             ),
-            "Expected delayed bundled `cmux notify` command to finish without foregrounding cmux. state=\(app.state.rawValue)"
+            "Expected delayed bundled `zerocmux notify` command to finish without foregrounding zerocmux. state=\(app.state.rawValue)"
         )
 
         let notifyExitStatus = readTrimmedFile(atPath: commandStatusPath) ?? "<missing>"
@@ -362,11 +362,11 @@ final class MultiWindowNotificationsUITests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         XCTAssertFalse(
             app.state == .runningForeground,
-            "Expected cmux to remain in background after bundled `cmux notify`. state=\(app.state.rawValue) stderr=\(notifyStderr)"
+            "Expected zerocmux to remain in background after bundled `zerocmux notify`. state=\(app.state.rawValue) stderr=\(notifyStderr)"
         )
         guard notifyExitStatus == "0" else {
             XCTFail(
-                "Expected bundled `cmux notify` launched from the in-app shell to succeed. " +
+                "Expected bundled `zerocmux notify` launched from the in-app shell to succeed. " +
                 "status=\(notifyExitStatus) stdout=\(notifyStdout) stderr=\(notifyStderr)"
             )
             return
@@ -678,7 +678,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
             return (
                 terminationStatus: -1,
                 stdout: "",
-                stderr: "Failed to locate bundled cmux CLI"
+                stderr: "Failed to locate bundled zerocmux CLI"
             )
         }
 
@@ -703,7 +703,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
             return lastPermissionFailure ?? (
                 terminationStatus: -1,
                 stdout: "",
-                stderr: "Bundled cmux CLI command failed without an executable path"
+                stderr: "Bundled zerocmux CLI command failed without an executable path"
             )
         }
 
@@ -766,10 +766,10 @@ final class MultiWindowNotificationsUITests: XCTestCase {
             appendCLIPathCandidates(fromProductsDirectory: productsDir, strategy: strategy, to: &candidates)
         }
 
-        candidates.append("/tmp/cmux-\(launchTag)/Build/Products/Debug/cmux DEV.app/Contents/Resources/bin/cmux")
-        candidates.append("/tmp/cmux-\(launchTag)/Build/Products/Debug/cmux.app/Contents/Resources/bin/cmux")
+        candidates.append("/tmp/zerocmux-\(launchTag)/Build/Products/Debug/zerocmux DEV.app/Contents/Resources/bin/zerocmux")
+        candidates.append("/tmp/zerocmux-\(launchTag)/Build/Products/Debug/zerocmux.app/Contents/Resources/bin/zerocmux")
         if strategy == .any {
-            candidates.append("/tmp/cmux-\(launchTag)/Build/Products/Debug/cmux")
+            candidates.append("/tmp/zerocmux-\(launchTag)/Build/Products/Debug/zerocmux")
         }
 
         var resolvedPaths: [String] = []
@@ -803,10 +803,10 @@ final class MultiWindowNotificationsUITests: XCTestCase {
         strategy: CmuxCLIStrategy,
         to candidates: inout [String]
     ) {
-        candidates.append("\(productsDir)/cmux DEV.app/Contents/Resources/bin/cmux")
-        candidates.append("\(productsDir)/cmux.app/Contents/Resources/bin/cmux")
+        candidates.append("\(productsDir)/zerocmux DEV.app/Contents/Resources/bin/zerocmux")
+        candidates.append("\(productsDir)/zerocmux.app/Contents/Resources/bin/zerocmux")
         if strategy == .any {
-            candidates.append("\(productsDir)/cmux")
+            candidates.append("\(productsDir)/zerocmux")
         }
 
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: productsDir) else {
@@ -852,7 +852,7 @@ final class MultiWindowNotificationsUITests: XCTestCase {
             return (
                 terminationStatus: -1,
                 stdout: "",
-                stderr: "Failed to run cmux command: \(error.localizedDescription) (cliPath=\(executablePath))"
+                stderr: "Failed to run zerocmux command: \(error.localizedDescription) (cliPath=\(executablePath))"
             )
         }
 

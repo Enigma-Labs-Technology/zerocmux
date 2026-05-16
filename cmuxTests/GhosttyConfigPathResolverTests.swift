@@ -8,6 +8,44 @@ import Foundation
 #endif
 
 final class GhosttyConfigPathResolverTests: XCTestCase {
+    func testZerocmuxAppSupportConfigURLsUseReleaseConfigForDebugBundleWithoutCurrentConfig() throws {
+        try withTemporaryAppSupportDirectory { appSupportDirectory in
+            let releaseConfigURL = try writeAppSupportConfig(
+                appSupportDirectory: appSupportDirectory,
+                bundleIdentifier: "com.kernelalex.zerocmux",
+                filename: "config",
+                contents: "font-size = 13\n"
+            )
+
+            XCTAssertEqual(
+                GhosttyApp.cmuxAppSupportConfigURLs(
+                    currentBundleIdentifier: "com.kernelalex.zerocmux.debug",
+                    appSupportDirectory: appSupportDirectory
+                ),
+                [releaseConfigURL]
+            )
+        }
+    }
+
+    func testZerocmuxDebugFallsBackToLegacyReleaseConfigWhenNewConfigIsMissing() throws {
+        try withTemporaryAppSupportDirectory { appSupportDirectory in
+            let legacyReleaseConfigURL = try writeAppSupportConfig(
+                appSupportDirectory: appSupportDirectory,
+                bundleIdentifier: "com.cmuxterm.app",
+                filename: "config",
+                contents: "font-size = 13\n"
+            )
+
+            XCTAssertEqual(
+                GhosttyApp.cmuxAppSupportConfigURLs(
+                    currentBundleIdentifier: "com.kernelalex.zerocmux.debug",
+                    appSupportDirectory: appSupportDirectory
+                ),
+                [legacyReleaseConfigURL]
+            )
+        }
+    }
+
     func testCmuxAppSupportConfigURLsUseReleaseConfigForDebugBundleWithoutCurrentConfig() throws {
         try withTemporaryAppSupportDirectory { appSupportDirectory in
             let releaseConfigURL = try writeAppSupportConfig(

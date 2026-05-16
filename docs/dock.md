@@ -1,8 +1,8 @@
 # Dock
 
-Dock lets you pin terminal controls into the cmux right sidebar. Each Dock control runs a command in its own Ghostty-backed terminal section, so TUIs keep normal keyboard behavior such as arrow keys, `j` / `k`, and `Ctrl-C`.
+Dock lets you pin terminal controls into the zerocmux right sidebar. Each Dock control runs a command in its own Ghostty-backed terminal section, so TUIs keep normal keyboard behavior such as arrow keys, `j` / `k`, and `Ctrl-C`.
 
-Dock controls are useful for project dashboards, git views, logs, queues, local services, test watchers, dev servers, and custom TUIs. Feed can be added as one optional control with `cmux feed tui --opentui`, but Dock is not limited to Feed.
+Dock controls are useful for project dashboards, git views, logs, queues, local services, test watchers, dev servers, and custom TUIs. Feed can be added as one optional control with `zerocmux feed tui --opentui`, but Dock is not limited to Feed.
 
 Each command starts inside the terminal's non-interactive login shell. That keeps the user's normal PATH and toolchain setup without running prompt code before the TUI starts. When the command exits, Dock drops into an interactive login shell in the same section so the user can inspect, rerun, or exit.
 
@@ -52,7 +52,7 @@ The order of `controls` is the order shown in Dock. Reorder entries in the file 
 
 ## Config Precedence
 
-cmux looks for Dock config in this order:
+zerocmux looks for Dock config in this order:
 
 1. `.cmux/dock.json` in the current project or a parent directory
 2. `~/.config/cmux/dock.json`
@@ -63,13 +63,13 @@ Use `~/.config/cmux/dock.json` for personal defaults, machines without a repo, o
 
 Nested project configs apply to their directory tree. If a nested project has its own `.cmux/dock.json`, use that nearest config for work inside the nested project. Do not put unrelated project controls into the global config just because a repo is absent.
 
-If neither file exists, Dock opens empty and offers a prompt to create a starter config. cmux does not add Dock controls automatically.
+If neither file exists, Dock opens empty and offers a prompt to create a starter config. zerocmux does not add Dock controls automatically.
 
 Relative `cwd` values resolve from the config base. For `.cmux/dock.json`, that base is the project directory containing `.cmux`. For the global config, that base is the home directory.
 
 ## Trust
 
-Project Dock configs can start commands. The first time cmux sees a project Dock config, it shows a trust gate before launching controls. Changing the config changes the trust fingerprint and asks again.
+Project Dock configs can start commands. The first time zerocmux sees a project Dock config, it shows a trust gate before launching controls. Changing the config changes the trust fingerprint and asks again.
 
 Global Dock config at `~/.config/cmux/dock.json` is treated as personal config and starts without a project trust gate.
 
@@ -80,7 +80,7 @@ Do not put secrets, tokens, or machine-specific private paths in a shared projec
 When asking a coding agent to create a Dock config, tell it to run:
 
 ```sh
-cmux docs dock
+zerocmux docs dock
 ```
 
 The agent should inspect the project first, choose project config or global config deliberately, ask the user when the desired controls are unclear, validate the JSON, and summarize each command before the user trusts the config.

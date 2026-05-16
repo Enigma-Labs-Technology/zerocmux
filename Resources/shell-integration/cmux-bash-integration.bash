@@ -1,4 +1,4 @@
-# cmux shell integration for bash
+# zerocmux shell integration for bash
 
 # Cache which send tool is available to avoid repeated PATH lookups.
 _CMUX_SEND_TOOL=""
@@ -41,7 +41,7 @@ _cmux_relay_cli_path() {
         printf '%s\n' "${CMUX_BUNDLED_CLI_PATH}"
         return 0
     fi
-    command -v cmux 2>/dev/null
+    command -v zerocmux 2>/dev/null || command -v cmux 2>/dev/null
 }
 
 _cmux_socket_uses_remote_relay() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression: interactive `cmux ssh` shells must resolve `cmux` to the relay wrapper."""
+"""Regression: interactive `zerocmux ssh` shells must resolve `cmux` to the relay wrapper."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 SSH_HOST = os.environ.get("CMUX_SSH_TEST_HOST", "").strip()
 
 
@@ -30,15 +30,15 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
-    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"), recursive=True)
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"), recursive=True)
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     return candidates[0]
 
@@ -171,7 +171,7 @@ def _run_remote_shell_command(client: cmux, surface_id: str, command: str, timeo
 
 def main() -> int:
     if not SSH_HOST:
-        print("SKIP: set CMUX_SSH_TEST_HOST to run interactive ssh cmux command regression")
+        print("SKIP: set CMUX_SSH_TEST_HOST to run interactive ssh zerocmux command regression")
         return 0
 
     cli = _find_cli_binary()
@@ -180,7 +180,7 @@ def main() -> int:
         with cmux(SOCKET_PATH) as client:
             payload = _run_cli_json(cli, ["ssh", SSH_HOST])
             workspace_id = _workspace_id_from_payload(client, payload)
-            _must(bool(workspace_id), f"cmux ssh output missing workspace_id: {payload}")
+            _must(bool(workspace_id), f"zerocmux ssh output missing workspace_id: {payload}")
             workspace_ids.append(workspace_id)
 
             _wait_remote_ready(client, workspace_id)
@@ -191,41 +191,41 @@ def main() -> int:
             shell_ready_text = client.read_terminal_text(surface_id)
             _assert_no_login_profile_noise(shell_ready_text)
 
-            which_status, which_output, which_text = _run_remote_shell_command(client, surface_id, "command -v cmux")
-            _must(which_status == 0, f"`command -v cmux` failed: output={which_output!r} tail={which_text[-1200:]!r}")
+            which_status, which_output, which_text = _run_remote_shell_command(client, surface_id, "command -v zerocmux")
+            _must(which_status == 0, f"`command -v zerocmux` failed: output={which_output!r} tail={which_text[-1200:]!r}")
             _must(
-                "/.cmux/bin/cmux" in which_output,
-                f"interactive ssh shell should resolve cmux to relay wrapper, got {which_output!r}",
+                "/.cmux/bin/zerocmux" in which_output,
+                f"interactive ssh shell should resolve zerocmux to relay wrapper, got {which_output!r}",
             )
 
-            ping_status, ping_output, ping_text = _run_remote_shell_command(client, surface_id, "cmux ping")
-            _must(ping_status == 0, f"`cmux ping` failed in interactive shell: output={ping_output!r} tail={ping_text[-1200:]!r}")
-            _must("pong" in ping_output.lower(), f"`cmux ping` should return pong, got {ping_output!r}")
+            ping_status, ping_output, ping_text = _run_remote_shell_command(client, surface_id, "zerocmux ping")
+            _must(ping_status == 0, f"`zerocmux ping` failed in interactive shell: output={ping_output!r} tail={ping_text[-1200:]!r}")
+            _must("pong" in ping_output.lower(), f"`zerocmux ping` should return pong, got {ping_output!r}")
             _must(
                 "Socket not found at 127.0.0.1:" not in ping_text,
-                f"interactive ssh shell still routed cmux to a unix-socket-only binary: {ping_text[-1200:]!r}",
+                f"interactive ssh shell still routed zerocmux to a unix-socket-only binary: {ping_text[-1200:]!r}",
             )
             _must(
                 "waiting for relay on 127.0.0.1:" not in ping_text and "failed to connect to 127.0.0.1:" not in ping_text,
-                f"`cmux ping` hit a dead ssh relay instead of the local app socket: {ping_text[-1200:]!r}",
+                f"`zerocmux ping` hit a dead ssh relay instead of the local app socket: {ping_text[-1200:]!r}",
             )
 
             notify_status, notify_output, notify_text = _run_remote_shell_command(
                 client,
                 surface_id,
-                "cmux notify --body interactive-ssh-regression",
+                "zerocmux notify --body interactive-ssh-regression",
             )
             _must(
                 notify_status == 0,
-                f"`cmux notify` failed in interactive shell: output={notify_output!r} tail={notify_text[-1200:]!r}",
+                f"`zerocmux notify` failed in interactive shell: output={notify_output!r} tail={notify_text[-1200:]!r}",
             )
             _must(
                 "Socket not found at 127.0.0.1:" not in notify_text,
-                f"`cmux notify` still failed via wrong cmux binary: {notify_text[-1200:]!r}",
+                f"`zerocmux notify` still failed via wrong zerocmux binary: {notify_text[-1200:]!r}",
             )
             _must(
                 "waiting for relay on 127.0.0.1:" not in notify_text and "failed to connect to 127.0.0.1:" not in notify_text,
-                f"`cmux notify` still failed because the ssh relay listener was not running: {notify_text[-1200:]!r}",
+                f"`zerocmux notify` still failed because the ssh relay listener was not running: {notify_text[-1200:]!r}",
             )
 
             shell_status, shell_output, shell_text = _run_remote_shell_command(
@@ -256,7 +256,7 @@ def main() -> int:
             except Exception:
                 pass
 
-    print("PASS: interactive ssh shell resolves cmux to relay wrapper and remote cmux commands succeed")
+    print("PASS: interactive ssh shell resolves zerocmux to relay wrapper and remote zerocmux commands succeed")
     return 0
 
 

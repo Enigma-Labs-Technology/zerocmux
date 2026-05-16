@@ -28,8 +28,8 @@ def resolve_cmux_cli() -> str:
         return explicit
 
     candidates: list[str] = []
-    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux")))
-    candidates.extend(glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux"))
+    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux")))
+    candidates.extend(glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux"))
     candidates = [p for p in candidates if os.path.exists(p) and os.access(p, os.X_OK)]
     if candidates:
         candidates.sort(key=os.path.getmtime, reverse=True)
@@ -39,32 +39,11 @@ def resolve_cmux_cli() -> str:
     if in_path:
         return in_path
 
-    raise RuntimeError("Unable to find cmux CLI binary. Set CMUX_CLI_BIN.")
-
-
-def copy_runtime_frameworks(cli_path: str, fixture_contents: str) -> None:
-    frameworks_dir = os.path.join(fixture_contents, "Frameworks")
-    os.makedirs(frameworks_dir, exist_ok=True)
-
-    search_roots: list[str] = []
-    current = os.path.dirname(cli_path)
-    for _ in range(4):
-        search_roots.append(os.path.join(current, "Frameworks"))
-        search_roots.append(os.path.join(current, "PackageFrameworks"))
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-
-    for search_root in search_roots:
-        sentry_framework = os.path.join(search_root, "Sentry.framework")
-        if os.path.isdir(sentry_framework):
-            shutil.copytree(sentry_framework, os.path.join(frameworks_dir, "Sentry.framework"))
-            return
+    raise RuntimeError("Unable to find zerocmux CLI binary. Set CMUX_CLI_BIN.")
 
 
 def build_fixture(root: str, cli_path: str) -> str:
-    app_path = os.path.join(root, "cmux.app")
+    app_path = os.path.join(root, "zerocmux.app")
     contents_path = os.path.join(app_path, "Contents")
     resources_path = os.path.join(contents_path, "Resources")
     bin_path = os.path.join(resources_path, "bin")
@@ -72,7 +51,6 @@ def build_fixture(root: str, cli_path: str) -> str:
 
     fixture_cli = os.path.join(bin_path, "cmux")
     shutil.copy2(cli_path, fixture_cli)
-    copy_runtime_frameworks(cli_path, contents_path)
 
     info = {
         "CFBundleExecutable": "cmux",

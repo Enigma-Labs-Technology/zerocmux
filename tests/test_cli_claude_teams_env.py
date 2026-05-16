@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams` injects the tmux-style auto-mode env.
+Regression test: `zerocmux claude-teams` injects the tmux-style auto-mode env.
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ fs.writeFileSync(
             raise SystemExit(1)
 
         if tmux_path.startswith(str(real_bin)):
-            print(f"FAIL: expected cmux tmux shim to shadow PATH, got {tmux_path!r}")
+            print(f"FAIL: expected zerocmux tmux shim to shadow PATH, got {tmux_path!r}")
             raise SystemExit(1)
 
         cmux_bin_value = read_text(cmux_bin_log)
@@ -243,7 +243,7 @@ def main() -> int:
         "--trace-warnings",
     )
     if proc.returncode != 0:
-        print("FAIL: `cmux claude-teams --version` exited non-zero")
+        print("FAIL: `zerocmux claude-teams --version` exited non-zero")
         print(f"exit={proc.returncode}")
         print(f"stdout={proc.stdout.strip()}")
         print(f"stderr={proc.stderr.strip()}")
@@ -284,7 +284,7 @@ def main() -> int:
         "--max-old-space-size 2048 --trace-warnings",
     )
     if proc.returncode != 0:
-        print("FAIL: `cmux claude-teams --version` with existing heap flag exited non-zero")
+        print("FAIL: `zerocmux claude-teams --version` with existing heap flag exited non-zero")
         print(f"exit={proc.returncode}")
         print(f"stdout={proc.stdout.strip()}")
         print(f"stderr={proc.stderr.strip()}")
@@ -329,7 +329,7 @@ def main() -> int:
             tmpdir=str(bad_tmpdir),
         )
     if proc.returncode != 0:
-        print("FAIL: `cmux claude-teams --version` should still succeed when TMPDIR is unusable")
+        print("FAIL: `zerocmux claude-teams --version` should still succeed when TMPDIR is unusable")
         print(f"exit={proc.returncode}")
         print(f"stdout={proc.stdout.strip()}")
         print(f"stderr={proc.stderr.strip()}")
@@ -356,7 +356,7 @@ def main() -> int:
         )
         return 1
 
-    print("PASS: cmux claude-teams restores child NODE_OPTIONS while injecting the auto-mode tmux env")
+    print("PASS: zerocmux claude-teams restores child NODE_OPTIONS while injecting the auto-mode tmux env")
     return 0
 
 

@@ -4,8 +4,8 @@ Regression: GhosttyKit already injects zsh shell integration by setting ZDOTDIR
 to Ghostty's own integration directory (and optionally preserving a user-set
 ZDOTDIR in GHOSTTY_ZSH_ZDOTDIR).
 
-cmux also injects its own zsh integration by setting ZDOTDIR to
-Resources/shell-integration. If cmux incorrectly treats Ghostty's injected
+zerocmux also injects its own zsh integration by setting ZDOTDIR to
+Resources/shell-integration. If zerocmux incorrectly treats Ghostty's injected
 ZDOTDIR as the "user" ZDOTDIR, zsh history will be isolated to the integration
 directory rather than the user's HOME/ZDOTDIR, breaking cross-terminal history
 and therefore zsh-autosuggestions.
@@ -41,7 +41,7 @@ def main() -> int:
     ghostty_zsh_dir = root / "ghostty" / "src" / "shell-integration" / "zsh"
 
     if not (cmux_wrapper_dir / ".zshenv").exists():
-        print(f"SKIP: missing cmux wrapper .zshenv at {cmux_wrapper_dir}")
+        print(f"SKIP: missing zerocmux wrapper .zshenv at {cmux_wrapper_dir}")
         return 0
     if not (ghostty_zsh_dir / ".zshenv").exists():
         print(f"SKIP: missing Ghostty zsh .zshenv at {ghostty_zsh_dir}")
@@ -63,7 +63,7 @@ def main() -> int:
         env.pop("GHOSTTY_SHELL_FEATURES", None)
         env.pop("GHOSTTY_BIN_DIR", None)
 
-        # Simulate the buggy situation: cmux stores Ghostty's injected ZDOTDIR
+        # Simulate the buggy situation: zerocmux stores Ghostty's injected ZDOTDIR
         # as the "original" ZDOTDIR, then sets ZDOTDIR to its own wrapper.
         env["CMUX_ORIGINAL_ZDOTDIR"] = str(ghostty_zsh_dir)
         env["ZDOTDIR"] = str(cmux_wrapper_dir)

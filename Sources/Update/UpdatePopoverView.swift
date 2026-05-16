@@ -200,7 +200,7 @@ fileprivate struct PermissionRequestView: View {
                 Text(String(localized: "update.popover.enableAutoUpdates", defaultValue: "Enable automatic updates?"))
                     .font(.system(size: 13, weight: .semibold))
 
-                Text(String(localized: "update.popover.autoUpdatesDescription", defaultValue: "cmux can automatically check for updates in the background."))
+                Text(String(localized: "update.popover.autoUpdatesDescription", defaultValue: "zerocmux can automatically check for updates in the background."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -220,7 +220,7 @@ fileprivate struct PermissionRequestView: View {
 
                 Button(String(localized: "common.allow", defaultValue: "Allow")) {
                     request.reply(SUUpdatePermissionResponse(
-                        automaticUpdateChecks: true,
+                        automaticUpdateChecks: false,
                         sendSystemProfile: false
                     ))
                     dismiss()

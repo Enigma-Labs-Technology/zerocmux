@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: the generated Pi extension is importable and emits cmux hook calls.
+Regression test: the generated Pi extension is importable and emits zerocmux hook calls.
 """
 
 from __future__ import annotations
@@ -53,19 +53,19 @@ def main() -> int:
             print(f"stderr={install.stderr.strip()}")
             return 1
 
-        extension_path = config_dir / "extensions" / "cmux-session.ts"
+        extension_path = config_dir / "extensions" / "zerocmux-session.ts"
         if not extension_path.exists():
             print(f"FAIL: expected extension at {extension_path}")
             return 1
         extension_text = extension_path.read_text(encoding="utf-8")
-        if "cmux-pi-session-extension-marker" not in extension_text:
-            print(f"FAIL: expected cmux marker in {extension_path}")
+        if "zerocmux-pi-session-extension-marker" not in extension_text:
+            print(f"FAIL: expected zerocmux marker in {extension_path}")
             return 1
 
-        fake_cmux = root / "fake-cmux"
-        fake_args_log = root / "fake-cmux-args.log"
-        fake_stdin_log = root / "fake-cmux-stdin.log"
-        fake_env_log = root / "fake-cmux-env.log"
+        fake_cmux = root / "fake-zerocmux"
+        fake_args_log = root / "fake-zerocmux-args.log"
+        fake_stdin_log = root / "fake-zerocmux-stdin.log"
+        fake_env_log = root / "fake-zerocmux-env.log"
         make_executable(
             fake_cmux,
             """#!/usr/bin/env bash
@@ -179,7 +179,7 @@ await handlers.get("agent_end")({
             print(f"FAIL: extension captured wrong Pi launch argv; expected {expected_argv!r}, got {decoded_argv!r}")
             return 1
 
-    print("PASS: generated Pi extension installs and emits cmux hooks")
+    print("PASS: generated Pi extension installs and emits zerocmux hooks")
     return 0
 
 

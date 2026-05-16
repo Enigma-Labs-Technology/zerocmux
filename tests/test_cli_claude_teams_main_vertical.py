@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams` main-vertical layout stacks teammates
+Regression test: `zerocmux claude-teams` main-vertical layout stacks teammates
 vertically in a right-side column instead of creating nested horizontal splits.
 
 Simulates Claude creating 3 teammates:
@@ -216,7 +216,7 @@ class FakeCmuxState:
                 return {"ok": True}
             if method == "surface.send_text":
                 return {"ok": True}
-            raise RuntimeError(f"Unsupported fake cmux method: {method}")
+            raise RuntimeError(f"Unsupported fake zerocmux method: {method}")
 
     def _pane_by_id(self, pane_id: str) -> dict:
         for p in self.panes:

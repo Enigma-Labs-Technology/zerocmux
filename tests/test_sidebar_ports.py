@@ -23,7 +23,7 @@ from pathlib import Path
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError  # noqa: E402
+from zerocmux import cmux, cmuxError  # noqa: E402
 
 
 # Historically, ports detection only checked a small allowlist. This test
@@ -84,7 +84,7 @@ def _find_free_allowed_port() -> int:
 
 def _start_external_server(base: Path, port: int) -> subprocess.Popen:
     """
-    Start an http.server outside cmux and ensure it is actually listening.
+    Start an http.server outside zerocmux and ensure it is actually listening.
     Retries are handled by the caller by picking a different port.
     """
     proc = subprocess.Popen(

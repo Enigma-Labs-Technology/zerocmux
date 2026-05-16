@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Executable contract check for no-socket cmux CLI help behavior.
+Executable contract check for no-socket zerocmux CLI help behavior.
 
 The command list lives in docs/cli-contract.md so the human migration spec and
 CI check stay tied together. This test invokes the built CLI binary; it does not
@@ -52,13 +52,13 @@ def resolve_cmux_cli() -> str:
         return explicit
 
     candidates: list[str] = []
-    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux")))
+    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux")))
     candidates = [path for path in candidates if os.path.exists(path) and os.access(path, os.X_OK)]
     if candidates:
         candidates.sort(key=os.path.getmtime, reverse=True)
         return candidates[0]
 
-    raise RuntimeError("Unable to find cmux CLI binary. Set CMUX_CLI_BIN.")
+    raise RuntimeError("Unable to find zerocmux CLI binary. Set CMUX_CLI_BIN.")
 
 
 def load_help_probes() -> list[HelpProbe]:
@@ -122,8 +122,6 @@ def run_cli_args(cli_path: str, args: list[str]) -> ProbeResult:
         "CMUX_TAB_ID",
     ]:
         env.pop(key, None)
-    env["CMUX_CLI_SENTRY_DISABLED"] = "1"
-    env["CMUX_CLAUDE_HOOK_SENTRY_DISABLED"] = "1"
 
     with tempfile.TemporaryDirectory(prefix="cmux-no-socket-") as tmpdir:
         no_socket = os.path.join(tmpdir, f"socket-{uuid.uuid4().hex}.sock")
@@ -226,37 +224,37 @@ def main() -> int:
             )
         if result.stdout:
             failures.append(
-                f"cmux: missing-command usage should not write stdout\n"
+                f"zerocmux: missing-command usage should not write stdout\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
             )
-        if "Missing command" not in result.stderr or "cmux --help" not in result.stderr:
+        if "Missing command" not in result.stderr or "zerocmux --help" not in result.stderr:
             failures.append(
-                f"cmux: missing-command error should point to cmux --help\n"
+                f"zerocmux: missing-command error should point to zerocmux --help\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
             )
-        if "browser find" in result.stderr or "cmux - control cmux via Unix socket" in result.stderr:
+        if "browser find" in result.stderr or "zerocmux - control zerocmux via Unix socket" in result.stderr:
             failures.append(
-                f"cmux: missing-command error should not dump full help\n"
+                f"zerocmux: missing-command error should not dump full help\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
             )
 
     try:
         result = run_cli_args(cli_path, ["settings", "--help"])
     except subprocess.TimeoutExpired:
-        failures.append("cmux settings --help stale-target check: timed out")
+        failures.append("zerocmux settings --help stale-target check: timed out")
     except (RuntimeError, OSError, ValueError) as exc:
-        failures.append(f"cmux settings --help stale-target check: {exc}")
+        failures.append(f"zerocmux settings --help stale-target check: {exc}")
     else:
-        stale_usage = "Usage: cmux settings [open|path|docs|target]"
-        target_usage = "Usage: cmux settings [open [target]|path|docs|<target>]"
+        stale_usage = "Usage: zerocmux settings [open|path|docs|target]"
+        target_usage = "Usage: zerocmux settings [open [target]|path|docs|<target>]"
         if stale_usage in result.stdout:
             failures.append(
-                f"cmux settings --help: stale literal target usage still present\n"
+                f"zerocmux settings --help: stale literal target usage still present\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
             )
         if target_usage not in result.stdout:
             failures.append(
-                f"cmux settings --help: expected target-placeholder usage {target_usage!r}\n"
+                f"zerocmux settings --help: expected target-placeholder usage {target_usage!r}\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
             )
 

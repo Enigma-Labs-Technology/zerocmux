@@ -38,18 +38,18 @@ final class FeedCoordinatorTests: XCTestCase {
             requestId: "timeout-request"
         )
 
-        let done = DispatchSemaphore(value: 0)
+        let done = expectation(description: "blocking ingest returns")
         let resultBox = IngestResultBox()
 
         DispatchQueue.global(qos: .userInitiated).async {
             resultBox.value = FeedCoordinator.shared.ingestBlocking(
                 event: event,
-                waitTimeout: 0.05
+                waitTimeout: 0.01
             )
-            done.signal()
+            done.fulfill()
         }
 
-        XCTAssertEqual(done.wait(timeout: .now() + 2), .success)
+        await fulfillment(of: [done], timeout: 10.0)
 
         guard case .timedOut = resultBox.value else {
             XCTFail("expected feed.push to time out")
@@ -67,5 +67,19 @@ final class FeedCoordinatorTests: XCTestCase {
 }
 
 private final class IngestResultBox: @unchecked Sendable {
-    var value: FeedCoordinator.IngestBlockingResult?
+    private let lock = NSLock()
+    private var storage: FeedCoordinator.IngestBlockingResult?
+
+    var value: FeedCoordinator.IngestBlockingResult? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            storage = newValue
+            lock.unlock()
+        }
+    }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Regression for issue #734:
-cmux wrapper .zshenv should only source Ghostty zsh integration when Ghostty
+zerocmux wrapper .zshenv should only source Ghostty zsh integration when Ghostty
 actually enabled shell integration (signaled by GHOSTTY_ZSH_ZDOTDIR being set).
 """
 

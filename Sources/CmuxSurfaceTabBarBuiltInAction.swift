@@ -34,6 +34,14 @@ enum CmuxSurfaceTabBarBuiltInAction: String, Codable, Sendable, CaseIterable, Ha
         rawValue
     }
 
+    static let availableBuiltIns: [Self] = [
+        .newWorkspace,
+        .newTerminal,
+        .newBrowser,
+        .splitRight,
+        .splitDown,
+    ]
+
     var defaultIcon: String {
         switch self {
         case .newWorkspace:

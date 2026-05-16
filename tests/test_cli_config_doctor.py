@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior checks for the no-socket `cmux config doctor` command."""
+"""Behavior checks for the no-socket `zerocmux config doctor` command."""
 
 from __future__ import annotations
 
@@ -19,14 +19,14 @@ def resolve_cmux_cli() -> str:
 
     candidates = [
         path
-        for path in glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux"))
+        for path in glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux"))
         if os.path.isfile(path) and os.access(path, os.X_OK)
     ]
     if candidates:
         candidates.sort(key=os.path.getmtime, reverse=True)
         return candidates[0]
 
-    raise RuntimeError("Unable to find cmux CLI binary. Set CMUX_CLI_BIN.")
+    raise RuntimeError("Unable to find zerocmux CLI binary. Set CMUX_CLI_BIN.")
 
 
 def run_cli(
@@ -37,7 +37,6 @@ def run_cli(
 ) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["HOME"] = str(home)
-    env["CMUX_CLI_SENTRY_DISABLED"] = "1"
     env["CMUX_SOCKET_PATH"] = str(home / "missing.sock")
     env.pop("CMUX_SOCKET", None)
     env.pop("CMUX_SOCKET_PASSWORD", None)
@@ -159,7 +158,7 @@ def main() -> int:
                 finding = first_finding(payload, "invalid JSON", bad_result.stdout, failures)
                 if finding is not None and (payload.get("ok") is not False or finding.get("status") != "error"):
                     failures.append(f"invalid JSON did not report an error: {bad_result.stdout}")
-            if "cmux config doctor found 1 error(s)" not in bad_result.stderr:
+            if "zerocmux config doctor found 1 error(s)" not in bad_result.stderr:
                 failures.append(f"invalid JSON stderr was unexpected: {bad_result.stderr}")
 
         directory_path = home / "config-directory"
@@ -188,7 +187,7 @@ def main() -> int:
             print(f"FAIL: {failure}")
         return 1
 
-    print("PASS: cmux config doctor validates JSONC and reports syntax errors")
+    print("PASS: zerocmux config doctor validates JSONC and reports syntax errors")
     return 0
 
 

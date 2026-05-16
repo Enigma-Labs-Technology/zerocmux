@@ -7,14 +7,14 @@ struct HermesAgentHookConfigTests {
     @Test("Installs hooks into empty config")
     func installsHooksIntoEmptyConfig() {
         let events = [
-            HermesAgentHookConfig.Event(name: "on_session_start", command: "sh -c 'cmux hooks hermes-agent session-start'"),
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
+            HermesAgentHookConfig.Event(name: "on_session_start", command: "sh -c 'zerocmux hooks hermes-agent session-start'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
         ]
 
         let installed = HermesAgentHookConfig.installing(events: events, in: "")
 
-        #expect(installed.contains("# cmux hooks hermes-agent begin\nhooks:\n  on_session_start:"))
-        #expect(installed.contains("    - command: \"sh -c 'cmux hooks hermes-agent session-start'\""))
+        #expect(installed.contains("# zerocmux hooks hermes-agent begin\nhooks:\n  on_session_start:"))
+        #expect(installed.contains("    - command: \"sh -c 'zerocmux hooks hermes-agent session-start'\""))
         #expect(installed.contains("      timeout: 120"))
         #expect(HermesAgentHookConfig.uninstalling(from: installed) == "")
     }
@@ -32,14 +32,14 @@ struct HermesAgentHookConfigTests {
 
         """
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
-            HermesAgentHookConfig.Event(name: "on_session_end", command: "sh -c 'cmux hooks hermes-agent stop'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
+            HermesAgentHookConfig.Event(name: "on_session_end", command: "sh -c 'zerocmux hooks hermes-agent stop'"),
         ]
 
         let installed = HermesAgentHookConfig.installing(events: events, in: existing)
 
         #expect(installed.components(separatedBy: "\n  pre_tool_call:").count == 2)
-        #expect(installed.contains("  pre_tool_call:\n    # cmux hooks hermes-agent begin\n    - command: \"sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'\""))
+        #expect(installed.contains("  pre_tool_call:\n    # zerocmux hooks hermes-agent begin\n    - command: \"sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'\""))
         #expect(installed.contains("    - command: \"echo user\""))
         #expect(installed.contains("  on_session_end:"))
         #expect(HermesAgentHookConfig.uninstalling(from: installed) == existing)
@@ -56,14 +56,14 @@ struct HermesAgentHookConfigTests {
 
         """
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'"),
-            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event post_tool_call'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'"),
+            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event post_tool_call'"),
         ]
 
         let installed = HermesAgentHookConfig.installing(events: events, in: existing)
 
-        #expect(installed.contains("  pre_tool_call:\n    # cmux hooks hermes-agent begin"))
-        #expect(installed.contains("  post_tool_call:\n    # cmux hooks hermes-agent begin"))
+        #expect(installed.contains("  pre_tool_call:\n    # zerocmux hooks hermes-agent begin"))
+        #expect(installed.contains("  post_tool_call:\n    # zerocmux hooks hermes-agent begin"))
         #expect(installed.contains("    - command: \"echo pre\""))
         #expect(installed.contains("    - command: \"echo post\""))
         #expect(HermesAgentHookConfig.uninstalling(from: installed) == existing)
@@ -78,16 +78,16 @@ struct HermesAgentHookConfigTests {
 
         """
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'"),
-            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event post_tool_call'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'"),
+            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event post_tool_call'"),
         ]
 
         let installed = HermesAgentHookConfig.installing(events: events, in: existing)
 
-        #expect(installed.contains("  pre_tool_call:\n    # cmux hooks hermes-agent begin"))
-        #expect(installed.contains("  post_tool_call:\n    # cmux hooks hermes-agent begin"))
-        #expect(!installed.contains("pre_tool_call: []\n    # cmux hooks hermes-agent begin"))
-        #expect(!installed.contains("post_tool_call: {} # intentionally empty\n    # cmux hooks hermes-agent begin"))
+        #expect(installed.contains("  pre_tool_call:\n    # zerocmux hooks hermes-agent begin"))
+        #expect(installed.contains("  post_tool_call:\n    # zerocmux hooks hermes-agent begin"))
+        #expect(!installed.contains("pre_tool_call: []\n    # zerocmux hooks hermes-agent begin"))
+        #expect(!installed.contains("post_tool_call: {} # intentionally empty\n    # zerocmux hooks hermes-agent begin"))
         #expect(HermesAgentHookConfig.uninstalling(from: installed) == existing)
     }
 
@@ -99,19 +99,19 @@ struct HermesAgentHookConfigTests {
 
         """
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'"),
-            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event post_tool_call'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'"),
+            HermesAgentHookConfig.Event(name: "post_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event post_tool_call'"),
         ]
 
         let installed = HermesAgentHookConfig.installing(events: events, in: existing)
 
-        #expect(installed.contains("hooks:\n  # cmux hooks hermes-agent begin restore-line-base64:"))
+        #expect(installed.contains("hooks:\n  # zerocmux hooks hermes-agent begin restore-line-base64:"))
         #expect(installed.contains("  pre_tool_call:"))
         #expect(HermesAgentHookConfig.uninstalling(from: installed) == existing)
     }
 
-    @Test("Allowlist install and uninstall only touches cmux commands")
-    func allowlistInstallAndUninstallOnlyTouchesCmuxCommands() throws {
+    @Test("Allowlist install and uninstall only touches zerocmux commands")
+    func allowlistInstallAndUninstallOnlyTouchesZerocmuxCommands() throws {
         let existing = """
         {
           "approvals": [
@@ -123,7 +123,7 @@ struct HermesAgentHookConfigTests {
         }
         """.data(using: .utf8)
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'", timeout: 120),
         ]
 
         let installed = try HermesAgentHookAllowlist.installing(
@@ -156,7 +156,7 @@ struct HermesAgentHookConfigTests {
         }
         """.data(using: .utf8)
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'"),
         ]
 
         let installed = try HermesAgentHookAllowlist.installing(events: events, in: existing)
@@ -172,7 +172,7 @@ struct HermesAgentHookConfigTests {
     func allowlistInstallRejectsNonObjectJSONRoots() throws {
         let existing = #"[]"#.data(using: .utf8)
         let events = [
-            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'cmux hooks feed --source hermes-agent --event pre_tool_call'"),
+            HermesAgentHookConfig.Event(name: "pre_tool_call", command: "sh -c 'zerocmux hooks feed --source hermes-agent --event pre_tool_call'"),
         ]
 
         do {

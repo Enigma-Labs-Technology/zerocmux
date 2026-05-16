@@ -1,4 +1,4 @@
-# cmux CLI Contract
+# zerocmux CLI Contract
 
 This document is the compatibility contract for migrating `CLI/cmux.swift` to
 Swift ArgumentParser. The migration should preserve command names, aliases,
@@ -10,9 +10,9 @@ written around user-visible behavior so the implementation can change behind it.
 
 ## Migration Rules
 
-- Keep `cmux --help`, `cmux -h`, `cmux --version`, and `cmux -v` working without
-  connecting to the cmux socket.
-- Keep documented `cmux <command> --help` probes working without a socket where
+- Keep `zerocmux --help`, `zerocmux -h`, `zerocmux --version`, and `zerocmux -v` working without
+  connecting to the zerocmux socket.
+- Keep documented `zerocmux <command> --help` probes working without a socket where
   they already do.
 - Keep `--socket`, `--password`, `--json`, `--id-format`, and `--window` as
   global options before the command.
@@ -26,11 +26,11 @@ written around user-visible behavior so the implementation can change behind it.
 
 | Form | Contract |
 | --- | --- |
-| `cmux <path>` | Open a directory or file path in cmux. Relative paths resolve from the current working directory. |
-| `cmux [global-options] <command> [options]` | Run a named command. |
-| `cmux --help`, `cmux -h` | Print top-level usage without a socket. |
-| `cmux help` | Print top-level usage without a socket. |
-| `cmux --version`, `cmux -v`, `cmux version` | Print version summary without a socket. |
+| `zerocmux <path>` | Open a directory or file path in zerocmux. Relative paths resolve from the current working directory. |
+| `zerocmux [global-options] <command> [options]` | Run a named command. |
+| `zerocmux --help`, `zerocmux -h` | Print top-level usage without a socket. |
+| `zerocmux help` | Print top-level usage without a socket. |
+| `zerocmux --version`, `zerocmux -v`, `zerocmux version` | Print version summary without a socket. |
 
 Global options:
 
@@ -49,8 +49,8 @@ Environment:
 | `CMUX_SOCKET_PATH` | Canonical socket path override. |
 | `CMUX_SOCKET` | Deprecated compatibility alias for `CMUX_SOCKET_PATH`. New scripts should use `CMUX_SOCKET_PATH`; if both variables are set and differ, the CLI fails before socket commands. |
 | `CMUX_SOCKET_PASSWORD` | Socket password fallback when `--password` is absent. |
-| `CMUX_WORKSPACE_ID` | Default workspace context inside cmux terminals. |
-| `CMUX_SURFACE_ID` | Default surface context inside cmux terminals. |
+| `CMUX_WORKSPACE_ID` | Default workspace context inside zerocmux terminals. |
+| `CMUX_SURFACE_ID` | Default surface context inside zerocmux terminals. |
 | `CMUX_TAB_ID` | Default tab context for tab commands. |
 
 ## Top-Level Commands
@@ -62,22 +62,21 @@ Environment:
 | `settings` | Open Settings, print cmux.json paths, or print settings docs. |
 | `config` | Validate cmux.json syntax, print config references, or reload config. |
 | `shortcuts` | Open Settings to Keyboard Shortcuts. |
-| `disable-browser` | Disable cmux browser creation and link interception until re-enabled. |
-| `enable-browser` | Re-enable cmux browser creation and link interception. |
-| `browser-status` | Print whether cmux browser creation and link interception are enabled. |
-| `restore-session` | Restore the previously saved cmux session. |
-| `feedback` | Open feedback UI or submit feedback with `--email`, `--body`, and repeated `--image`. |
+| `disable-browser` | Disable zerocmux browser creation and link interception until re-enabled. |
+| `enable-browser` | Re-enable zerocmux browser creation and link interception. |
+| `browser-status` | Print whether zerocmux browser creation and link interception are enabled. |
+| `restore-session` | Restore the previously saved zerocmux session. |
 | `feed` | Open the keyboard-first Feed TUI or manage persisted Feed workstream history. |
 | `themes` | List, set, clear, or interactively pick Ghostty themes. |
 | `claude-teams` | Launch Claude Code with cmux/tmux-style agent team integration. |
 | `omo` | Launch OpenCode with oh-my-openagent integration. |
-| `omx` | Launch Oh My Codex with cmux pane integration. |
-| `omc` | Launch Oh My Claude Code with cmux pane integration. |
+| `omx` | Launch Oh My Codex with zerocmux pane integration. |
+| `omc` | Launch Oh My Claude Code with zerocmux pane integration. |
 | `hooks` | Install, uninstall, and run agent hook integrations under one namespace. |
 | `codex` | Compatibility alias for installing or uninstalling Codex hooks. |
 | `ping` | Check socket connectivity. |
 | `capabilities` | Print server capabilities as JSON. |
-| `events` | Stream reconnectable cmux events as newline-delimited JSON. |
+| `events` | Stream reconnectable zerocmux events as newline-delimited JSON. |
 | `auth` | Manage auth status, login, and logout through the app. |
 | `vm`, `cloud` | Manage cloud VMs. `cloud` is an alias for `vm`. |
 | `rpc` | Call a raw v2 socket method with optional JSON params. |
@@ -109,7 +108,7 @@ Environment:
 | `rename-tab` | Rename a tab. Compatibility wrapper for `tab-action rename`. |
 | `drag-surface-to-split` | Move a surface into a split direction. |
 | `refresh-surfaces` | Ask the app to refresh terminal surfaces. |
-| `reload-config` | Ask cmux to reload configuration. |
+| `reload-config` | Ask zerocmux to reload configuration. |
 | `surface-health` | Print terminal surface health information. |
 | `debug-terminals` | Print debug terminal state. |
 | `trigger-flash` | Trigger a visual flash on a workspace or surface. |
@@ -149,9 +148,9 @@ Environment:
 | `focus-webview` | Legacy alias for `browser focus-webview`. |
 | `is-webview-focused` | Legacy alias for `browser is-webview-focused`. |
 | `markdown` | Open a markdown file in a formatted viewer panel with live reload. |
-| `vm-pty-attach` | Internal VM PTY attach command. |
-| `vm-ssh-attach` | Hidden compatibility alias for older VM workspaces. |
-| `vm-pty-connect` | Internal helper that connects to a VM PTY from a config file. |
+| `vm-pty-attach` | Hosted Cloud VM helper retained as an unavailable compatibility tombstone. |
+| `vm-ssh-attach` | Hosted Cloud VM helper retained as an unavailable compatibility tombstone. |
+| `vm-pty-connect` | Hosted Cloud VM helper retained as an unavailable compatibility tombstone. |
 | `ssh-session-end` | Internal helper that clears remote SSH session state. |
 | `__tmux-compat` | Internal tmux compatibility dispatcher. |
 
@@ -161,21 +160,13 @@ Auth subcommands:
 
 | Command | Contract |
 | --- | --- |
-| `auth status` | Print signed-in state. Supports `--json`. |
-| `auth login` | Begin sign-in through the app and wait for completion. |
-| `auth logout` | Clear the current session. |
+| `auth` | Hosted auth is unavailable in zerocmux because the web backend has been removed. Supports `--json` for an unavailable status payload. |
 
 VM subcommands:
 
 | Command | Contract |
 | --- | --- |
-| `vm ls`, `vm list` | List VMs. |
-| `vm new`, `vm create` | Create a VM. Supports `--image`, `--provider`, `--detach`, and `-d`. |
-| `vm shell`, `vm attach` | Open an interactive shell for an existing VM. |
-| `vm rm`, `vm destroy`, `vm delete` | Destroy a VM. |
-| `vm ssh`, `vm ssh-info` | Print SSH connection info. |
-| `vm ssh-attach` | Internal attach helper. |
-| `vm exec` | Run a shell command inside a VM. |
+| `vm`, `cloud` | Hosted Cloud VM commands are unavailable in zerocmux because the web backend has been removed. Use `zerocmux ssh` for remote workspaces. Supports `--json` for an unavailable status payload. |
 
 Theme subcommands:
 
@@ -186,7 +177,7 @@ Theme subcommands:
 | `themes set <theme>` | Set the same theme for light and dark appearance. |
 | `themes set --light <theme>` | Set the light appearance theme. |
 | `themes set --dark <theme>` | Set the dark appearance theme. |
-| `themes clear` | Remove the cmux theme override. |
+| `themes clear` | Remove the zerocmux theme override. |
 
 Workspace and tab action names:
 
@@ -263,8 +254,8 @@ Hook subcommands:
 
 | Command | Contract |
 | --- | --- |
-| `hooks setup` | Install hooks for all supported agents whose binaries are on `PATH`. Supports `--agent <name>`, positional agent filters such as `cmux hooks setup rovo`, and `--yes`. |
-| `hooks uninstall` | Remove hooks for all supported agents. Supports `--agent <name>`, positional agent filters such as `cmux hooks uninstall rovo`, and `--yes`. |
+| `hooks setup` | Install hooks for all supported agents whose binaries are on `PATH`. Supports `--agent <name>`, positional agent filters such as `zerocmux hooks setup rovo`, and `--yes`. |
+| `hooks uninstall` | Remove hooks for all supported agents. Supports `--agent <name>`, positional agent filters such as `zerocmux hooks uninstall rovo`, and `--yes`. |
 | `hooks <agent> install` | Install hooks for one supported agent. `opencode` also supports `--project` for the project-local Feed plugin. |
 | `hooks <agent> uninstall` | Remove hooks for one supported agent. |
 | `hooks claude <event>` | Handle Claude Code hook events. `claude-hook <event>` remains as the main-compatibility alias. |
@@ -287,7 +278,7 @@ Settings subcommands:
 
 | Command | Contract |
 | --- | --- |
-| `settings` | Open the Settings window, launching cmux if needed. |
+| `settings` | Open the Settings window, launching zerocmux if needed. |
 | `settings open [target]` | Open Settings to an optional target section. |
 | `settings path` | Print cmux.json paths, docs URL, schema URL, backup reminder, and reload command without a socket. |
 | `settings docs` | Print the same output as `docs settings` without a socket. |
@@ -300,7 +291,7 @@ Config subcommands:
 | `config doctor [--path <file>]`, `config check`, `config validate` | Validate JSONC syntax for config files. When `--path` is absent, default discovery checks the primary config, project-level `.cmux/cmux.json` or `cmux.json`, and legacy config files. `--path <file>` may be repeated to validate multiple explicit files. Exits 0 on success and 1 on any error. Supports `--json`. Works without a socket. |
 | `config path`, `config paths` | Print cmux.json paths, docs URL, schema URL, backup reminder, and reload command without a socket. |
 | `config docs`, `config documentation` | Print the same output as `docs settings` without a socket. |
-| `config reload` | Ask the running cmux app to reload configuration. Requires a socket. |
+| `config reload` | Ask the running zerocmux app to reload configuration. Requires a socket. |
 
 `config doctor --json` outputs an object with `ok`, `error_count`,
 `findings`, `reload_command`, `docs_url`, and `schema_url`. Each finding includes
@@ -328,7 +319,7 @@ should persist `seq` after processing each event and reconnect with that value.
 See [events.md](events.md) for the full protocol and event catalog. Every emitted event is also appended to
 `~/.cmuxterm/events.jsonl`, including model lifecycle events for window
 creation, close, focus, key-window state, workspace selection, pane focus, and
-surface selection, focus, creation, or closure. The stream is bounded: cmux keeps
+surface selection, focus, creation, or closure. The stream is bounded: zerocmux keeps
 4,096 replay events in memory, caps each encoded event frame at 16 KiB, closes
 slow subscribers after 1,024 pending events, and rotates `events.jsonl` with one
 16 MiB archive at `events.jsonl.1`.
@@ -336,134 +327,133 @@ slow subscribers after 1,024 pending events, and rotates `events.jsonl` with one
 ## No-Socket Help Probes
 
 The following probes are executable contract checks. They must exit 0 and print
-the expected text without connecting to a cmux socket.
+the expected text without connecting to a zerocmux socket.
 
 <!-- cli-contract-help-probes:start -->
-- `cmux --help` -> `cmux - control cmux via Unix socket`
-- `cmux help` -> `cmux - control cmux via Unix socket`
-- `cmux ping --help` -> `Usage: cmux ping`
-- `cmux capabilities --help` -> `Usage: cmux capabilities`
-- `cmux events --help` -> `Usage: cmux events [options]`
-- `cmux auth --help` -> `Usage: cmux auth <status|login|logout>`
-- `cmux vm --help` -> `Usage: cmux vm <new|ls|rm|exec|shell|attach|ssh> [args...]`
-- `cmux cloud --help` -> `Usage: cmux cloud <new|ls|rm|exec|shell|attach|ssh> [args...]`
-- `cmux rpc --help` -> `Usage: cmux rpc <method> [json-params]`
-- `cmux help --help` -> `Usage: cmux help`
-- `cmux docs --help` -> `Usage: cmux docs [settings|shortcuts|api|browser|agents|dock]`
-- `cmux docs` -> `Topics:`
-- `cmux docs settings` -> `Config files:`
-- `cmux docs dock` -> `dock: Custom right-sidebar terminal controls`
-- `cmux settings --help` -> `Usage: cmux settings [open [target]|path|docs|<target>]`
-- `cmux settings path` -> `Config files:`
-- `cmux settings docs` -> `Config files:`
-- `cmux config --help` -> `Usage: cmux config <doctor|check|validate|path|paths|docs|documentation|reload>`
-- `cmux config path` -> `Config files:`
-- `cmux config docs` -> `Config files:`
-- `cmux welcome --help` -> `Usage: cmux welcome`
-- `cmux shortcuts --help` -> `Usage: cmux shortcuts`
-- `cmux disable-browser --help` -> `Usage: cmux disable-browser [--json]`
-- `cmux enable-browser --help` -> `Usage: cmux enable-browser [--json]`
-- `cmux browser-status --help` -> `Usage: cmux browser-status [--json]`
-- `cmux restore-session --help` -> `Usage: cmux restore-session`
-- `cmux feedback --help` -> `Usage: cmux feedback`
-- `cmux feed --help` -> `Usage: cmux feed tui [--opentui|--legacy]`
-- `cmux hooks --help` -> `Usage: cmux hooks setup [agent] [--agent <name>] [--yes|-y]`
-- `cmux codex --help` -> `Usage: cmux codex <install-hooks|uninstall-hooks>`
-- `cmux themes --help` -> `Usage: cmux themes`
-- `cmux omo --help` -> `Usage: cmux omo [opencode-args...]`
-- `cmux omx --help` -> `Usage: cmux omx [omx-args...]`
-- `cmux omc --help` -> `Usage: cmux omc [omc-args...]`
-- `cmux identify --help` -> `Usage: cmux identify`
-- `cmux list-windows --help` -> `Usage: cmux list-windows`
-- `cmux current-window --help` -> `Usage: cmux current-window`
-- `cmux new-window --help` -> `Usage: cmux new-window`
-- `cmux focus-window --help` -> `Usage: cmux focus-window --window <id|ref|index>`
-- `cmux close-window --help` -> `Usage: cmux close-window --window <id|ref|index>`
-- `cmux move-workspace-to-window --help` -> `Usage: cmux move-workspace-to-window`
-- `cmux move-surface --help` -> `Usage: cmux move-surface`
-- `cmux split-off --help` -> `Usage: cmux split-off`
-- `cmux reorder-surface --help` -> `Usage: cmux reorder-surface`
-- `cmux reorder-workspace --help` -> `Usage: cmux reorder-workspace`
-- `cmux workspace-action --help` -> `Usage: cmux workspace-action --action <name>`
-- `cmux tab-action --help` -> `Usage: cmux tab-action --action <name>`
-- `cmux rename-tab --help` -> `Usage: cmux rename-tab`
-- `cmux new-workspace --help` -> `Usage: cmux new-workspace`
-- `cmux list-workspaces --help` -> `Usage: cmux list-workspaces`
-- `cmux ssh --help` -> `Usage: cmux ssh <destination>`
-- `cmux new-split --help` -> `Usage: cmux new-split`
-- `cmux list-panes --help` -> `Usage: cmux list-panes`
-- `cmux list-pane-surfaces --help` -> `Usage: cmux list-pane-surfaces`
-- `cmux tree --help` -> `Usage: cmux tree`
-- `cmux focus-pane --help` -> `Usage: cmux focus-pane`
-- `cmux new-pane --help` -> `Usage: cmux new-pane`
-- `cmux new-surface --help` -> `Usage: cmux new-surface`
-- `cmux close-surface --help` -> `Usage: cmux close-surface`
-- `cmux drag-surface-to-split --help` -> `Usage: cmux drag-surface-to-split`
-- `cmux refresh-surfaces --help` -> `Usage: cmux refresh-surfaces`
-- `cmux reload-config --help` -> `Usage: cmux reload-config`
-- `cmux surface-health --help` -> `Usage: cmux surface-health`
-- `cmux debug-terminals --help` -> `Usage: cmux debug-terminals`
-- `cmux trigger-flash --help` -> `Usage: cmux trigger-flash`
-- `cmux list-panels --help` -> `Usage: cmux list-panels`
-- `cmux focus-panel --help` -> `Usage: cmux focus-panel`
-- `cmux close-workspace --help` -> `Usage: cmux close-workspace`
-- `cmux select-workspace --help` -> `Usage: cmux select-workspace`
-- `cmux rename-workspace --help` -> `Usage: cmux rename-workspace`
-- `cmux rename-window --help` -> `Usage: cmux rename-workspace`
-- `cmux current-workspace --help` -> `Usage: cmux current-workspace`
-- `cmux capture-pane --help` -> `Usage: cmux capture-pane`
-- `cmux resize-pane --help` -> `Usage: cmux resize-pane`
-- `cmux pipe-pane --help` -> `Usage: cmux pipe-pane`
-- `cmux wait-for --help` -> `Usage: cmux wait-for`
-- `cmux swap-pane --help` -> `Usage: cmux swap-pane`
-- `cmux break-pane --help` -> `Usage: cmux break-pane`
-- `cmux join-pane --help` -> `Usage: cmux join-pane`
-- `cmux next-window --help` -> `Usage: cmux next-window`
-- `cmux previous-window --help` -> `Usage: cmux previous-window`
-- `cmux last-window --help` -> `Usage: cmux last-window`
-- `cmux last-pane --help` -> `Usage: cmux last-pane`
-- `cmux find-window --help` -> `Usage: cmux find-window`
-- `cmux clear-history --help` -> `Usage: cmux clear-history`
-- `cmux set-hook --help` -> `Usage: cmux set-hook`
-- `cmux popup --help` -> `Usage: cmux popup`
-- `cmux bind-key --help` -> `Usage: cmux bind-key`
-- `cmux unbind-key --help` -> `Usage: cmux unbind-key`
-- `cmux copy-mode --help` -> `Usage: cmux copy-mode`
-- `cmux set-buffer --help` -> `Usage: cmux set-buffer`
-- `cmux paste-buffer --help` -> `Usage: cmux paste-buffer`
-- `cmux list-buffers --help` -> `Usage: cmux list-buffers`
-- `cmux respawn-pane --help` -> `Usage: cmux respawn-pane`
-- `cmux display-message --help` -> `Usage: cmux display-message`
-- `cmux read-screen --help` -> `Usage: cmux read-screen`
-- `cmux send --help` -> `Usage: cmux send`
-- `cmux send-key --help` -> `Usage: cmux send-key`
-- `cmux send-panel --help` -> `Usage: cmux send-panel`
-- `cmux send-key-panel --help` -> `Usage: cmux send-key-panel`
-- `cmux notify --help` -> `Usage: cmux notify`
-- `cmux list-notifications --help` -> `Usage: cmux list-notifications`
-- `cmux clear-notifications --help` -> `Usage: cmux clear-notifications`
-- `cmux set-status --help` -> `Usage: cmux set-status`
-- `cmux clear-status --help` -> `Usage: cmux clear-status`
-- `cmux list-status --help` -> `Usage: cmux list-status`
-- `cmux set-progress --help` -> `Usage: cmux set-progress`
-- `cmux clear-progress --help` -> `Usage: cmux clear-progress`
-- `cmux log --help` -> `Usage: cmux log`
-- `cmux clear-log --help` -> `Usage: cmux clear-log`
-- `cmux list-log --help` -> `Usage: cmux list-log`
-- `cmux sidebar-state --help` -> `Usage: cmux sidebar-state`
-- `cmux set-app-focus --help` -> `Usage: cmux set-app-focus`
-- `cmux simulate-app-active --help` -> `Usage: cmux simulate-app-active`
-- `cmux claude-hook --help` -> `Usage: cmux claude-hook`
-- `cmux browser --help` -> `Usage: cmux browser`
-- `cmux open-browser --help` -> `Legacy alias for 'cmux browser open'`
-- `cmux navigate --help` -> `Legacy alias for 'cmux browser navigate'`
-- `cmux browser-back --help` -> `Legacy alias for 'cmux browser back'`
-- `cmux browser-forward --help` -> `Legacy alias for 'cmux browser forward'`
-- `cmux browser-reload --help` -> `Legacy alias for 'cmux browser reload'`
-- `cmux get-url --help` -> `Legacy alias for 'cmux browser get-url'`
-- `cmux focus-webview --help` -> `Legacy alias for 'cmux browser focus-webview'`
-- `cmux is-webview-focused --help` -> `Legacy alias for 'cmux browser is-webview-focused'`
-- `cmux markdown --help` -> `Usage: cmux markdown open <path>`
+- `zerocmux --help` -> `zerocmux - control zerocmux via Unix socket`
+- `zerocmux help` -> `zerocmux - control zerocmux via Unix socket`
+- `zerocmux ping --help` -> `Usage: zerocmux ping`
+- `zerocmux capabilities --help` -> `Usage: zerocmux capabilities`
+- `zerocmux events --help` -> `Usage: zerocmux events [options]`
+- `zerocmux auth --help` -> `Usage: zerocmux auth <status|login|logout>`
+- `zerocmux vm --help` -> `Usage: zerocmux vm <new|ls|rm|exec|shell|attach|ssh> [args...]`
+- `zerocmux cloud --help` -> `Usage: zerocmux cloud <new|ls|rm|exec|shell|attach|ssh> [args...]`
+- `zerocmux rpc --help` -> `Usage: zerocmux rpc <method> [json-params]`
+- `zerocmux help --help` -> `Usage: zerocmux help`
+- `zerocmux docs --help` -> `Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]`
+- `zerocmux docs` -> `Topics:`
+- `zerocmux docs settings` -> `Config files:`
+- `zerocmux docs dock` -> `dock: Custom right-sidebar terminal controls`
+- `zerocmux settings --help` -> `Usage: zerocmux settings [open [target]|path|docs|<target>]`
+- `zerocmux settings path` -> `Config files:`
+- `zerocmux settings docs` -> `Config files:`
+- `zerocmux config --help` -> `Usage: zerocmux config <doctor|check|validate|path|paths|docs|documentation|reload>`
+- `zerocmux config path` -> `Config files:`
+- `zerocmux config docs` -> `Config files:`
+- `zerocmux welcome --help` -> `Usage: zerocmux welcome`
+- `zerocmux shortcuts --help` -> `Usage: zerocmux shortcuts`
+- `zerocmux disable-browser --help` -> `Usage: zerocmux disable-browser [--json]`
+- `zerocmux enable-browser --help` -> `Usage: zerocmux enable-browser [--json]`
+- `zerocmux browser-status --help` -> `Usage: zerocmux browser-status [--json]`
+- `zerocmux restore-session --help` -> `Usage: zerocmux restore-session`
+- `zerocmux feed --help` -> `Usage: zerocmux feed tui [--opentui|--legacy]`
+- `zerocmux hooks --help` -> `Usage: zerocmux hooks setup [agent] [--agent <name>] [--yes|-y]`
+- `zerocmux codex --help` -> `Usage: zerocmux codex <install-hooks|uninstall-hooks>`
+- `zerocmux themes --help` -> `Usage: zerocmux themes`
+- `zerocmux omo --help` -> `Usage: zerocmux omo [opencode-args...]`
+- `zerocmux omx --help` -> `Usage: zerocmux omx [omx-args...]`
+- `zerocmux omc --help` -> `Usage: zerocmux omc [omc-args...]`
+- `zerocmux identify --help` -> `Usage: zerocmux identify`
+- `zerocmux list-windows --help` -> `Usage: zerocmux list-windows`
+- `zerocmux current-window --help` -> `Usage: zerocmux current-window`
+- `zerocmux new-window --help` -> `Usage: zerocmux new-window`
+- `zerocmux focus-window --help` -> `Usage: zerocmux focus-window --window <id|ref|index>`
+- `zerocmux close-window --help` -> `Usage: zerocmux close-window --window <id|ref|index>`
+- `zerocmux move-workspace-to-window --help` -> `Usage: zerocmux move-workspace-to-window`
+- `zerocmux move-surface --help` -> `Usage: zerocmux move-surface`
+- `zerocmux split-off --help` -> `Usage: zerocmux split-off`
+- `zerocmux reorder-surface --help` -> `Usage: zerocmux reorder-surface`
+- `zerocmux reorder-workspace --help` -> `Usage: zerocmux reorder-workspace`
+- `zerocmux workspace-action --help` -> `Usage: zerocmux workspace-action --action <name>`
+- `zerocmux tab-action --help` -> `Usage: zerocmux tab-action --action <name>`
+- `zerocmux rename-tab --help` -> `Usage: zerocmux rename-tab`
+- `zerocmux new-workspace --help` -> `Usage: zerocmux new-workspace`
+- `zerocmux list-workspaces --help` -> `Usage: zerocmux list-workspaces`
+- `zerocmux ssh --help` -> `Usage: zerocmux ssh <destination>`
+- `zerocmux new-split --help` -> `Usage: zerocmux new-split`
+- `zerocmux list-panes --help` -> `Usage: zerocmux list-panes`
+- `zerocmux list-pane-surfaces --help` -> `Usage: zerocmux list-pane-surfaces`
+- `zerocmux tree --help` -> `Usage: zerocmux tree`
+- `zerocmux focus-pane --help` -> `Usage: zerocmux focus-pane`
+- `zerocmux new-pane --help` -> `Usage: zerocmux new-pane`
+- `zerocmux new-surface --help` -> `Usage: zerocmux new-surface`
+- `zerocmux close-surface --help` -> `Usage: zerocmux close-surface`
+- `zerocmux drag-surface-to-split --help` -> `Usage: zerocmux drag-surface-to-split`
+- `zerocmux refresh-surfaces --help` -> `Usage: zerocmux refresh-surfaces`
+- `zerocmux reload-config --help` -> `Usage: zerocmux reload-config`
+- `zerocmux surface-health --help` -> `Usage: zerocmux surface-health`
+- `zerocmux debug-terminals --help` -> `Usage: zerocmux debug-terminals`
+- `zerocmux trigger-flash --help` -> `Usage: zerocmux trigger-flash`
+- `zerocmux list-panels --help` -> `Usage: zerocmux list-panels`
+- `zerocmux focus-panel --help` -> `Usage: zerocmux focus-panel`
+- `zerocmux close-workspace --help` -> `Usage: zerocmux close-workspace`
+- `zerocmux select-workspace --help` -> `Usage: zerocmux select-workspace`
+- `zerocmux rename-workspace --help` -> `Usage: zerocmux rename-workspace`
+- `zerocmux rename-window --help` -> `Usage: zerocmux rename-workspace`
+- `zerocmux current-workspace --help` -> `Usage: zerocmux current-workspace`
+- `zerocmux capture-pane --help` -> `Usage: zerocmux capture-pane`
+- `zerocmux resize-pane --help` -> `Usage: zerocmux resize-pane`
+- `zerocmux pipe-pane --help` -> `Usage: zerocmux pipe-pane`
+- `zerocmux wait-for --help` -> `Usage: zerocmux wait-for`
+- `zerocmux swap-pane --help` -> `Usage: zerocmux swap-pane`
+- `zerocmux break-pane --help` -> `Usage: zerocmux break-pane`
+- `zerocmux join-pane --help` -> `Usage: zerocmux join-pane`
+- `zerocmux next-window --help` -> `Usage: zerocmux next-window`
+- `zerocmux previous-window --help` -> `Usage: zerocmux previous-window`
+- `zerocmux last-window --help` -> `Usage: zerocmux last-window`
+- `zerocmux last-pane --help` -> `Usage: zerocmux last-pane`
+- `zerocmux find-window --help` -> `Usage: zerocmux find-window`
+- `zerocmux clear-history --help` -> `Usage: zerocmux clear-history`
+- `zerocmux set-hook --help` -> `Usage: zerocmux set-hook`
+- `zerocmux popup --help` -> `Usage: zerocmux popup`
+- `zerocmux bind-key --help` -> `Usage: zerocmux bind-key`
+- `zerocmux unbind-key --help` -> `Usage: zerocmux unbind-key`
+- `zerocmux copy-mode --help` -> `Usage: zerocmux copy-mode`
+- `zerocmux set-buffer --help` -> `Usage: zerocmux set-buffer`
+- `zerocmux paste-buffer --help` -> `Usage: zerocmux paste-buffer`
+- `zerocmux list-buffers --help` -> `Usage: zerocmux list-buffers`
+- `zerocmux respawn-pane --help` -> `Usage: zerocmux respawn-pane`
+- `zerocmux display-message --help` -> `Usage: zerocmux display-message`
+- `zerocmux read-screen --help` -> `Usage: zerocmux read-screen`
+- `zerocmux send --help` -> `Usage: zerocmux send`
+- `zerocmux send-key --help` -> `Usage: zerocmux send-key`
+- `zerocmux send-panel --help` -> `Usage: zerocmux send-panel`
+- `zerocmux send-key-panel --help` -> `Usage: zerocmux send-key-panel`
+- `zerocmux notify --help` -> `Usage: zerocmux notify`
+- `zerocmux list-notifications --help` -> `Usage: zerocmux list-notifications`
+- `zerocmux clear-notifications --help` -> `Usage: zerocmux clear-notifications`
+- `zerocmux set-status --help` -> `Usage: zerocmux set-status`
+- `zerocmux clear-status --help` -> `Usage: zerocmux clear-status`
+- `zerocmux list-status --help` -> `Usage: zerocmux list-status`
+- `zerocmux set-progress --help` -> `Usage: zerocmux set-progress`
+- `zerocmux clear-progress --help` -> `Usage: zerocmux clear-progress`
+- `zerocmux log --help` -> `Usage: zerocmux log`
+- `zerocmux clear-log --help` -> `Usage: zerocmux clear-log`
+- `zerocmux list-log --help` -> `Usage: zerocmux list-log`
+- `zerocmux sidebar-state --help` -> `Usage: zerocmux sidebar-state`
+- `zerocmux set-app-focus --help` -> `Usage: zerocmux set-app-focus`
+- `zerocmux simulate-app-active --help` -> `Usage: zerocmux simulate-app-active`
+- `zerocmux claude-hook --help` -> `Usage: zerocmux claude-hook`
+- `zerocmux browser --help` -> `Usage: zerocmux browser`
+- `zerocmux open-browser --help` -> `Legacy alias for 'zerocmux browser open'`
+- `zerocmux navigate --help` -> `Legacy alias for 'zerocmux browser navigate'`
+- `zerocmux browser-back --help` -> `Legacy alias for 'zerocmux browser back'`
+- `zerocmux browser-forward --help` -> `Legacy alias for 'zerocmux browser forward'`
+- `zerocmux browser-reload --help` -> `Legacy alias for 'zerocmux browser reload'`
+- `zerocmux get-url --help` -> `Legacy alias for 'zerocmux browser get-url'`
+- `zerocmux focus-webview --help` -> `Legacy alias for 'zerocmux browser focus-webview'`
+- `zerocmux is-webview-focused --help` -> `Legacy alias for 'zerocmux browser is-webview-focused'`
+- `zerocmux markdown --help` -> `Usage: zerocmux markdown open <path>`
 <!-- cli-contract-help-probes:end -->
 
 ## No-Socket Negative Help Probes
@@ -472,7 +462,7 @@ The following probes must not print help. They protect argument forwarding after
 `--`, where a forwarded `--help` token belongs to the command payload.
 
 <!-- cli-contract-negative-help-probes:start -->
-- `cmux vm exec demo -- --help` !> `Usage: cmux vm`
+- `zerocmux vm exec demo -- --help` !> `Usage: zerocmux vm`
 <!-- cli-contract-negative-help-probes:end -->
 
 ## Current Help Caveats
@@ -480,11 +470,11 @@ The following probes must not print help. They protect argument forwarding after
 These are current contracts to preserve until a follow-up PR intentionally
 changes them:
 
-- `cmux version --help` currently prints the version summary because `version`
+- `zerocmux version --help` currently prints the version summary because `version`
   is handled before subcommand help dispatch.
-- `cmux claude-teams --help` is handled by the command launcher, not by the
+- `zerocmux claude-teams --help` is handled by the command launcher, not by the
   pre-socket help dispatcher.
-- `cmux remote-daemon-status --help` currently prints status because the command
+- `zerocmux remote-daemon-status --help` currently prints status because the command
   runs before subcommand help dispatch.
 
 ## ArgumentParser Migration Sequence

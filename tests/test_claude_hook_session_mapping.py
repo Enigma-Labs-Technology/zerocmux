@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def resolve_cmux_cli() -> str:
@@ -32,8 +32,8 @@ def resolve_cmux_cli() -> str:
         return explicit
 
     candidates: list[str] = []
-    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux")))
-    candidates.extend(glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux"))
+    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux")))
+    candidates.extend(glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux"))
 
     candidates = [p for p in candidates if os.path.exists(p) and os.access(p, os.X_OK)]
     if candidates:
@@ -44,7 +44,7 @@ def resolve_cmux_cli() -> str:
     if in_path:
         return in_path
 
-    raise RuntimeError("Unable to find cmux CLI binary. Set CMUX_CLI_BIN.")
+    raise RuntimeError("Unable to find zerocmux CLI binary. Set CMUX_CLI_BIN.")
 
 
 def run_claude_hook(
@@ -64,7 +64,7 @@ def run_claude_hook(
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"cmux claude-hook {subcommand} failed:\n"
+            f"zerocmux claude-hook {subcommand} failed:\n"
             f"exit={proc.returncode}\nstdout={proc.stdout}\nstderr={proc.stderr}"
         )
     return proc.stdout.strip()

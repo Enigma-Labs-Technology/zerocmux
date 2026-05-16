@@ -174,7 +174,7 @@ final class SocketControlPasswordStoreTests: XCTestCase {
         XCTAssertEqual(readCount, 1)
     }
 
-    func testDefaultPasswordFileURLUsesCmuxAppSupportPath() throws {
+    func testDefaultPasswordFileURLUsesZerocmuxAppSupportPath() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("cmux-socket-password-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -183,7 +183,7 @@ final class SocketControlPasswordStoreTests: XCTestCase {
         let resolved = SocketControlPasswordStore.defaultPasswordFileURL(appSupportDirectory: tempDir)
         XCTAssertEqual(
             resolved?.path,
-            tempDir.appendingPathComponent("cmux", isDirectory: true)
+            tempDir.appendingPathComponent("zerocmux", isDirectory: true)
                 .appendingPathComponent("socket-control-password", isDirectory: false).path
         )
     }
@@ -250,14 +250,14 @@ final class CmuxCLIPathInstallerTests: XCTestCase {
         defer { try? fileManager.removeItem(at: root) }
 
         let bundledCLIURL = root
-            .appendingPathComponent("cmux.app/Contents/Resources/bin/cmux", isDirectory: false)
+            .appendingPathComponent("zerocmux.app/Contents/Resources/bin/zerocmux", isDirectory: false)
         try fileManager.createDirectory(
             at: bundledCLIURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try "#!/bin/sh\necho cmux\n".write(to: bundledCLIURL, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\necho zerocmux\n".write(to: bundledCLIURL, atomically: true, encoding: .utf8)
 
-        let destinationURL = root.appendingPathComponent("usr/local/bin/cmux", isDirectory: false)
+        let destinationURL = root.appendingPathComponent("usr/local/bin/zerocmux", isDirectory: false)
 
         var privilegedInstallCallCount = 0
         var privilegedUninstallCallCount = 0
@@ -295,14 +295,14 @@ final class CmuxCLIPathInstallerTests: XCTestCase {
         defer { try? fileManager.removeItem(at: root) }
 
         let bundledCLIURL = root
-            .appendingPathComponent("cmux.app/Contents/Resources/bin/cmux", isDirectory: false)
+            .appendingPathComponent("zerocmux.app/Contents/Resources/bin/zerocmux", isDirectory: false)
         try fileManager.createDirectory(
             at: bundledCLIURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try "#!/bin/sh\necho cmux\n".write(to: bundledCLIURL, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\necho zerocmux\n".write(to: bundledCLIURL, atomically: true, encoding: .utf8)
 
-        let destinationURL = root.appendingPathComponent("usr/local/bin/cmux", isDirectory: false)
+        let destinationURL = root.appendingPathComponent("usr/local/bin/zerocmux", isDirectory: false)
         let destinationDir = destinationURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: destinationDir, withIntermediateDirectories: true)
         try fileManager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: destinationDir.path)

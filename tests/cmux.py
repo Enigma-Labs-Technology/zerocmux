@@ -2,10 +2,10 @@
 """
 cmux Python Client
 
-A client library for programmatically controlling cmux via Unix socket.
+A client library for programmatically controlling zerocmux via Unix socket.
 
 Usage:
-    from cmux import cmux
+    from zerocmux import cmux
 
     client = cmux()
     client.connect()
@@ -41,18 +41,21 @@ from typing import Optional, List, Tuple, Union
 
 
 class cmuxError(Exception):
-    """Exception raised for cmux errors"""
+    """Exception raised for zerocmux errors"""
     pass
 
 
-_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/cmux")
-_STABLE_SOCKET_PATH = os.path.join(_APP_SUPPORT_DIR, "cmux.sock")
+_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/zerocmux")
+_LEGACY_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/cmux")
+_STABLE_SOCKET_PATH = os.path.join(_APP_SUPPORT_DIR, "zerocmux.sock")
 _LEGACY_STABLE_SOCKET_PATH = "/tmp/cmux.sock"
 _LAST_SOCKET_PATH_FILES = [
     os.path.join(_APP_SUPPORT_DIR, "last-socket-path"),
+    "/tmp/zerocmux-last-socket-path",
+    os.path.join(_LEGACY_APP_SUPPORT_DIR, "last-socket-path"),
     "/tmp/cmux-last-socket-path",
 ]
-_DEFAULT_DEBUG_BUNDLE_ID = "com.cmuxterm.app.debug"
+_DEFAULT_DEBUG_BUNDLE_ID = "com.kernelalex.zerocmux.debug"
 
 
 def _sanitize_tag_slug(raw: str) -> str:
@@ -123,6 +126,8 @@ def _default_socket_path() -> str:
     if tag:
         slug = _sanitize_tag_slug(tag)
         tagged_candidates = [
+            f"/tmp/zerocmux-debug-{slug}.sock",
+            f"/tmp/zerocmux-{slug}.sock",
             f"/tmp/cmux-debug-{slug}.sock",
             f"/tmp/cmux-{slug}.sock",
         ]
@@ -151,14 +156,22 @@ def _default_socket_path() -> str:
             return last_socket
 
     # Prefer the non-tagged sockets when present.
-    candidates = ["/tmp/cmux-debug.sock", _STABLE_SOCKET_PATH, _LEGACY_STABLE_SOCKET_PATH]
+    candidates = [
+        "/tmp/zerocmux-debug.sock",
+        _STABLE_SOCKET_PATH,
+        "/tmp/cmux-debug.sock",
+        _LEGACY_STABLE_SOCKET_PATH,
+    ]
     for path in candidates:
         if os.path.exists(path) and _can_connect(path):
             return path
 
     # Otherwise, fall back to the newest discovered socket if there is one.
-    tagged = glob.glob("/tmp/cmux-debug-*.sock")
+    tagged = glob.glob("/tmp/zerocmux-debug-*.sock")
+    tagged.extend(glob.glob("/tmp/cmux-debug-*.sock"))
+    tagged.extend(glob.glob(os.path.join(_APP_SUPPORT_DIR, "zerocmux*.sock")))
     tagged.extend(glob.glob(os.path.join(_APP_SUPPORT_DIR, "cmux*.sock")))
+    tagged.extend(glob.glob(os.path.join(_LEGACY_APP_SUPPORT_DIR, "cmux*.sock")))
     tagged = [p for p in tagged if os.path.exists(p)]
     if tagged:
         tagged.sort(key=lambda p: os.path.getmtime(p), reverse=True)
@@ -170,7 +183,7 @@ def _default_socket_path() -> str:
 
 
 class cmux:
-    """Client for controlling cmux via Unix socket"""
+    """Client for controlling zerocmux via Unix socket"""
 
     DEFAULT_SOCKET_PATH = _default_socket_path()
     DEFAULT_BUNDLE_ID = _default_bundle_id()
@@ -190,7 +203,7 @@ class cmux:
         self._recv_buffer: str = ""
 
     def connect(self) -> None:
-        """Connect to the cmux socket"""
+        """Connect to the zerocmux socket"""
         if self._socket is not None:
             return
 
@@ -199,7 +212,7 @@ class cmux:
             if time.time() - start >= 2.0:
                 raise cmuxError(
                     f"Socket not found at {self.socket_path}. "
-                    "Is cmux running?"
+                    "Is zerocmux running?"
                 )
             time.sleep(0.1)
 
@@ -1323,7 +1336,7 @@ def main():
     import sys
     import argparse
 
-    parser = argparse.ArgumentParser(description="cmux CLI")
+    parser = argparse.ArgumentParser(description="zerocmux CLI")
     parser.add_argument("command", nargs="?", help="Command to send")
     parser.add_argument("args", nargs="*", help="Command arguments")
     parser.add_argument("-s", "--socket", default=None,
@@ -1335,7 +1348,7 @@ def main():
         with cmux(args.socket) as client:
             if not args.command:
                 # Interactive mode
-                print("cmux CLI (type 'help' for commands, 'quit' to exit)")
+                print("zerocmux CLI (type 'help' for commands, 'quit' to exit)")
                 while True:
                     try:
                         line = input("> ").strip()

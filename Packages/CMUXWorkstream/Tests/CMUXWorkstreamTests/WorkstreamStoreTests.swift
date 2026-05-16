@@ -106,8 +106,8 @@ struct WorkstreamStoreTests {
         }
     }
 
-    @Test("Telemetry items (toolUse) never enter pending")
-    func telemetryNeverPending() {
+    @Test("Non-actionable items (toolUse) never enter pending")
+    func nonActionableNeverPending() {
         let store = WorkstreamStore(ringCapacity: 10)
         store.ingest(WorkstreamEvent(
             sessionId: "s1",
@@ -120,8 +120,8 @@ struct WorkstreamStoreTests {
         #expect(store.items[0].kind == .toolUse)
     }
 
-    @Test("Telemetry payloads preserve prompt, stop, and todo content")
-    func telemetryContent() {
+    @Test("Non-actionable payloads preserve prompt, stop, and todo content")
+    func nonActionableContent() {
         let store = WorkstreamStore(ringCapacity: 10)
         store.ingest(WorkstreamEvent(
             sessionId: "s1",

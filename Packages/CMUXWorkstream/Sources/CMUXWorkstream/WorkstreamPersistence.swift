@@ -127,7 +127,7 @@ public actor WorkstreamPersistence {
         )
     }
 
-    /// Truncates the JSONL file. Used by `cmux feed clear`.
+    /// Truncates the JSONL file. Used by `zerocmux feed clear`.
     public func clear() throws {
         if let fh = handle {
             try fh.close()

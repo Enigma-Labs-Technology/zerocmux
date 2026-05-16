@@ -3,7 +3,8 @@ import Foundation
 
 final class AutomationSocketUITests: XCTestCase {
     private var socketPath = ""
-    private let defaultsDomain = "com.cmuxterm.app.debug"
+    private let defaultsDomain = "com.kernelalex.zerocmux.debug"
+    private let legacyDefaultsDomain = "com.cmuxterm.app.debug"
     private let modeKey = "socketControlMode"
     private let legacyKey = "socketControlEnabled"
     private let launchTag = "ui-tests-automation-socket"
@@ -11,7 +12,7 @@ final class AutomationSocketUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        socketPath = "/tmp/cmux-debug-\(UUID().uuidString).sock"
+        socketPath = "/tmp/zerocmux-debug-\(UUID().uuidString).sock"
         resetSocketDefaults()
         removeSocketFile()
     }
@@ -49,6 +50,7 @@ final class AutomationSocketUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-\(modeKey)", mode]
         app.launchEnvironment["CMUX_SOCKET_PATH"] = socketPath
+        app.launchEnvironment["CMUX_ALLOW_SOCKET_OVERRIDE"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_SOCKET_SANITY"] = "1"
         // Debug launches require a tag outside reload.sh; provide one in UITests so CI
         // does not fail with "Application ... does not have a process ID".
@@ -105,7 +107,9 @@ final class AutomationSocketUITests: XCTestCase {
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: tmpPath) else {
             return nil
         }
-        let matches = entries.filter { $0.hasPrefix("cmux") && $0.hasSuffix(".sock") }
+        let matches = entries.filter { entry in
+            (entry.hasPrefix("zerocmux") || entry.hasPrefix("cmux")) && entry.hasSuffix(".sock")
+        }
         if let debug = matches.first(where: { $0.contains("debug") }) {
             return (tmpPath as NSString).appendingPathComponent(debug)
         }
@@ -116,9 +120,14 @@ final class AutomationSocketUITests: XCTestCase {
     }
 
     private func resetSocketDefaults() {
+        resetSocketDefaults(domain: defaultsDomain)
+        resetSocketDefaults(domain: legacyDefaultsDomain)
+    }
+
+    private func resetSocketDefaults(domain: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        process.arguments = ["delete", defaultsDomain, modeKey]
+        process.arguments = ["delete", domain, modeKey]
         do {
             try process.run()
             process.waitUntilExit()
@@ -127,7 +136,7 @@ final class AutomationSocketUITests: XCTestCase {
         }
         let legacy = Process()
         legacy.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        legacy.arguments = ["delete", defaultsDomain, legacyKey]
+        legacy.arguments = ["delete", domain, legacyKey]
         do {
             try legacy.run()
             legacy.waitUntilExit()

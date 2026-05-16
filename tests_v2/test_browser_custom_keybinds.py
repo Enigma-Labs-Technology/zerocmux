@@ -9,7 +9,7 @@ Why this exists:
     so matching must use keyCode fallbacks.
 
 Requires:
-  - cmux running
+  - zerocmux running
   - Debug socket commands enabled (`set_shortcut`, `simulate_shortcut`)
 """
 
@@ -19,7 +19,7 @@ import time
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cmux import cmux
+from zerocmux import cmux
 
 def focused_pane_id(client: cmux) -> Optional[str]:
     for _idx, pane_id, _count, is_focused in client.list_panes():
@@ -129,7 +129,7 @@ def test_cmd_opt_left_arrow_goto_split_left_from_webview(client: cmux) -> tuple[
 
 
 def main() -> int:
-    print("cmux Browser Custom Keybind Tests")
+    print("zerocmux Browser Custom Keybind Tests")
     print("=" * 50)
     client = cmux()
     client.connect()

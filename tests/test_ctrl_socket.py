@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Automated tests for Ctrl+C and Ctrl+D using the cmux socket interface.
+Automated tests for Ctrl+C and Ctrl+D using the zerocmux socket interface.
 
 Usage:
     python3 test_ctrl_socket.py
 
 Requirements:
-    - cmux must be running with the socket controller enabled
+    - zerocmux must be running with the socket controller enabled
 """
 
 import json
@@ -19,7 +19,7 @@ from pathlib import Path
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class TestResult:
@@ -273,14 +273,14 @@ def test_environment_paths(client: cmux) -> TestResult:
 def run_tests():
     """Run all tests"""
     print("=" * 60)
-    print("cmux Ctrl+C/D Automated Tests")
+    print("zerocmux Ctrl+C/D Automated Tests")
     print("=" * 60)
     print()
 
     socket_path = cmux.DEFAULT_SOCKET_PATH
     if not os.path.exists(socket_path):
         print(f"Error: Socket not found at {socket_path}")
-        print("Please make sure cmux is running.")
+        print("Please make sure zerocmux is running.")
         return 1
 
     results = []

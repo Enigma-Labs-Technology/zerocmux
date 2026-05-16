@@ -20,17 +20,16 @@ on:
         default: true
         type: boolean
       runner:
-        description: "Runner OS (Depot runners for GUI activation support)"
+        description: "Runner OS"
         required: false
-        default: "depot-macos-latest"
+        default: "macos-latest"
         type: choice
         options:
-          - depot-macos-latest
-          - depot-macos-14
+          - macos-latest
 
 jobs:
   e2e:
-    runs-on: ${{ inputs.runner || 'depot-macos-latest' }}
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 20
     env:
       TEST_REF: ${{ inputs.ref || github.ref }}
@@ -71,7 +70,7 @@ jobs:
           set -euo pipefail
           GHOSTTY_SHA=$(git -C ghostty rev-parse HEAD)
           TAG="xcframework-$GHOSTTY_SHA"
-          URL="https://github.com/manaflow-ai/ghostty/releases/download/$TAG/GhosttyKit.xcframework.tar.gz"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/GhosttyKit.xcframework.tar.gz"
           echo "Downloading xcframework for ghostty $GHOSTTY_SHA"
           MAX_RETRIES=30
           RETRY_DELAY=20
@@ -167,8 +166,8 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .ci-source-packages
-          key: spm-${{ inputs.runner || 'depot-macos-latest' }}-${{ hashFiles('GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: spm-${{ inputs.runner || 'depot-macos-latest' }}-
+          key: spm-${{ inputs.runner || 'macos-latest' }}-${{ hashFiles('GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ inputs.runner || 'macos-latest' }}-
 
       - name: Resolve Swift packages
         run: |
@@ -176,7 +175,7 @@ jobs:
           SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
           mkdir -p "$SOURCE_PACKAGES_DIR"
           for attempt in 1 2 3; do
-            if xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux-unit -configuration Debug \
+            if xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
               -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
               -resolvePackageDependencies; then
               exit 0
@@ -203,7 +202,7 @@ jobs:
 
           if [ "$TEST_FILTER" = "DisplayResolutionRegressionUITests" ]; then
             HELPER_PATH="/tmp/create-virtual-display"
-            MANIFEST_PATH="/tmp/cmux-ui-test-display-harness.json"
+            MANIFEST_PATH="/tmp/zerocmux-ui-test-display-harness.json"
 
             rm -f "$MANIFEST_PATH"
             trap 'rm -f "$MANIFEST_PATH"' EXIT
@@ -244,7 +243,7 @@ jobs:
           fi
 
           XCODEBUILD_CMD=(
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux -configuration Debug
+            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug
             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR"
             -disableAutomaticPackageResolution
             -destination "platform=macOS"
@@ -334,7 +333,7 @@ jobs:
           path: /tmp/test-recording.mp4
           if-no-files-found: warn
 
-      - name: Post results to cmux-dev-artifacts
+      - name: Post results to zerocmux-dev-artifacts
         if: always()
         env:
           GH_TOKEN: ${{ secrets.DEV_ARTIFACTS_TOKEN }}
@@ -347,6 +346,11 @@ jobs:
           RECORD_VIDEO: ${{ inputs.record_video }}
         run: |
           set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "DEV_ARTIFACTS_TOKEN is not set; skipping dev artifact issue posting."
+            exit 0
+          fi
 
           LABEL="$TEST_RESULT"
           if [ "$TEST_RESULT" = "passed" ]; then
@@ -390,11 +394,14 @@ jobs:
           \`\`\`"
           fi
 
-          ISSUE_URL=$(gh issue create \
-            --repo manaflow-ai/cmux-dev-artifacts \
+          if ! ISSUE_URL=$(gh issue create \
+            --repo kernelalex/zerocmux-dev-artifacts \
             --title "[$STATUS_EMOJI] $TEST_FILTER @ ${COMMIT_SHA:0:7} ($REF_DISPLAY)" \
             --body "$BODY" \
-            --label "$LABEL")
+            --label "$LABEL"); then
+            echo "Could not post to kernelalex/zerocmux-dev-artifacts; continuing without dev artifact issue."
+            exit 0
+          fi
 
           echo "Issue posted: $ISSUE_URL"
           echo "::notice title=Test Result Issue::$ISSUE_URL"

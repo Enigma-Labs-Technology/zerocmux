@@ -98,7 +98,7 @@ final class UpdateTestURLProtocol: URLProtocol {
           xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
           xmlns:dc="http://purl.org/dc/elements/1.1/">
           <channel>
-            <title>cmux Test Updates</title>
+            <title>zerocmux Test Updates</title>
             <link>https://\(host)</link>
             <description>Test updates feed</description>
             <language>en</language>
@@ -111,7 +111,7 @@ final class UpdateTestURLProtocol: URLProtocol {
     }
 
     private static func updateArchiveData() -> Data {
-        Data("cmux test update".utf8)
+        Data("zerocmux test update".utf8)
     }
 }
 #endif

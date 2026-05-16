@@ -235,7 +235,7 @@ extension CmuxButtonIcon {
     var sfSymbolImage: NSImage? {
         guard case .symbol(let symbolName) = self else {
 #if DEBUG
-            assertionFailure("cmux config menu icons only support SF Symbols")
+            assertionFailure("zerocmux config menu icons only support SF Symbols")
 #endif
             return nil
         }

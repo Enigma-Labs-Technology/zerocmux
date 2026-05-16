@@ -894,7 +894,7 @@ final class FileExplorerContainerView: NSView {
     }
 
     @discardableResult
-    func focusSearchField() -> Bool {
+    func focusSearchField(selectText: Bool = true) -> Bool {
         guard let window, cmuxCanAcceptRightSidebarKeyboardFocus else {
 #if DEBUG
             dlog(
@@ -908,7 +908,12 @@ final class FileExplorerContainerView: NSView {
         updateSearchLayout()
         refreshSearchIfNeeded()
         let result = window.makeFirstResponder(searchField)
-        searchField.selectText(nil)
+        if selectText {
+            searchField.selectText(nil)
+        } else if let editor = searchField.currentEditor() {
+            let end = (searchField.stringValue as NSString).length
+            editor.selectedRange = NSRange(location: end, length: 0)
+        }
 #if DEBUG
         dlog(
             "file.focus.search.end result=\(result ? 1 : 0) win=\(window.windowNumber) " +
@@ -1210,7 +1215,7 @@ extension FileExplorerContainerView: NSSearchFieldDelegate, NSTableViewDataSourc
         }
 
         let openInCmuxItem = NSMenuItem(
-            title: String(localized: "fileExplorer.contextMenu.openInCmux", defaultValue: "Open in cmux"),
+            title: String(localized: "fileExplorer.contextMenu.openInCmux", defaultValue: "Open in zerocmux"),
             action: #selector(contextMenuOpenSearchResultInCmux(_:)),
             keyEquivalent: ""
         )

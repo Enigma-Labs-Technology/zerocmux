@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Stability regression test: browser panels should not crash cmux when:
+Stability regression test: browser panels should not crash zerocmux when:
   1) Creating a browser surface then immediately creating a new terminal surface
   2) Rapidly switching focus between panes when one pane is a loaded browser
 
 This test uses the control socket only (no osascript / Accessibility required).
 
 Requires:
-  - cmux running
+  - zerocmux running
 """
 
 import os
@@ -17,7 +17,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def wait_for_socket(path: str, timeout_s: float = 5.0) -> None:
@@ -155,7 +155,7 @@ def test_focus_panes_with_loaded_browser(client: cmux) -> tuple[bool, str]:
 
 def run_tests() -> int:
     print("=" * 60)
-    print("cmux Browser Panel Stability Test")
+    print("zerocmux Browser Panel Stability Test")
     print("=" * 60)
     print()
 

@@ -118,7 +118,7 @@ private func windowDragHandleEmitBreadcrumb(
     for (name, value) in extraData {
         data[name] = value
     }
-    sentryBreadcrumb(message, category: "titlebar.drag", data: data)
+    diagnosticsBreadcrumb(message, category: "titlebar.drag", data: data)
 }
 
 private func windowDragHandleShouldResolveActiveHitCapture(

@@ -220,14 +220,14 @@ struct ConfigSettingsView: View {
             GhosttyApp.shared.reloadConfiguration(source: "settings.configWindow.save")
             statusMessage = String(
                 localized: "settings.config.status.saved",
-                defaultValue: "Saved to cmux config and reloaded."
+                defaultValue: "Saved to zerocmux config and reloaded."
             )
             statusIsError = false
         } catch {
             NSSound.beep()
             statusMessage = String(
                 localized: "settings.config.status.saveFailed",
-                defaultValue: "Couldn't save the cmux config."
+                defaultValue: "Couldn't save the zerocmux config."
             )
             statusIsError = true
         }
@@ -255,7 +255,7 @@ struct ConfigSettingsView: View {
             NSSound.beep()
             statusMessage = String(
                 localized: "settings.config.status.openFailed",
-                defaultValue: "Couldn't open the cmux config."
+                defaultValue: "Couldn't open the zerocmux config."
             )
             statusIsError = true
             return nil

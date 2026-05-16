@@ -1,7 +1,7 @@
 import Foundation
 
 /// The agent that produced a `WorkstreamItem`. The raw value matches the
-/// `_source` field on the wire frame that cmux hooks and the OpenCode plugin
+/// `_source` field on the wire frame that zerocmux hooks and the OpenCode plugin
 /// emit, and matches Vibe Island's source tag 1:1 so existing hook payloads
 /// can flow through unchanged.
 public enum WorkstreamSource: String, Codable, Sendable, CaseIterable, Equatable {

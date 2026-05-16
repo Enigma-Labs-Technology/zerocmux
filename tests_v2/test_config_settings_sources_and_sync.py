@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Regression test: unified config settings resolves the right files and renders
-the synced preview with cmux overrides on top of Ghostty base values.
+the synced preview with zerocmux overrides on top of Ghostty base values.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def write_text(path: Path, contents: str) -> None:
 def run_probe(
     executable: Path,
     home_directory: Path,
-    bundle_identifier: str = "com.cmuxterm.app",
+    bundle_identifier: str = "com.kernelalex.zerocmux",
 ) -> dict:
     result = subprocess.run(
         [str(executable), str(home_directory), bundle_identifier],
@@ -66,12 +66,12 @@ def expect(condition: bool, message: str) -> None:
 def test_uses_cmux_config_ghostty_and_removes_standalone_tab(executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="cmux-config-settings-") as tmp:
         home = Path(tmp)
-        cmux_legacy_config = home / "Library" / "Application Support" / "com.cmuxterm.app" / "config"
+        cmux_legacy_config = home / "Library" / "Application Support" / "com.kernelalex.zerocmux" / "config"
         cmux_config = (
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
         ghostty_config = home / ".config" / "ghostty" / "config"
@@ -89,7 +89,7 @@ def test_uses_cmux_config_ghostty_and_removes_standalone_tab(executable: Path) -
         payload = run_probe(executable, home)
 
         expect(payload["sources"] == ["cmux", "synced"], f"unexpected config sources: {payload}")
-        expect(payload["cmux"]["path"] == str(cmux_config), f"unexpected cmux path: {payload}")
+        expect(payload["cmux"]["path"] == str(cmux_config), f"unexpected zerocmux path: {payload}")
 
         synced_path = Path(payload["synced"]["path"])
         expect(synced_path.exists(), f"synced preview path should exist: {payload}")
@@ -100,12 +100,12 @@ def test_uses_cmux_config_ghostty_and_removes_standalone_tab(executable: Path) -
             f"synced preview should keep Ghostty-only keys with provenance: {synced_contents}",
         )
         expect(
-            "background = #222222  # from: ~/Library/Application Support/com.cmuxterm.app/config.ghostty:1"
+            "background = #222222  # from: ~/Library/Application Support/com.kernelalex.zerocmux/config.ghostty:1"
             in synced_contents,
-            f"synced preview should use cmux override for duplicate keys: {synced_contents}",
+            f"synced preview should use zerocmux override for duplicate keys: {synced_contents}",
         )
         expect(
-            "copy-on-select = clipboard  # from: ~/Library/Application Support/com.cmuxterm.app/config.ghostty:2"
+            "copy-on-select = clipboard  # from: ~/Library/Application Support/com.kernelalex.zerocmux/config.ghostty:2"
             in synced_contents,
             f"synced preview should include cmux-only keys: {synced_contents}",
         )
@@ -118,12 +118,12 @@ def test_uses_cmux_config_ghostty_and_removes_standalone_tab(executable: Path) -
 def test_uses_legacy_cmux_config_when_config_ghostty_is_empty(executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="cmux-config-settings-") as tmp:
         home = Path(tmp)
-        cmux_legacy_config = home / "Library" / "Application Support" / "com.cmuxterm.app" / "config"
+        cmux_legacy_config = home / "Library" / "Application Support" / "com.kernelalex.zerocmux" / "config"
         cmux_config = (
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
 
@@ -132,9 +132,9 @@ def test_uses_legacy_cmux_config_when_config_ghostty_is_empty(executable: Path) 
 
         payload = run_probe(executable, home)
 
-        expect(payload["cmux"]["path"] == str(cmux_legacy_config), f"unexpected cmux path: {payload}")
+        expect(payload["cmux"]["path"] == str(cmux_legacy_config), f"unexpected zerocmux path: {payload}")
         expect(payload["loadPaths"] == [str(cmux_legacy_config)], f"unexpected load paths: {payload}")
-        expect("background = #000000" in payload["cmux"]["contents"], f"wrong cmux contents: {payload}")
+        expect("background = #000000" in payload["cmux"]["contents"], f"wrong zerocmux contents: {payload}")
 
 
 def test_falls_back_to_app_support_ghostty_when_dotconfig_missing(executable: Path) -> None:
@@ -144,7 +144,7 @@ def test_falls_back_to_app_support_ghostty_when_dotconfig_missing(executable: Pa
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
         ghostty_app_support = (
@@ -162,9 +162,9 @@ def test_falls_back_to_app_support_ghostty_when_dotconfig_missing(executable: Pa
 
         synced_contents = str(payload["synced"]["contents"])
         expect(
-            "font-size = 17  # from: ~/Library/Application Support/com.cmuxterm.app/config.ghostty:1"
+            "font-size = 17  # from: ~/Library/Application Support/com.kernelalex.zerocmux/config.ghostty:1"
             in synced_contents,
-            f"cmux override should win over Ghostty base font-size: {synced_contents}",
+            f"zerocmux override should win over Ghostty base font-size: {synced_contents}",
         )
         expect(
             "selection-background = #333333  # from: ~/Library/Application Support/com.mitchellh.ghostty/config:2"
@@ -180,21 +180,21 @@ def test_debug_bundle_edits_variant_config_and_loads_variant_when_present(execut
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
         nightly_config = (
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app.debug.nightly.123"
+            / "com.kernelalex.zerocmux.debug.nightly.123"
             / "config.ghostty"
         )
 
         write_text(release_config, "font-size = 13\n")
         write_text(nightly_config, "font-size = 15\n")
 
-        payload = run_probe(executable, home, "com.cmuxterm.app.debug.nightly.123")
+        payload = run_probe(executable, home, "com.kernelalex.zerocmux.debug.nightly.123")
 
         expect(payload["cmux"]["path"] == str(nightly_config), f"unexpected nightly path: {payload}")
         expect("font-size = 15" in payload["cmux"]["contents"], f"wrong nightly contents: {payload}")
@@ -210,13 +210,13 @@ def test_debug_bundle_uses_release_fallback_when_variant_missing(
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
 
         write_text(release_config, "font-size = 13\n")
 
-        payload = run_probe(executable, home, "com.cmuxterm.app.debug.nightly.123")
+        payload = run_probe(executable, home, "com.kernelalex.zerocmux.debug.nightly.123")
 
         expect(payload["cmux"]["path"] == str(release_config), f"unexpected fallback edit path: {payload}")
         expect("font-size = 13" in payload["cmux"]["contents"], f"wrong fallback contents: {payload}")
@@ -233,11 +233,11 @@ def test_debug_bundle_targets_variant_config_when_no_current_or_fallback_config(
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app.debug.nightly.123"
+            / "com.kernelalex.zerocmux.debug.nightly.123"
             / "config.ghostty"
         )
 
-        payload = run_probe(executable, home, "com.cmuxterm.app.debug.nightly.123")
+        payload = run_probe(executable, home, "com.kernelalex.zerocmux.debug.nightly.123")
 
         expect(payload["cmux"]["path"] == str(variant_config), f"unexpected empty edit path: {payload}")
         expect(payload["cmux"]["contents"] == "", f"empty variant target should have no contents: {payload}")
@@ -253,27 +253,27 @@ def test_nightly_app_edits_nightly_config_and_falls_back_to_release_when_missing
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app"
+            / "com.kernelalex.zerocmux"
             / "config.ghostty"
         )
         nightly_config = (
             home
             / "Library"
             / "Application Support"
-            / "com.cmuxterm.app.nightly"
+            / "com.kernelalex.zerocmux.nightly"
             / "config.ghostty"
         )
 
         write_text(release_config, "font-size = 13\n")
 
-        payload = run_probe(executable, home, "com.cmuxterm.app.nightly")
+        payload = run_probe(executable, home, "com.kernelalex.zerocmux.nightly")
 
         expect(payload["cmux"]["path"] == str(release_config), f"unexpected nightly fallback path: {payload}")
         expect(payload["loadPaths"] == [str(release_config)], f"unexpected nightly fallback paths: {payload}")
 
         write_text(nightly_config, "font-size = 16\n")
 
-        payload = run_probe(executable, home, "com.cmuxterm.app.nightly")
+        payload = run_probe(executable, home, "com.kernelalex.zerocmux.nightly")
 
         expect(payload["cmux"]["path"] == str(nightly_config), f"unexpected nightly edit path: {payload}")
         expect(payload["loadPaths"] == [str(nightly_config)], f"unexpected nightly load paths: {payload}")

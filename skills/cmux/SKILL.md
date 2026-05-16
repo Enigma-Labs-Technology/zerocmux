@@ -1,15 +1,15 @@
 ---
-name: cmux
-description: End-user control of cmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane cmux layout.
+name: zerocmux
+description: End-user control of zerocmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane zerocmux layout.
 ---
 
-# cmux Core Control
+# zerocmux Core Control
 
-Use this skill to control non-browser cmux topology and routing.
+Use this skill to control non-browser zerocmux topology and routing.
 
 ## Core Concepts
 
-- Window: top-level macOS cmux window.
+- Window: top-level macOS zerocmux window.
 - Workspace: tab-like group within a window.
 - Pane: split container in a workspace.
 - Surface: a tab within a pane (terminal or browser panel).
@@ -18,48 +18,48 @@ Use this skill to control non-browser cmux topology and routing.
 
 ```bash
 # identify current caller context
-cmux identify --json
+zerocmux identify --json
 
 # list topology
-cmux list-windows
-cmux list-workspaces
-cmux list-panes
-cmux list-pane-surfaces --pane pane:1
+zerocmux list-windows
+zerocmux list-workspaces
+zerocmux list-panes
+zerocmux list-pane-surfaces --pane pane:1
 
 # create/focus/move
-cmux new-workspace
-cmux new-split right --panel pane:1
-cmux move-surface --surface surface:7 --pane pane:2 --focus true
-cmux split-off --surface surface:7 right
-cmux reorder-surface --surface surface:7 --before surface:3
+zerocmux new-workspace
+zerocmux new-split right --panel pane:1
+zerocmux move-surface --surface surface:7 --pane pane:2 --focus true
+zerocmux split-off --surface surface:7 right
+zerocmux reorder-surface --surface surface:7 --before surface:3
 
 # attention cue
-cmux trigger-flash --surface surface:7
+zerocmux trigger-flash --surface surface:7
 ```
 
 ## Settings and Docs
 
-Use `cmux docs settings` before changing cmux-owned settings. It prints the docs URL, schema URL, raw GitHub resources, cmux.json paths, and reload command.
+Use `zerocmux docs settings` before changing zerocmux-owned settings. It prints the docs URL, schema URL, raw GitHub resources, cmux.json paths, and reload command.
 
 ```bash
-cmux docs settings
-cmux settings path
+zerocmux docs settings
+zerocmux settings path
 ```
 
-cmux-owned settings live in `~/.config/cmux/cmux.json`. Legacy `~/.config/cmux/settings.json` and `~/Library/Application Support/com.cmuxterm.app/settings.json` files are read only as fallback for missing keys. Before editing, copy any existing `cmux.json` file to a timestamped `.bak` next to it so the user can revert. Edit the user file, then reload:
+zerocmux-owned settings live in `~/.config/cmux/cmux.json`. Legacy `~/.config/cmux/settings.json` and `~/Library/Application Support/com.cmuxterm.app/settings.json` files are read only as fallback for missing keys. Before editing, copy any existing `cmux.json` file to a timestamped `.bak` next to it so the user can revert. Edit the user file, then reload:
 
 ```bash
-cmux reload-config
+zerocmux reload-config
 ```
 
-Use cmux settings for app behavior, sidebar, notifications, browser behavior, automation, workspace colors, and cmux-owned shortcuts. Terminal rendering settings such as font, cursor style, theme, and scrollback belong in Ghostty config.
+Use zerocmux settings for app behavior, sidebar, notifications, browser behavior, automation, workspace colors, and zerocmux-owned shortcuts. Terminal rendering settings such as font, cursor style, theme, and scrollback belong in Ghostty config.
 
 Open the UI when useful:
 
 ```bash
-cmux settings
-cmux settings cmux-json
-cmux settings shortcuts
+zerocmux settings
+zerocmux settings cmux-json
+zerocmux settings shortcuts
 ```
 
 ## Handle Model

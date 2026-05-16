@@ -1,32 +1,32 @@
-# cmux Events
+# zerocmux Events
 
-cmux exposes a reconnectable event stream for local tools that need to observe
+zerocmux exposes a reconnectable event stream for local tools that need to observe
 workspace, pane, surface, notification, browser, Feed, and agent-hook activity.
 
 The same events are appended to `~/.cmuxterm/events.jsonl` as newline-delimited
-JSON. The live stream is delivered over the existing cmux socket. Clients call
+JSON. The live stream is delivered over the existing zerocmux socket. Clients call
 the v2 method `events.stream`, then keep reading newline-delimited JSON frames
 from the same connection.
 
 ## Quick start
 
 ```bash
-cmux events --cursor-file ~/.cache/cmux/events.seq --reconnect
-cmux events --category window --category workspace --category pane --category surface
-cmux events --category notification
-cmux events --category feed --category agent --no-heartbeat
+zerocmux events --cursor-file ~/.cache/zerocmux/events.seq --reconnect
+zerocmux events --category window --category workspace --category pane --category surface
+zerocmux events --category notification
+zerocmux events --category feed --category agent --no-heartbeat
 ```
 
 Every event has a monotonically increasing process-local `seq` and a `boot_id`.
 Persist the latest processed `seq`, then reconnect with `after_seq` or use
-`cmux events --cursor-file`. If cmux restarts, `boot_id` changes and the server
+`zerocmux events --cursor-file`. If zerocmux restarts, `boot_id` changes and the server
 marks stale cursors as a resume gap.
 
 Use the JSONL log for audit and catch-up tools. Use the socket stream for live
 delivery with bounded replay.
 
 Lifecycle events with `source: "window.lifecycle"` or
-`source: "workspace.lifecycle"` are emitted from the cmux model, so they cover
+`source: "workspace.lifecycle"` are emitted from the zerocmux model, so they cover
 UI actions, CLI/socket commands, shortcuts, startup creation, restore paths, and
 AppKit focus/key transitions. Socket-sourced events are reserved for command
 effects that do not have an authoritative model lifecycle event.
@@ -86,7 +86,7 @@ heartbeats.
 }
 ```
 
-`resume.gap` is `true` when the requested cursor is older than cmux still keeps
+`resume.gap` is `true` when the requested cursor is older than zerocmux still keeps
 in memory, or newer than the current process after an app restart. In that case,
 process the replayed tail, then refresh any state you need through
 snapshot-style commands such as `list-workspaces`, `list-notifications`, `tree`,
@@ -129,8 +129,8 @@ Event fields:
 | Field | Meaning |
 | --- | --- |
 | `seq` | Process-local sequence. Increases by one for every emitted event. |
-| `boot_id` | UUID process-boot identifier for this in-memory event log. Changes when cmux restarts. |
-| `id` | Stable event id for the current cmux process. Use it for dedupe. |
+| `boot_id` | UUID process-boot identifier for this in-memory event log. Changes when zerocmux restarts. |
+| `id` | Stable event id for the current zerocmux process. Use it for dedupe. |
 | `name` | Specific event name, such as `feed.item.received`. |
 | `category` | Coarse subscription group. |
 | `source` | Producer, such as `socket.v2`, `notification.store`, or `codex`. |
@@ -162,7 +162,7 @@ the server's latest sequence.
 
 The intended client loop is:
 
-1. Connect to the cmux socket and authenticate if required.
+1. Connect to the zerocmux socket and authenticate if required.
 2. Send `events.stream` with the last fully processed `seq`.
 3. Read `ack`.
 4. If `ack.resume.gap` is true, refresh state through snapshot commands.
@@ -175,15 +175,15 @@ event frames are capped to 16 KiB after JSON encoding; oversized payloads are
 replaced with a small payload that sets `payload_truncated: true`.
 
 Each live subscriber also has a bounded pending queue of 1,024 events. If a
-client stops reading and falls behind that queue, cmux closes that subscription
+client stops reading and falls behind that queue, zerocmux closes that subscription
 with a `slow_consumer` error. The client should reconnect with the last `seq` it
 successfully processed.
 
-The durable event log is bounded too. cmux writes current events to
+The durable event log is bounded too. zerocmux writes current events to
 `~/.cmuxterm/events.jsonl`, rotates the previous file to
 `~/.cmuxterm/events.jsonl.1`, and caps each file at 16 MiB. Disk writes are
 batched behind a bounded 1,024-line queue. Under sustained disk backpressure,
-cmux drops the oldest pending disk-only lines and keeps the live socket stream
+zerocmux drops the oldest pending disk-only lines and keeps the live socket stream
 and in-memory replay buffer moving. Clients can read those files for recent
 auditing, but should treat the socket `ack.resume.gap` contract plus snapshot
 commands as the source of truth for catch-up after long outages. Feed still
@@ -191,7 +191,7 @@ writes its specialized long-term audit log to `~/.cmuxterm/workstream.jsonl`.
 
 ## CLI
 
-`cmux events` prints the stream as newline-delimited JSON.
+`zerocmux events` prints the stream as newline-delimited JSON.
 
 Options:
 
@@ -213,11 +213,11 @@ Window:
 
 | Name | Trigger |
 | --- | --- |
-| `window.created` | A main cmux window is registered in the app model. Covers startup, session restore, shortcuts, menus, and socket commands. |
-| `window.focused` | A cmux window focus request succeeded. This is an app-level focus action, not necessarily a new AppKit key transition. |
-| `window.keyed` | AppKit reported a main cmux window became the key window. Use this to track the window receiving keyboard input. |
-| `window.unkeyed` | AppKit reported a main cmux window resigned key status. |
-| `window.closed` | A main cmux window was unregistered during close. |
+| `window.created` | A main zerocmux window is registered in the app model. Covers startup, session restore, shortcuts, menus, and socket commands. |
+| `window.focused` | A zerocmux window focus request succeeded. This is an app-level focus action, not necessarily a new AppKit key transition. |
+| `window.keyed` | AppKit reported a main zerocmux window became the key window. Use this to track the window receiving keyboard input. |
+| `window.unkeyed` | AppKit reported a main zerocmux window resigned key status. |
+| `window.closed` | A main zerocmux window was unregistered during close. |
 
 Window lifecycle payloads include `window_id`, `workspace_id`,
 `workspace_count`, `selected_workspace_index`, `is_key_window`,
@@ -276,8 +276,8 @@ Notifications:
 
 | Name | Trigger |
 | --- | --- |
-| `notification.requested` | Socket command asked cmux to create a notification. |
-| `notification.clear_requested` | Socket command asked cmux to clear notifications. |
+| `notification.requested` | Socket command asked zerocmux to create a notification. |
+| `notification.clear_requested` | Socket command asked zerocmux to clear notifications. |
 | `notification.created` | Notification store created a notification. |
 | `notification.read` | Notification was marked read. |
 | `notification.removed` | One notification was removed. |
@@ -305,7 +305,7 @@ App, browser, and config:
 
 ## Agent hooks
 
-Agent integrations use `cmux hooks feed --source <agent>` or an equivalent
+Agent integrations use `zerocmux hooks feed --source <agent>` or an equivalent
 plugin bridge. The event stream publishes both agent and Feed events:
 
 ```json

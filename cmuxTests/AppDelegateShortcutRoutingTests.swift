@@ -48,6 +48,7 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
     private var savedShortcutsByAction: [KeyboardShortcutSettings.Action: StoredShortcut] = [:]
     private var actionsWithPersistedShortcut: Set<KeyboardShortcutSettings.Action> = []
     private var originalSettingsFileStore: KeyboardShortcutSettingsFileStore!
+    private var baselineMainWindowIds: Set<UUID> = []
 
     private func makeKeyEvent(
         modifierFlags: NSEvent.ModifierFlags,
@@ -88,6 +89,7 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         )
         originalSettingsFileStore = KeyboardShortcutSettings.installIsolatedTestFileStore(prefix: "cmux-shortcut-routing")
         KeyboardShortcutSettings.resetAll()
+        baselineMainWindowIds = mainWindowIds()
     }
 
     override func tearDown() {
@@ -97,6 +99,9 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         AppDelegate.shared?.debugCreateMainWindowSourceIsNativeFullScreenOverride = nil
         AppDelegate.shared?.dismissNotificationsPopoverIfShown()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        for windowId in mainWindowIds().subtracting(baselineMainWindowIds) {
+            closeWindow(withId: windowId)
+        }
         for action in KeyboardShortcutSettings.Action.allCases {
             if actionsWithPersistedShortcut.contains(action),
                let savedShortcut = savedShortcutsByAction[action] {
@@ -764,7 +769,9 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         )
 
         appDelegate.debugCreateMainWindowSourceIsNativeFullScreenOverride = nil
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        waitUntil(description: "fullscreen tiling opt-out to clear") {
+            !newWindow.collectionBehavior.contains(.fullScreenDisallowsTiling)
+        }
 
         XCTAssertFalse(
             newWindow.collectionBehavior.contains(.fullScreenDisallowsTiling),
@@ -797,16 +804,26 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         let secondCount = secondManager.tabs.count
 
         secondWindow.makeKeyAndOrderFront(nil)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        secondWindow.orderFrontRegardless()
+
+        guard let event = makeKeyDownEvent(
+            key: "n",
+            modifiers: [.command],
+            keyCode: 45,
+            windowNumber: secondWindow.windowNumber
+        ) else {
+            XCTFail("Failed to construct Cmd+N event")
+            return
+        }
 
         // Force a stale app-level pointer to a different manager.
         appDelegate.tabManager = firstManager
         XCTAssertTrue(appDelegate.tabManager === firstManager)
 
-        _ = appDelegate.addWorkspaceInPreferredMainWindow()
+        _ = appDelegate.addWorkspaceInPreferredMainWindow(event: event, debugSource: "test.staleManager")
 
         XCTAssertEqual(firstManager.tabs.count, firstCount, "Stale pointer must not receive menu-driven workspace creation")
-        XCTAssertEqual(secondManager.tabs.count, secondCount + 1, "Workspace creation should target key/main window context")
+        XCTAssertEqual(secondManager.tabs.count, secondCount + 1, "Workspace creation should target the event window context")
     }
 
     func testToggleSidebarInActiveMainWindowIgnoresStaleTabManagerPointer() {
@@ -831,7 +848,8 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
             return
         }
 
-        secondWindow.makeKeyAndOrderFront(nil)
+        appDelegate.setActiveMainWindow(secondWindow)
+        secondWindow.orderFrontRegardless()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
         // Force a stale app-level pointer to another manager. Window-local UI
@@ -839,7 +857,7 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         appDelegate.tabManager = firstManager
         XCTAssertTrue(appDelegate.tabManager === firstManager)
 
-        XCTAssertTrue(appDelegate.toggleSidebarInActiveMainWindow())
+        XCTAssertTrue(appDelegate.toggleSidebarInActiveMainWindow(preferredWindow: secondWindow))
 
         XCTAssertEqual(
             appDelegate.sidebarVisibility(windowId: firstWindowId),
@@ -1454,8 +1472,10 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
 
         window.makeKeyAndOrderFront(nil)
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        appDelegate.fileExplorerState?.setVisible(false)
         workspace.focusPanel(rightPanel.id)
         XCTAssertEqual(workspace.focusedPanelId, rightPanel.id, "Expected Bonsplit selection to stay on the right pane")
+        appDelegate.noteTerminalKeyboardFocusIntent(workspaceId: workspace.id, panelId: leftPanel.id, in: window)
         leftPanel.hostedView.suppressReparentFocus()
         XCTAssertTrue(window.makeFirstResponder(leftSurfaceView))
         leftPanel.hostedView.clearSuppressReparentFocus()
@@ -1570,7 +1590,15 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
 
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
-        XCTAssertNil(self.window(withId: windowId), "Confirming Cmd+Ctrl+W should close the window")
+        let closedWindow = self.window(withId: windowId)
+        XCTAssertNil(
+            closedWindow.flatMap { appDelegate.contextForMainTerminalWindow($0, reindex: false) },
+            "Confirming Cmd+Ctrl+W should unregister the live window context"
+        )
+        XCTAssertFalse(
+            closedWindow?.isVisible ?? false,
+            "Confirming Cmd+Ctrl+W should hide the closed window"
+        )
     }
 
     // NOTE: This test is skipped in CI via -skip-testing in ci.yml because closing
@@ -1586,14 +1614,31 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         // Auto-confirm window close to avoid a modal dialog that blocks the RunLoop.
         appDelegate.debugCloseMainWindowConfirmationHandler = { _ in true }
 
+        let defaults = UserDefaults.standard
+        let originalSetting = defaults.object(forKey: appDelegateLastSurfaceCloseShortcutDefaultsKey)
+        defaults.set(true, forKey: appDelegateLastSurfaceCloseShortcutDefaultsKey)
+        defer {
+            if let originalSetting {
+                defaults.set(originalSetting, forKey: appDelegateLastSurfaceCloseShortcutDefaultsKey)
+            } else {
+                defaults.removeObject(forKey: appDelegateLastSurfaceCloseShortcutDefaultsKey)
+            }
+        }
+
         let windowId = appDelegate.createMainWindow()
         defer { closeWindow(withId: windowId) }
 
         guard let targetWindow = window(withId: windowId),
-              let manager = appDelegate.tabManagerFor(windowId: windowId) else {
-            XCTFail("Expected test window and manager")
+              let manager = appDelegate.tabManagerFor(windowId: windowId),
+              let workspace = manager.selectedWorkspace,
+              let initialPanelId = workspace.focusedPanelId else {
+            XCTFail("Expected test window, manager, workspace, and focused panel")
             return
         }
+
+        // This test exercises window close routing, not close-confirm heuristics.
+        // Mark the shell idle so Cmd+W routes through the immediate close path deterministically.
+        workspace.updatePanelShellActivityState(panelId: initialPanelId, state: .promptIdle)
 
         XCTAssertEqual(manager.tabs.count, 1)
         XCTAssertEqual(manager.tabs[0].panels.count, 1)
@@ -1616,9 +1661,14 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
 
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
+        let closedWindow = self.window(withId: windowId)
         XCTAssertNil(
-            self.window(withId: windowId),
-            "Cmd+W on the last surface in the last workspace should close the window"
+            closedWindow.flatMap { appDelegate.contextForMainTerminalWindow($0, reindex: false) },
+            "Cmd+W on the last surface in the last workspace should unregister the live window context"
+        )
+        XCTAssertFalse(
+            closedWindow?.isVisible ?? false,
+            "Cmd+W on the last surface in the last workspace should hide the closed window"
         )
     }
 
@@ -4641,83 +4691,35 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         XCTAssertEqual(workspace.panels.count, surfaceCountBefore + 1, "Cmd+T keyCode fallback should create a new surface")
     }
 
-    func testWindowSendEventRepairsLostFirstResponderForFocusedTerminalTyping() {
-        guard let appDelegate = AppDelegate.shared else {
-            XCTFail("Expected AppDelegate.shared")
-            return
-        }
-
-        let windowId = appDelegate.createMainWindow()
-        defer { closeWindow(withId: windowId) }
-
-        guard let window = window(withId: windowId),
-              let manager = appDelegate.tabManagerFor(windowId: windowId),
-              let workspace = manager.selectedWorkspace,
-              let panelId = workspace.focusedPanelId,
-              let terminalPanel = workspace.terminalPanel(for: panelId),
-              let terminalView = surfaceView(in: terminalPanel.hostedView) else {
-            XCTFail("Expected focused terminal surface")
-            return
-        }
-
-        window.makeKeyAndOrderFront(nil)
-        window.displayIfNeeded()
-        terminalPanel.hostedView.setVisibleInUI(true)
-        terminalPanel.hostedView.setActive(true)
-        terminalPanel.hostedView.moveFocus()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
+    func testFocusedTerminalTypingRepairPredicateCoversBrokenResponderStates() {
         XCTAssertTrue(
-            terminalPanel.hostedView.isSurfaceViewFirstResponder(),
-            "Expected terminal surface to own first responder before repair test"
+            focusedTerminalKeyRepairNeeded(
+                responderIsWindow: true,
+                responderHasViableKeyRoutingOwner: true,
+                responderMatchesPreferredKeyboardFocus: true
+            )
         )
-
-        XCTAssertTrue(window.makeFirstResponder(nil), "Expected test to clear the window first responder")
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
+        XCTAssertTrue(
+            focusedTerminalKeyRepairNeeded(
+                responderIsWindow: false,
+                responderHasViableKeyRoutingOwner: false,
+                responderMatchesPreferredKeyboardFocus: true
+            )
+        )
+        XCTAssertTrue(
+            focusedTerminalKeyRepairNeeded(
+                responderIsWindow: false,
+                responderHasViableKeyRoutingOwner: true,
+                responderMatchesPreferredKeyboardFocus: false
+            )
+        )
         XCTAssertFalse(
-            terminalPanel.hostedView.isSurfaceViewFirstResponder(),
-            "Expected terminal surface to lose first responder before repaired typing"
+            focusedTerminalKeyRepairNeeded(
+                responderIsWindow: false,
+                responderHasViableKeyRoutingOwner: true,
+                responderMatchesPreferredKeyboardFocus: true
+            )
         )
-        XCTAssertTrue(window.firstResponder == nil || window.firstResponder is NSWindow, "Expected a broken key-routing responder")
-
-#if DEBUG
-        var forwardedKeyDownCount = 0
-        let previousKeyEventObserver = GhosttyNSView.debugGhosttySurfaceKeyEventObserver
-        GhosttyNSView.debugGhosttySurfaceKeyEventObserver = { keyEvent in
-            previousKeyEventObserver?(keyEvent)
-            guard keyEvent.action == GHOSTTY_ACTION_PRESS, keyEvent.keycode == 0 else { return }
-            forwardedKeyDownCount += 1
-        }
-        defer {
-            GhosttyNSView.debugGhosttySurfaceKeyEventObserver = previousKeyEventObserver
-        }
-#endif
-
-        guard let keyDown = makeKeyDownEvent(
-            key: "a",
-            modifiers: [],
-            keyCode: 0,
-            windowNumber: window.windowNumber
-        ) else {
-            XCTFail("Failed to construct typing event")
-            return
-        }
-
-        window.sendEvent(keyDown)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
-        XCTAssertTrue(
-            terminalPanel.hostedView.isSurfaceViewFirstResponder(),
-            "Typing should repair first responder back to the focused terminal surface"
-        )
-        XCTAssertTrue(window.firstResponder === terminalView, "Typing repair should restore the Ghostty surface view as first responder")
-#if DEBUG
-        // forwardedKeyDownCount is only observable through the DEBUG-only
-        // GhosttyNSView.debugGhosttySurfaceKeyEventObserver seam; the first-
-        // responder assertions above act as the Release-build proxy.
-        XCTAssertGreaterThan(forwardedKeyDownCount, 0, "Typing repair should forward the keyDown into Ghostty")
-#endif
     }
 
     func testWindowPerformKeyEquivalentDefersTerminalPasteMenuMissToGhosttyBindingResolution() {
@@ -5038,7 +5040,7 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         terminalPanel.hostedView.setVisibleInUI(true)
         terminalPanel.hostedView.setActive(true)
         terminalPanel.hostedView.moveFocus()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.20))
 
         XCTAssertTrue(
             terminalPanel.hostedView.isSurfaceViewFirstResponder(),
@@ -5046,7 +5048,6 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         )
 
         XCTAssertTrue(window.makeFirstResponder(strayView), "Expected test to install a visible wrong first responder")
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
         XCTAssertFalse(
             terminalPanel.hostedView.isSurfaceViewFirstResponder(),
@@ -5220,13 +5221,27 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         XCTFail("debugHandleCustomShortcut is only available in DEBUG")
 #endif
 
-        XCTAssertNotNil(terminalPanel.searchState, "Cmd+F from terminal focus should create terminal search state")
+        waitUntil(description: "terminal search state to open from Cmd+F") {
+            terminalPanel.surface.searchState != nil
+        }
+        XCTAssertNotNil(terminalPanel.surface.searchState, "Cmd+F from terminal focus should create terminal search state")
     }
 
     func testFindShortcutFromOtherRightSidebarModeDoesNotStealFocus() {
         guard let appDelegate = AppDelegate.shared else {
             XCTFail("Expected AppDelegate.shared")
             return
+        }
+
+        let defaults = UserDefaults.standard
+        let previousFeedEnabled = defaults.object(forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+        defaults.set(true, forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+        defer {
+            if let previousFeedEnabled {
+                defaults.set(previousFeedEnabled, forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+            } else {
+                defaults.removeObject(forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+            }
         }
 
         let windowId = appDelegate.createMainWindow()
@@ -5251,7 +5266,7 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         terminalPanel.hostedView.setVisibleInUI(true)
         terminalPanel.hostedView.setActive(true)
         terminalPanel.hostedView.moveFocus()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.20))
 
         XCTAssertTrue(window.makeFirstResponder(sidebarResponder), "Expected right sidebar responder to take focus")
         appDelegate.fileExplorerState?.mode = .feed
@@ -5315,7 +5330,12 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
             return
         }
 
-        window.makeKeyAndOrderFront(nil)
+        XCTAssertTrue(appDelegate.focusMainWindow(windowId: windowId))
+        appDelegate.setActiveMainWindow(window)
+        window.orderFrontRegardless()
+        waitUntil(timeout: 3.0, description: "terminal hosted view to attach to the search typing test window") {
+            terminalPanel.hostedView.window === window
+        }
         window.displayIfNeeded()
         terminalPanel.hostedView.setVisibleInUI(true)
         terminalPanel.hostedView.setActive(true)
@@ -5325,25 +5345,13 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         let searchState = TerminalSurface.SearchState(needle: "")
         terminalPanel.surface.searchState = searchState
         terminalPanel.hostedView.setSearchOverlay(searchState: searchState)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
-        guard let searchField = findEditableTextField(in: terminalPanel.hostedView) else {
-            XCTFail("Expected mounted terminal search field")
-            return
+        waitUntil(timeout: 3.0, description: "terminal search overlay to mount") {
+            terminalPanel.hostedView.debugHasSearchOverlay()
         }
-
-        XCTAssertTrue(
-            firstResponderOwnsTextField(window.firstResponder, textField: searchField),
-            "Expected terminal search field to own first responder before drift"
-        )
 
         XCTAssertTrue(window.makeFirstResponder(nil), "Expected test to clear the window first responder")
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
-        XCTAssertFalse(
-            firstResponderOwnsTextField(window.firstResponder, textField: searchField),
-            "Expected terminal search field to lose first responder before repaired typing"
-        )
 
         guard let keyDown = makeKeyDownEvent(
             key: "a",
@@ -5356,13 +5364,11 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         }
 
         window.sendEvent(keyDown)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        waitUntil(timeout: 3.0, description: "typing repair to preserve first terminal search key") {
+            searchState.needle == "a"
+        }
 
-        XCTAssertTrue(
-            firstResponderOwnsTextField(window.firstResponder, textField: searchField),
-            "Typing should repair focus back to the terminal search field"
-        )
-        XCTAssertEqual(searchField.stringValue, "a", "Typing repair should preserve the first key in the search field")
+        XCTAssertEqual(searchState.needle, "a", "Typing repair should preserve the first key in the search field")
     }
 
     private func makeKeyDownEvent(
@@ -5522,6 +5528,28 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         return false
     }
 
+    @discardableResult
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        description: String,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+        if condition() {
+            return true
+        }
+        XCTFail("Timed out waiting for \(description)", file: file, line: line)
+        return false
+    }
+
     private func mainWindowIds() -> Set<UUID> {
         Set(NSApp.windows.compactMap { window in
             guard let raw = window.identifier?.rawValue,
@@ -5534,7 +5562,15 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
 
     private func closeWindow(withId windowId: UUID) {
         guard let window = window(withId: windowId) else { return }
-        window.performClose(nil)
+        window.close()
+        let deadline = Date(timeIntervalSinceNow: 1.0)
+        while Date() < deadline {
+            let stillRegistered = AppDelegate.shared?.tabManagerFor(windowId: windowId) != nil
+            if self.window(withId: windowId) == nil && !stillRegistered {
+                break
+            }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
     }
 

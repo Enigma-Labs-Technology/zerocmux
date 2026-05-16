@@ -84,17 +84,15 @@ final class CmuxConfigContextMenuTests: XCTestCase {
     }
 
     @MainActor
-    func testDefaultNewWorkspaceContextMenuIncludesCloudVM() throws {
+    func testDefaultNewWorkspaceContextMenuOnlyIncludesNewWorkspace() throws {
         let store = try loadStore()
 
-        XCTAssertEqual(store.newWorkspaceContextMenuItems.count, 2)
-        guard store.newWorkspaceContextMenuItems.count == 2 else { return }
-        guard case .action(let first) = store.newWorkspaceContextMenuItems[0],
-              case .action(let second) = store.newWorkspaceContextMenuItems[1] else {
+        XCTAssertEqual(store.newWorkspaceContextMenuItems.count, 1)
+        guard store.newWorkspaceContextMenuItems.count == 1 else { return }
+        guard case .action(let first) = store.newWorkspaceContextMenuItems[0] else {
             return XCTFail("Expected default context menu actions.")
         }
         XCTAssertEqual(first.action.id, CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID)
-        XCTAssertEqual(second.action.id, CmuxSurfaceTabBarBuiltInAction.cloudVM.configID)
         XCTAssertTrue(store.configurationIssues.isEmpty)
     }
 
@@ -111,78 +109,6 @@ final class CmuxConfigContextMenuTests: XCTestCase {
         """)
 
         XCTAssertTrue(store.newWorkspaceContextMenuItems.isEmpty)
-        XCTAssertTrue(store.configurationIssues.isEmpty)
-    }
-
-    @MainActor
-    func testCloudVMAliasesResolveToCanonicalBuiltInAction() throws {
-        let store = try loadStore(localJSON: """
-        {
-          "ui": {
-            "newWorkspace": {
-              "contextMenu": [
-                "cmux.cloudvm",
-                "cmux.cloudVM",
-                "cloudVM",
-                "newCloudVM",
-                "startCloudVM"
-              ]
-            }
-          }
-        }
-        """)
-
-        XCTAssertEqual(store.newWorkspaceContextMenuItems.count, 5)
-        for item in store.newWorkspaceContextMenuItems {
-            guard case .action(let action) = item else {
-                return XCTFail("Expected Cloud VM context-menu action.")
-            }
-            XCTAssertEqual(action.action.id, CmuxSurfaceTabBarBuiltInAction.cloudVM.configID)
-        }
-        XCTAssertTrue(store.configurationIssues.isEmpty)
-    }
-
-    func testActionAliasesCannotOverrideSameBuiltInTwice() throws {
-        let json = """
-        {
-          "actions": {
-            "cmux.cloudvm": { "type": "command", "command": "echo canonical" },
-            "startCloudVM": { "type": "command", "command": "echo alias" }
-          }
-        }
-        """
-
-        XCTAssertThrowsError(try decode(json)) { error in
-            let description = String(describing: error)
-            XCTAssertTrue(description.contains("duplicate aliases"))
-            XCTAssertTrue(description.contains(CmuxSurfaceTabBarBuiltInAction.cloudVM.configID))
-        }
-    }
-
-    @MainActor
-    func testDefaultCloudVMMenuActionCanBeOverriddenByAlias() throws {
-        let store = try loadStore(localJSON: """
-        {
-          "actions": {
-            "cmux.cloudvm": {
-              "type": "command",
-              "command": "echo cloud",
-              "title": "Cloud Override",
-              "icon": { "type": "symbol", "name": "bolt" }
-            }
-          }
-        }
-        """)
-
-        XCTAssertEqual(store.newWorkspaceContextMenuItems.count, 2)
-        guard store.newWorkspaceContextMenuItems.count == 2 else { return }
-        guard case .action(let item) = store.newWorkspaceContextMenuItems[1] else {
-            return XCTFail("Expected Cloud VM context-menu action.")
-        }
-        XCTAssertEqual(item.action.id, CmuxSurfaceTabBarBuiltInAction.cloudVM.configID)
-        XCTAssertEqual(item.title, "Cloud Override")
-        XCTAssertEqual(item.icon, .symbol("bolt"))
-        XCTAssertEqual(item.action.terminalCommand, "echo cloud")
         XCTAssertTrue(store.configurationIssues.isEmpty)
     }
 

@@ -43,7 +43,7 @@ public final class WorkstreamStore {
 
     /// Last known conversational context for each workstream. Tool hooks
     /// usually arrive without the surrounding user prompt, so the store
-    /// carries forward prompt/preamble context from nearby telemetry rows.
+    /// carries forward prompt/preamble context from nearby non-actionable rows.
     private var lastContextByWorkstream: [String: WorkstreamContext] = [:]
 
     public init(

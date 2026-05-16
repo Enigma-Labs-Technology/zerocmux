@@ -26,10 +26,10 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH") or "/tmp/cmux-debug.sock"
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH") or "/tmp/zerocmux-debug.sock"
 HTML_REPORT = Path(__file__).parent / "terminal_input_report.html"
 
 
@@ -123,7 +123,7 @@ def _write_report(cases: list[dict]) -> None:
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>cmux terminal input render report</title>
+  <title>zerocmux terminal input render report</title>
   <style>
     :root {{
       --bg: #0b0f14;
@@ -207,7 +207,7 @@ def _write_report(cases: list[dict]) -> None:
   </style>
 </head>
 <body>
-  <h1>cmux terminal input render report</h1>
+  <h1>zerocmux terminal input render report</h1>
   <div class="meta">generated: {esc(generated)} | socket: {esc(SOCKET_PATH)}</div>
 """
 

@@ -78,8 +78,6 @@ final class WorkspaceSSHFishShellTests: XCTestCase {
 
         var environment = ProcessInfo.processInfo.environment
         environment["CMUX_SOCKET_PATH"] = socketPath
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
-        environment["CMUX_CLAUDE_HOOK_SENTRY_DISABLED"] = "1"
 
         let result = runProcess(
             executablePath: cliPath,
@@ -154,8 +152,6 @@ final class WorkspaceSSHFishShellTests: XCTestCase {
         startupEnvironment["CMUX_TEST_LOCAL_SHELL"] = fishExecutable
         startupEnvironment["CMUX_SOCKET_PATH"] = socketPath
         startupEnvironment["CMUX_WORKSPACE_ID"] = workspaceID
-        startupEnvironment["CMUX_CLI_SENTRY_DISABLED"] = "1"
-        startupEnvironment["CMUX_CLAUDE_HOOK_SENTRY_DISABLED"] = "1"
 
         let foregroundAuthState = MockSocketServerState()
         let foregroundAuthHandled = startMockServer(listenerFD: listenerFD, state: foregroundAuthState) { line in
@@ -317,14 +313,14 @@ final class WorkspaceSSHFishShellTests: XCTestCase {
         )
 
         while let item = enumerator?.nextObject() as? URL {
-            guard item.lastPathComponent == "cmux",
-                  item.path.contains(".app/Contents/Resources/bin/cmux") else {
+            guard item.lastPathComponent == "zerocmux",
+                  item.path.contains(".app/Contents/Resources/bin/zerocmux") else {
                 continue
             }
             return item.path
         }
 
-        throw XCTSkip("Bundled cmux CLI not found in \(appBundleURL.path)")
+        throw XCTSkip("Bundled zerocmux CLI not found in \(appBundleURL.path)")
     }
 
     private func requireExecutable(_ candidates: [String], name: String) throws -> String {

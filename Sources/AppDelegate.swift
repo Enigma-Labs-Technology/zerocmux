@@ -4,7 +4,6 @@ import Bonsplit
 import CMUXWorkstream
 import CoreServices
 import UserNotifications
-import Sentry
 import WebKit
 import Combine
 import ObjectiveC.runtime
@@ -130,7 +129,8 @@ final class CmuxApplicationAccessibilityHierarchyCache {
 }
 
 private enum CmuxThemeNotifications {
-    static let reloadConfig = Notification.Name("com.cmuxterm.themes.reload-config")
+    static let reloadConfig = Notification.Name("com.kernelalex.zerocmux.themes.reload-config")
+    static let legacyReloadConfig = Notification.Name("com.cmuxterm.themes.reload-config")
 }
 
 func isCommandPaletteFocusStealingTerminalOrBrowserResponder(_ responder: NSResponder) -> Bool {
@@ -845,11 +845,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var sessionAutosaveTickInFlight = false
     private var sessionAutosaveDeferredRetryPending = false
     private let sessionPersistenceQueue = DispatchQueue(
-        label: "com.cmuxterm.app.sessionPersistence",
+        label: "com.kernelalex.zerocmux.sessionPersistence",
         qos: .utility
     )
     private nonisolated static let launchServicesRegistrationQueue = DispatchQueue(
-        label: "com.cmuxterm.app.launchServicesRegistration",
+        label: "com.kernelalex.zerocmux.launchServicesRegistration",
         qos: .utility
     )
     private nonisolated static func enqueueLaunchServicesRegistrationWork(_ work: @escaping @Sendable () -> Void) {
@@ -935,17 +935,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        let authCallbacks = urls.filter(AuthCallbackRouter.isAuthCallbackURL)
-        for url in authCallbacks {
-            Task { @MainActor in
-                do {
-                    try await AuthManager.shared.handleCallbackURL(url)
-                } catch {
-                    NSLog("auth.callback failed: %@", "\(error)")
-                }
-            }
-        }
-
         let fileURLs = externalOpenFileURLs(from: urls)
         let directories = externalOpenDirectories(from: urls.filter { externalOpenURLIsDirectory($0) })
         guard !fileURLs.isEmpty || !directories.isEmpty else { return }
@@ -983,7 +972,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationDidFinishLaunching(_ notification: Notification) {
         let env = ProcessInfo.processInfo.environment
         let isRunningUnderXCTest = isRunningUnderXCTest(env)
-        let telemetryEnabled = TelemetrySettings.enabledForCurrentLaunch
         AppIconLaunchState.markDidFinishLaunching()
         if isRunningUnderXCTest {
             NSApp.setActivationPolicy(.regular)
@@ -1014,6 +1002,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self,
             selector: #selector(handleThemesReloadNotification(_:)),
             name: CmuxThemeNotifications.reloadConfig,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleThemesReloadNotification(_:)),
+            name: CmuxThemeNotifications.legacyReloadConfig,
             object: nil,
             suspensionBehavior: .deliverImmediately
         )
@@ -1053,43 +1048,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self?.writeUITestDiagnosticsIfNeeded(stage: "after1s")
         }
 #endif
-
-        if telemetryEnabled {
-            // Pre-warm locale before Sentry to avoid a startup data race.
-            // Locale initialization (os.locale.ensureLocale / NSLocale._preferredLanguages)
-            // on the main thread can race with Sentry's background init thread
-            // calling posix.getenv, causing a SIGSEGV ~134ms after launch.
-            // Forcing locale access here before SentrySDK.start eliminates the race.
-            // Related to: #836
-            _ = Locale.current
-            _ = NSLocale.preferredLanguages
-
-            SentrySDK.start { options in
-                options.dsn = "https://ecba1ec90ecaee02a102fba931b6d2b3@o4507547940749312.ingest.us.sentry.io/4510796264636416"
-                #if DEBUG
-                options.environment = "development"
-                options.debug = true
-                #else
-                options.environment = "production"
-                options.debug = false
-                #endif
-                options.sendDefaultPii = false
-
-                // Performance tracing (10% of transactions)
-                options.tracesSampleRate = 0.1
-                // Keep app-hang tracking enabled, but avoid reporting short main-thread stalls
-                // as hangs in normal user interaction flows.
-                options.appHangTimeoutInterval = 8.0
-                // Attach stack traces to all events
-                options.attachStacktrace = true
-                // Avoid recursively capturing failed requests from Sentry's own ingestion endpoint.
-                options.enableCaptureFailedRequests = false
-            }
-        }
-
-        if telemetryEnabled && !isRunningUnderXCTest {
-            PostHogAnalytics.shared.startIfNeeded()
-        }
 
         let forceDuplicateLaunchObserver = env["CMUX_UI_TEST_ENABLE_DUPLICATE_LAUNCH_OBSERVER"] == "1"
 
@@ -1455,13 +1413,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if mainWindowVisibilityController.finishPendingApplicationActivationRestore(windows: activationWindows, reason: .applicationDidBecomeActive) == nil, !hasVisibleMainTerminalWindow() {
             _ = mainWindowVisibilityController.restoreApplicationWindowsAfterActivation(windows: activationWindows, reason: .applicationDidBecomeActive)
         }
-        sentryBreadcrumb("app.didBecomeActive", category: "lifecycle", data: [
+        diagnosticsBreadcrumb("app.didBecomeActive", category: "lifecycle", data: [
             "tabCount": tabManager?.tabs.count ?? 0
         ])
-        if TelemetrySettings.enabledForCurrentLaunch && !isRunningUnderXCTestCached {
-            PostHogAnalytics.shared.trackActive(reason: "didBecomeActive")
-        }
-
         guard let notificationStore else { return }
         notificationStore.handleApplicationDidBecomeActive()
         guard let tabManager else { return }
@@ -1502,7 +1456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = String(localized: "dialog.quitCmux.title", defaultValue: "Quit cmux?")
+            alert.messageText = String(localized: "dialog.quitCmux.title", defaultValue: "Quit zerocmux?")
             alert.informativeText = String(localized: "dialog.quitCmux.message", defaultValue: "This will close all windows and workspaces.")
             alert.addButton(withTitle: String(localized: "dialog.quitCmux.quit", defaultValue: "Quit"))
             alert.addButton(withTitle: String(localized: "common.cancel", defaultValue: "Cancel"))
@@ -1534,9 +1488,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         TerminalController.shared.stop()
         VSCodeServeWebController.shared.stop()
         BrowserProfileStore.shared.flushPendingSaves()
-        if TelemetrySettings.enabledForCurrentLaunch {
-            PostHogAnalytics.shared.flush()
-        }
         notificationStore?.clearAll()
         enableSuddenTerminationIfNeeded()
     }
@@ -2236,30 +2187,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let env = ProcessInfo.processInfo.environment
         guard env["CMUX_UI_TEST_SOCKET_SANITY"] == "1" else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
+        let maxAttempts = 4
+        var runAttempt: ((Int) -> Void)!
+        runAttempt = { [weak self] attempt in
             guard let self else { return }
-            guard let config = self.socketListenerConfigurationIfEnabled() else {
-                self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityDisabled")
-                return
-            }
+            let delay: TimeInterval = attempt == 0 ? 0.75 : 1.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self else { return }
+                guard let config = self.socketListenerConfigurationIfEnabled() else {
+                    self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityDisabled")
+                    return
+                }
 
-            let expectedPath = TerminalController.shared.activeSocketPath(preferredPath: config.path)
-            let health = TerminalController.shared.socketListenerHealth(expectedSocketPath: expectedPath)
-            let pingResponse = health.isHealthy
-                ? TerminalController.probeSocketCommand("ping", at: expectedPath, timeout: 1.0)
-                : nil
-            let isReady = health.isHealthy && pingResponse == "PONG"
-            if isReady {
-                self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityReady")
-                return
-            }
+                let expectedPath = TerminalController.shared.activeSocketPath(preferredPath: config.path)
+                let health = TerminalController.shared.socketListenerHealth(expectedSocketPath: expectedPath)
+                let pingResponse = health.isHealthy
+                    ? TerminalController.probeSocketCommand("ping", at: expectedPath, timeout: 1.0)
+                    : nil
+                let isReady = health.isHealthy && pingResponse == "PONG"
+                if isReady {
+                    self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityReady.\(attempt)")
+                    return
+                }
 
-            self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityRestart")
-            self.restartSocketListenerIfEnabled(source: "uiTest.socketSanity")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
-                self?.writeUITestDiagnosticsIfNeeded(stage: "socketSanityPostRestart")
+                self.writeUITestDiagnosticsIfNeeded(stage: "socketSanityRestart.\(attempt)")
+                self.restartSocketListenerIfEnabled(source: "uiTest.socketSanity.\(attempt)")
+                guard attempt < maxAttempts else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
+                        self?.writeUITestDiagnosticsIfNeeded(stage: "socketSanityFinal")
+                    }
+                    return
+                }
+                runAttempt(attempt + 1)
             }
         }
+        runAttempt(0)
     }
 
     private func setupDisplayResolutionUITestDiagnosticsIfNeeded() {
@@ -3186,7 +3148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
         let path = TerminalController.shared.activeSocketPath(preferredPath: config.path)
-        sentryBreadcrumb("socket.listener.start", category: "socket", data: [
+        diagnosticsBreadcrumb("socket.listener.start", category: "socket", data: [
             "mode": config.mode.rawValue,
             "path": path,
             "source": source
@@ -3198,7 +3160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard let tabManager,
               let config = socketListenerConfigurationIfEnabled() else { return }
         let restartPath = TerminalController.shared.activeSocketPath(preferredPath: config.path)
-        sentryBreadcrumb("socket.listener.restart", category: "socket", data: [
+        diagnosticsBreadcrumb("socket.listener.restart", category: "socket", data: [
             "mode": config.mode.rawValue,
             "path": restartPath,
             "source": source
@@ -4552,14 +4514,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func isInsideCommandPaletteOverlay(_ view: NSView) -> Bool {
+        commandPaletteOverlayAncestor(of: view) != nil
+    }
+
+    private func commandPaletteOverlayAncestor(of view: NSView) -> NSView? {
         var current: NSView? = view
         while let candidate = current {
             if candidate.identifier == commandPaletteOverlayContainerIdentifier {
-                return true
+                return candidate
             }
             current = candidate.superview
         }
-        return false
+        return nil
     }
 
     private func keyRoutingOwnerView(for responder: NSResponder?) -> NSView? {
@@ -5122,8 +5088,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func isCommandPaletteResponderActive(in window: NSWindow) -> Bool {
         guard let responder = window.firstResponder else { return false }
         if let textView = responder as? NSTextView,
-           textView.isFieldEditor,
-           !(textView.delegate is NSView) {
+           textView.isFieldEditor {
+            let candidateViews = [
+                textView,
+                textView.delegate as? NSView,
+            ].compactMap { $0 }
+            for view in candidateViews {
+                if let container = commandPaletteOverlayAncestor(of: view) {
+                    return !container.isHidden && container.alphaValue > 0.001
+                }
+            }
+            guard !(textView.delegate is NSView) else {
+                return false
+            }
             // Field-editor delegates can be non-view responders. Confirm the overlay is
             // mounted and visible to avoid treating unrelated editors as palette input.
             return isCommandPaletteOverlayPresented(in: window)
@@ -5801,8 +5778,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .rightSidebarFileSearch:
             result = context.keyboardFocusCoordinator.focusFileSearch()
         case .mainPanelFind:
-            context.tabManager.startSearch()
-            result = context.tabManager.isFindVisible
+            result = context.tabManager.startSearch()
         case .none:
             result = false
         }
@@ -6342,11 +6318,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func claimAuthCallbackURLSchemes() {
-        // Pin the current build as the default for cmux://  and cmux-dev://
+        // Pin the current build as the default for zerocmux:// and legacy cmux://
         // so the auth-callback deeplink routes back to this app instead of an
         // unrelated LaunchServices entry.
         let bundleURL = Bundle.main.bundleURL
-        for scheme in ["cmux", "cmux-dev"] {
+        for scheme in ["zerocmux", "zerocmux-dev", "cmux", "cmux-dev"] {
             NSWorkspace.shared.setDefaultApplication(
                 at: bundleURL,
                 toOpenURLsWithScheme: scheme
@@ -7001,7 +6977,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func sendWelcomeCommandWhenReady(to workspace: Workspace, markShownOnSend: Bool = false) {
-        sendTextWhenReady("cmux welcome\n", to: workspace) {
+        sendTextWhenReady("zerocmux welcome\n", to: workspace) {
             if markShownOnSend {
                 UserDefaults.standard.set(true, forKey: WelcomeSettings.shownKey)
             }
@@ -7031,13 +7007,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 informativeText += "\n\n" + String(localized: "cli.install.adminRequired", defaultValue: "Administrator privileges were required to write to /usr/local/bin.")
             }
             presentCLIPathAlert(
-                title: String(localized: "cli.installed", defaultValue: "cmux CLI Installed"),
+                title: String(localized: "cli.installed", defaultValue: "zerocmux CLI Installed"),
                 informativeText: informativeText,
                 style: .informational
             )
         } catch {
             presentCLIPathAlert(
-                title: String(localized: "cli.installFailed", defaultValue: "Couldn't Install cmux CLI"),
+                title: String(localized: "cli.installFailed", defaultValue: "Couldn't Install zerocmux CLI"),
                 informativeText: error.localizedDescription,
                 style: .warning
             )
@@ -7050,19 +7026,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let outcome = try installer.uninstall()
             let prefix = outcome.removedExistingEntry
                 ? String(localized: "cli.uninstall.removed", defaultValue: "Removed \(outcome.destinationURL.path).")
-                : String(localized: "cli.uninstall.notFound", defaultValue: "No cmux CLI symlink was found at \(outcome.destinationURL.path).")
+                : String(localized: "cli.uninstall.notFound", defaultValue: "No zerocmux CLI symlink was found at \(outcome.destinationURL.path).")
             var informativeText = prefix
             if outcome.usedAdministratorPrivileges {
                 informativeText += "\n\n" + String(localized: "cli.uninstall.adminRequired", defaultValue: "Administrator privileges were required to modify /usr/local/bin.")
             }
             presentCLIPathAlert(
-                title: String(localized: "cli.uninstalled", defaultValue: "cmux CLI Uninstalled"),
+                title: String(localized: "cli.uninstalled", defaultValue: "zerocmux CLI Uninstalled"),
                 informativeText: informativeText,
                 style: .informational
             )
         } catch {
             presentCLIPathAlert(
-                title: String(localized: "cli.uninstallFailed", defaultValue: "Couldn't Uninstall cmux CLI"),
+                title: String(localized: "cli.uninstallFailed", defaultValue: "Couldn't Uninstall zerocmux CLI"),
                 informativeText: error.localizedDescription,
                 style: .warning
             )
@@ -8329,9 +8305,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
     }
 
-    @objc func triggerSentryTestCrash(_ sender: Any?) {
-        SentrySDK.crash()
-    }
 #endif
 
 #if DEBUG
@@ -8771,8 +8744,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func gotoSplitFindStateSnapshot(for workspace: Workspace) -> [String: String] {
         var updates: [String: String] = [
+            "workspaceId": workspace.id.uuidString,
             "focusedPaneId": workspace.bonsplitController.focusedPaneId?.description ?? ""
         ]
+        if let tabManager,
+           let workspaceIndex = tabManager.tabs.firstIndex(where: { $0.id == workspace.id }) {
+            updates["workspaceIndex"] = String(workspaceIndex + 1)
+            updates["workspaceCount"] = String(tabManager.tabs.count)
+        }
 
         if let focusedPanelId = workspace.focusedPanelId {
             updates["focusedPanelId"] = focusedPanelId.uuidString
@@ -8819,6 +8798,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             cmuxOwningGhosttyView(for: currentResponder)?.terminalSurface?.id.uuidString ?? ""
 
         updates.merge(cmuxFindResponderSnapshot()) { _, new in new }
+#if DEBUG
+        appendUITestSocketDiagnosticsIfNeeded(&updates, environment: ProcessInfo.processInfo.environment)
+#endif
         return updates
     }
 
@@ -8866,7 +8848,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             resolved = true
             cleanup()
             self.startGotoSplitUITestRecorder(browserPanelId: browserPanelId)
-            writeGotoSplitTestData([
+            var payload = [
                 "browserPanelId": browserPanelId.uuidString,
                 "browserPaneId": browserPaneId.description,
                 "terminalPaneId": terminalPaneId.description,
@@ -8877,7 +8859,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 "ghosttyGotoSplitUpShortcut": ghosttyGotoSplitUpShortcut?.displayString ?? "",
                 "ghosttyGotoSplitDownShortcut": ghosttyGotoSplitDownShortcut?.displayString ?? "",
                 "webViewFocused": "true"
-            ])
+            ]
+            payload.merge(self.gotoSplitBrowserContentClickOffsets(for: panel)) { _, new in new }
+            writeGotoSplitTestData(payload)
             if ProcessInfo.processInfo.environment["CMUX_UI_TEST_GOTO_SPLIT_INPUT_SETUP"] == "1" {
                 setupFocusedInputForGotoSplitUITest(panel: panel)
             }
@@ -8958,13 +8942,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         updates["browserPageTitle"] = browserPanel.webView.title?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         updates["browserPageURL"] = browserPanel.preferredURLStringForOmnibar() ?? ""
+        updates.merge(gotoSplitBrowserContentClickOffsets(for: browserPanel)) { _, new in new }
         writeGotoSplitTestData(updates)
+    }
+
+    private func gotoSplitBrowserContentClickOffsets(for panel: BrowserPanel) -> [String: String] {
+        guard let window = panel.webView.window,
+              let contentView = window.contentView else {
+            return [:]
+        }
+
+        let frame = panel.webView.convert(panel.webView.bounds, to: nil)
+        let contentHeight = Double(contentView.bounds.height)
+        guard frame.width > 1,
+              frame.height > 1,
+              contentHeight > 1 else {
+            return [:]
+        }
+
+        let titlebarHeight = max(0, Double(window.frame.height) - contentHeight)
+        let clickOffsetX = Double(frame.midX)
+        let clickOffsetY = titlebarHeight + (contentHeight - Double(frame.midY))
+        let safeBackdropClickOffsetY = titlebarHeight + (contentHeight - Double(frame.maxY)) + (Double(frame.height) * 0.92)
+        return [
+            "browserContentClickOffsetX": "\(clickOffsetX)",
+            "browserContentClickOffsetY": "\(clickOffsetY)",
+            "browserContentBackdropClickOffsetX": "\(clickOffsetX)",
+            "browserContentBackdropClickOffsetY": "\(safeBackdropClickOffsetY)",
+            "browserContentFrameInWindow": String(
+                format: "%.1f,%.1f %.1fx%.1f",
+                frame.origin.x,
+                frame.origin.y,
+                frame.size.width,
+                frame.size.height
+            )
+        ]
     }
 
     private func isWebViewFocused(_ panel: BrowserPanel) -> Bool {
         guard let window = panel.webView.window else { return false }
-        guard let fr = window.firstResponder as? NSView else { return false }
-        return fr.isDescendant(of: panel.webView)
+        if browserAddressBarFocusedPanelId == panel.id {
+            return false
+        }
+        if panel.preferredFocusIntent == .addressBar && panel.shouldSuppressWebViewFocus() {
+            return false
+        }
+        return gotoSplitUITestResponderChainContains(window.firstResponder, target: panel.webView)
+    }
+
+    private func gotoSplitUITestResponderChainContains(_ start: NSResponder?, target: NSResponder) -> Bool {
+        var current = start
+        var hops = 0
+        while let responder = current, hops < 64 {
+            if responder === target { return true }
+            current = responder.nextResponder
+            hops += 1
+        }
+        return false
     }
 
     private func paneIdsForGotoSplitUITest(tab: Workspace, browserPanelId: UUID) -> (browser: PaneID, terminal: PaneID)? {
@@ -9104,6 +9138,103 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func setupFocusedInputForGotoSplitUITest(panel: BrowserPanel) {
         let script = """
         (() => {
+          const ensureTestFocusTracker = () => {
+            try {
+              if (window.__cmuxAddressBarFocusTrackerInstalled === true) return true;
+              window.__cmuxAddressBarFocusTrackerInstalled = true;
+
+              const syncState = (state) => {
+                window.__cmuxAddressBarFocusState = state;
+                try {
+                  if (window.top && window.top !== window) {
+                    window.top.postMessage({ cmuxAddressBarFocusState: state }, "*");
+                  } else if (window.top) {
+                    window.top.__cmuxAddressBarFocusState = state;
+                  }
+                } catch (_) {}
+                try {
+                  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.cmuxAddressBarFocusState) {
+                    window.webkit.messageHandlers.cmuxAddressBarFocusState.postMessage(state || null);
+                  }
+                } catch (_) {}
+              };
+
+              const isEditable = (el) => {
+                if (!el) return false;
+                const tag = (el.tagName || "").toLowerCase();
+                const type = (el.type || "").toLowerCase();
+                return !!el.isContentEditable || tag === "textarea" || (tag === "input" && type !== "hidden");
+              };
+
+              const ensureFocusId = (el) => {
+                let id = el.getAttribute("data-cmux-addressbar-focus-id");
+                if (!id) {
+                  id = "cmux-ui-test-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+                  el.setAttribute("data-cmux-addressbar-focus-id", id);
+                }
+                return id;
+              };
+
+              const markLastFocused = (el) => {
+                try {
+                  document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+                    if (candidate !== el) candidate.removeAttribute("data-cmux-addressbar-last-focused");
+                  });
+                  el.setAttribute("data-cmux-addressbar-last-focused", "true");
+                } catch (_) {}
+              };
+
+              const clearLastFocused = () => {
+                try {
+                  document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+                    candidate.removeAttribute("data-cmux-addressbar-last-focused");
+                  });
+                } catch (_) {}
+              };
+
+              const snapshotEditable = (el) => {
+                if (!isEditable(el)) {
+                  return;
+                }
+                markLastFocused(el);
+                const state = {
+                  id: ensureFocusId(el),
+                  elementId: typeof el.id === "string" ? el.id : "",
+                  selectionStart: null,
+                  selectionEnd: null
+                };
+                if (typeof el.selectionStart === "number" && typeof el.selectionEnd === "number") {
+                  state.selectionStart = el.selectionStart;
+                  state.selectionEnd = el.selectionEnd;
+                }
+                syncState(state);
+              };
+
+              document.addEventListener("focusin", (ev) => {
+                snapshotEditable(ev && ev.target ? ev.target : document.activeElement);
+              }, true);
+              document.addEventListener("selectionchange", () => {
+                snapshotEditable(document.activeElement);
+              }, true);
+              document.addEventListener("input", () => {
+                snapshotEditable(document.activeElement);
+              }, true);
+              document.addEventListener("mousedown", (ev) => {
+                const target = ev && ev.target ? ev.target : null;
+                if (!isEditable(target)) {
+                  clearLastFocused();
+                  syncState(null);
+                }
+              }, true);
+              snapshotEditable(document.activeElement);
+              return true;
+            } catch (_) {
+              return false;
+            }
+          };
+
+          ensureTestFocusTracker();
+
           const snapshot = () => {
             const active = document.activeElement;
             return {
@@ -9198,8 +9329,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
               typeof window.__cmuxAddressBarFocusState.id !== "string" ||
               window.__cmuxAddressBarFocusState.id !== trackedFocusId
             ) {
-              window.__cmuxAddressBarFocusState = { id: trackedFocusId, selectionStart, selectionEnd };
+              window.__cmuxAddressBarFocusState = {
+                id: trackedFocusId,
+                elementId: input.id || "",
+                selectionStart,
+                selectionEnd
+              };
             }
+            try {
+              document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+                if (candidate !== input) candidate.removeAttribute("data-cmux-addressbar-last-focused");
+              });
+              input.setAttribute("data-cmux-addressbar-last-focused", "true");
+            } catch (_) {}
 
             const secondaryRect = secondaryInput.getBoundingClientRect();
             const viewportWidth = Math.max(Number(window.innerWidth) || 0, 1);
@@ -9332,7 +9474,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                secondaryCenterY < 1,
                secondaryClickOffsetX > 0,
                secondaryClickOffsetY > 0 {
-                self.writeGotoSplitTestData([
+                let updates = [
                     "webInputFocusSeeded": "true",
                     "webInputFocusElementId": inputId,
                     "webInputFocusSecondaryElementId": secondaryInputId,
@@ -9344,7 +9486,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     "webInputFocusTrackerInstalled": trackerInstalled ? "true" : "false",
                     "webInputFocusTrackedStateId": trackedStateId,
                     "webInputFocusReadyState": readyState
-                ])
+                ]
+                panel.prepareAddressBarPageFocusForAddressBarEntry { [weak self] in
+                    self?.writeGotoSplitTestData(updates)
+                }
                 return
             }
             self.writeGotoSplitTestData([
@@ -9375,7 +9520,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     "\(keyPrefix)ActiveElementType": snapshot["type"] ?? "",
                     "\(keyPrefix)ActiveElementEditable": snapshot["editable"] ?? "false",
                     "\(keyPrefix)TrackedFocusStateId": snapshot["trackedFocusStateId"] ?? "",
-                    "\(keyPrefix)FocusTrackerInstalled": snapshot["focusTrackerInstalled"] ?? "false"
+                    "\(keyPrefix)FocusTrackerInstalled": snapshot["focusTrackerInstalled"] ?? "false",
+                    "\(keyPrefix)LastFocusedElementId": snapshot["lastFocusedElementId"] ?? "",
+                    "\(keyPrefix)ExpectedInputExists": snapshot["expectedInputExists"] ?? "false",
+                    "\(keyPrefix)ExpectedInputFocusId": snapshot["expectedInputFocusId"] ?? ""
                 ])
             }
         }
@@ -9401,14 +9549,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
           const snapshot = () => {
             try {
               const active = document.activeElement;
+              const state =
+                window.__cmuxAddressBarFocusState &&
+                typeof window.__cmuxAddressBarFocusState.id === "string"
+                  ? window.__cmuxAddressBarFocusState.id
+                  : "";
+              const lastFocused = document.querySelector("[data-cmux-addressbar-last-focused='true']");
+              const expected = expectedInputId ? document.getElementById(expectedInputId) : null;
               if (!active) {
                 return {
                   id: "",
                   tag: "",
                   type: "",
                   editable: "false",
-                  trackedFocusStateId: "",
-                  focusTrackerInstalled: window.__cmuxAddressBarFocusTrackerInstalled === true ? "true" : "false"
+                  trackedFocusStateId: state,
+                  focusTrackerInstalled: window.__cmuxAddressBarFocusTrackerInstalled === true ? "true" : "false",
+                  lastFocusedElementId:
+                    lastFocused && typeof lastFocused.id === "string" ? lastFocused.id : "",
+                  expectedInputExists: expected ? "true" : "false",
+                  expectedInputFocusId:
+                    expected && typeof expected.getAttribute === "function"
+                      ? String(expected.getAttribute("data-cmux-addressbar-focus-id") || "")
+                      : ""
                 };
               }
               const tag = (active.tagName || "").toLowerCase();
@@ -9422,13 +9584,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 tag,
                 type,
                 editable: editable ? "true" : "false",
-                trackedFocusStateId:
-                  window.__cmuxAddressBarFocusState &&
-                  typeof window.__cmuxAddressBarFocusState.id === "string"
-                    ? window.__cmuxAddressBarFocusState.id
-                    : "",
+                trackedFocusStateId: state,
                 focusTrackerInstalled:
-                  window.__cmuxAddressBarFocusTrackerInstalled === true ? "true" : "false"
+                  window.__cmuxAddressBarFocusTrackerInstalled === true ? "true" : "false",
+                lastFocusedElementId:
+                  lastFocused && typeof lastFocused.id === "string" ? lastFocused.id : "",
+                expectedInputExists: expected ? "true" : "false",
+                expectedInputFocusId:
+                  expected && typeof expected.getAttribute === "function"
+                    ? String(expected.getAttribute("data-cmux-addressbar-focus-id") || "")
+                    : ""
               };
             } catch (_) {
               return {
@@ -9437,7 +9602,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 type: "",
                 editable: "false",
                 trackedFocusStateId: "",
-                focusTrackerInstalled: "false"
+                focusTrackerInstalled: "false",
+                lastFocusedElementId: "",
+                expectedInputExists: "false",
+                expectedInputFocusId: ""
               };
             }
           };
@@ -9503,7 +9671,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 "type": (payload?["type"] as? String) ?? "",
                 "editable": (payload?["editable"] as? String) ?? "false",
                 "trackedFocusStateId": (payload?["trackedFocusStateId"] as? String) ?? "",
-                "focusTrackerInstalled": (payload?["focusTrackerInstalled"] as? String) ?? "false"
+                "focusTrackerInstalled": (payload?["focusTrackerInstalled"] as? String) ?? "false",
+                "lastFocusedElementId": (payload?["lastFocusedElementId"] as? String) ?? "",
+                "expectedInputExists": (payload?["expectedInputExists"] as? String) ?? "false",
+                "expectedInputFocusId": (payload?["expectedInputFocusId"] as? String) ?? ""
             ])
         }
     }
@@ -9511,7 +9682,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func gotoSplitUITestExpectedInputId() -> String? {
         let env = ProcessInfo.processInfo.environment
         guard let path = env["CMUX_UI_TEST_GOTO_SPLIT_PATH"], !path.isEmpty else { return nil }
-        return loadGotoSplitTestData(at: path)["webInputFocusElementId"]
+        let data = loadGotoSplitTestData(at: path)
+        if data["addressBarFocusActiveElementEditable"] == "true",
+           let activeElementId = data["addressBarFocusActiveElementId"],
+           !activeElementId.isEmpty {
+            return activeElementId
+        }
+        return data["webInputFocusElementId"]
     }
 
     private func recordGotoSplitMoveIfNeeded(direction: NavigationDirection) {
@@ -10524,7 +10701,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = String(localized: "dialog.quitCmux.title", defaultValue: "Quit cmux?")
+        alert.messageText = String(localized: "dialog.quitCmux.title", defaultValue: "Quit zerocmux?")
         alert.informativeText = String(localized: "dialog.quitCmux.message", defaultValue: "This will close all windows and workspaces.")
         alert.addButton(withTitle: String(localized: "dialog.quitCmux.quit", defaultValue: "Quit"))
         alert.addButton(withTitle: String(localized: "common.cancel", defaultValue: "Cancel"))
@@ -11135,17 +11312,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 "\(debugShortcutRouteSnapshot(event: event))"
             )
 #endif
-            return true
-        }
-
-        if matchConfiguredShortcut(event: event, action: .sendFeedback) {
-            guard let targetContext = preferredMainWindowContextForShortcuts(event: event),
-                  let targetWindow = targetContext.window ?? windowForMainWindowId(targetContext.windowId) else {
-                return false
-            }
-            setActiveMainWindow(targetWindow)
-            bringToFront(targetWindow)
-            NotificationCenter.default.post(name: .feedbackComposerRequested, object: targetWindow)
             return true
         }
 
@@ -11776,6 +11942,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func focusBrowserAddressBar(in panel: BrowserPanel) {
+        panel.prepareAddressBarPageFocusForAddressBarEntry { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            self.finishFocusBrowserAddressBar(in: panel)
+        }
+    }
+
+    private func finishFocusBrowserAddressBar(in panel: BrowserPanel) {
 #if DEBUG
         let requestId = panel.requestAddressBarFocus()
         cmuxDebugLog(
@@ -12507,7 +12680,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         shortcuts: [StoredShortcut] = []
     ) -> Bool {
         var seen = Set<StoredShortcut>()
-        let configuredShortcuts = (actions ?? configuredShortcutChordActions).map {
+        let candidateActions = actions ?? KeyboardShortcutSettings.Action.allCases.filter { action in
+            guard action != .showHideAllWindows else { return false }
+            return KeyboardShortcutSettings.shortcut(for: action).hasChord
+        }
+        let configuredShortcuts = candidateActions.map {
             KeyboardShortcutSettings.shortcut(for: $0)
         } + shortcuts
         for shortcut in configuredShortcuts {
@@ -12995,7 +13172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             LSRegisterURL(url, true)
         },
         breadcrumb: @escaping (_ message: String, _ data: [String: Any]) -> Void = { message, data in
-            sentryBreadcrumb(message, category: "startup", data: data)
+            diagnosticsBreadcrumb(message, category: "startup", data: data)
         }
     ) {
         let normalizedURL = bundleURL.standardizedFileURL
@@ -13052,7 +13229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func observeDuplicateLaunches() {
         guard let bundleId = Bundle.main.bundleIdentifier else { return }
         let embeddedCLIURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Resources/bin/cmux", isDirectory: false)
+            .appendingPathComponent("Contents/Resources/bin/zerocmux", isDirectory: false)
             .standardizedFileURL
             .resolvingSymlinksInPath()
         let currentPid = ProcessInfo.processInfo.processIdentifier

@@ -2007,6 +2007,29 @@ final class WindowBrowserSlotViewTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.25))
     }
 
+    @discardableResult
+    private func waitUntil(
+        timeout: TimeInterval = 2.0,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+
+        if condition() {
+            return true
+        }
+
+        XCTFail("Timed out waiting for condition", file: file, line: line)
+        return false
+    }
+
     func testDropZoneOverlayStaysAboveContentWithoutBlockingHits() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
         let slot = WindowBrowserSlotView(frame: container.bounds)
@@ -2036,7 +2059,12 @@ final class WindowBrowserSlotViewTests: XCTestCase {
 
         slot.setDropZoneOverlay(zone: nil)
         advanceAnimations()
-        XCTAssertTrue(overlay.isHidden, "Clearing the drop zone should hide the overlay")
+        XCTAssertTrue(
+            waitUntil {
+                overlay.isHidden
+            },
+            "Clearing the drop zone should hide the overlay"
+        )
     }
 
     func testTopDropZoneOverlayUsesFullBrowserContentHeight() {

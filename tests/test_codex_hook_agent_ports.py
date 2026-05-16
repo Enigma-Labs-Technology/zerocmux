@@ -3,7 +3,7 @@
 E2E regression test for Codex hook agent PID registration and sidebar ports.
 
 Validates:
-1) `cmux hooks codex session-start` records the inferred agent root PID.
+1) `zerocmux hooks codex session-start` records the inferred agent root PID.
 2) a dev server launched under that agent process tree appears in sidebar ports.
 3) the port disappears once the agent process tree exits.
 """
@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from claude_teams_test_utils import resolve_cmux_cli
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 _PREFERRED_BIND_HOST = "127.0.0.1"

@@ -18,22 +18,22 @@ struct RovoDevHookConfigTests {
         let events = [
             RovoDevHookConfig.Event(
                 name: "on_complete",
-                command: "cmux hooks rovodev stop"
+                command: "zerocmux hooks rovodev stop"
             ),
         ]
         let installed = RovoDevHookConfig.installing(events: events, in: existing)
 
-        #expect(installed.contains("eventHooks:\n  # cmux hooks rovodev begin\n  events:"))
+        #expect(installed.contains("eventHooks:\n  # zerocmux hooks rovodev begin\n  events:"))
         #expect(installed.contains("    events:\n      - name: user_hook"))
         #expect(RovoDevHookConfig.uninstalling(from: installed) == existing)
     }
 
-    @Test("Dangling cmux marker does not drop following YAML")
+    @Test("Dangling zerocmux marker does not drop following YAML")
     func danglingMarkerDoesNotDropFollowingYAML() {
         let existing = """
         eventHooks:
           events:
-            # cmux hooks rovodev begin
+            # zerocmux hooks rovodev begin
         sessions:
           persistenceDir: /tmp/rovo
 
@@ -42,7 +42,7 @@ struct RovoDevHookConfigTests {
         let events = [
             RovoDevHookConfig.Event(
                 name: "on_complete",
-                command: "cmux hooks rovodev stop"
+                command: "zerocmux hooks rovodev stop"
             ),
         ]
         let installed = RovoDevHookConfig.installing(events: events, in: existing)

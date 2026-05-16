@@ -369,8 +369,24 @@ struct AppSessionSnapshot: Codable, Sendable {
 }
 
 enum SessionPersistenceStore {
+    private static let appSupportDirectoryName = "zerocmux"
+    private static let legacyAppSupportDirectoryName = "cmux"
+    private static let fallbackBundleIdentifier = "com.kernelalex.zerocmux"
+    private static let legacyFallbackBundleIdentifier = "com.cmuxterm.app"
+
     static func load(fileURL: URL? = nil) -> AppSessionSnapshot? {
-        guard let fileURL = fileURL ?? defaultSnapshotFileURL() else { return nil }
+        if let fileURL {
+            return loadSnapshot(fileURL: fileURL)
+        }
+        for candidateURL in snapshotFileURLs(suffix: "") {
+            if let snapshot = loadSnapshot(fileURL: candidateURL) {
+                return snapshot
+            }
+        }
+        return nil
+    }
+
+    private static func loadSnapshot(fileURL: URL) -> AppSessionSnapshot? {
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let decoder = JSONDecoder()
         guard let snapshot = try? decoder.decode(AppSessionSnapshot.self, from: data) else { return nil }
@@ -412,13 +428,19 @@ enum SessionPersistenceStore {
         bundleIdentifier: String? = Bundle.main.bundleIdentifier,
         appSupportDirectory: URL? = nil
     ) -> AppSessionSnapshot? {
-        guard let fileURL = fileURL ?? manualRestoreSnapshotFileURL(
+        if let fileURL {
+            return load(fileURL: fileURL)
+        }
+        for candidateURL in snapshotFileURLs(
+            suffix: "-previous",
             bundleIdentifier: bundleIdentifier,
             appSupportDirectory: appSupportDirectory
-        ) else {
-            return nil
+        ) {
+            if let snapshot = load(fileURL: candidateURL) {
+                return snapshot
+            }
         }
-        return load(fileURL: fileURL)
+        return nil
     }
 
     static func syncManualRestoreSnapshotCache() {
@@ -467,14 +489,69 @@ enum SessionPersistenceStore {
         }
         let bundleId = (bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             ? bundleIdentifier!
-            : "com.cmuxterm.app"
-        let safeBundleId = bundleId.replacingOccurrences(
+            : fallbackBundleIdentifier
+        return snapshotFileURL(
+            suffix: suffix,
+            bundleIdentifier: bundleId,
+            appSupportDirectory: resolvedAppSupport,
+            directoryName: appSupportDirectoryName
+        )
+    }
+
+    private static func snapshotFileURLs(
+        suffix: String,
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        appSupportDirectory: URL? = nil
+    ) -> [URL] {
+        let resolvedAppSupport: URL
+        if let appSupportDirectory {
+            resolvedAppSupport = appSupportDirectory
+        } else if let discovered = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            resolvedAppSupport = discovered
+        } else {
+            return []
+        }
+        let bundleId = (bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? bundleIdentifier!
+            : fallbackBundleIdentifier
+        var urls = [
+            snapshotFileURL(
+                suffix: suffix,
+                bundleIdentifier: bundleId,
+                appSupportDirectory: resolvedAppSupport,
+                directoryName: appSupportDirectoryName
+            ),
+        ]
+        if bundleId.hasPrefix("com.kernelalex.zerocmux") {
+            let legacyBundleId = bundleId.replacingOccurrences(
+                of: "com.kernelalex.zerocmux",
+                with: legacyFallbackBundleIdentifier
+            )
+            urls.append(
+                snapshotFileURL(
+                    suffix: suffix,
+                    bundleIdentifier: legacyBundleId,
+                    appSupportDirectory: resolvedAppSupport,
+                    directoryName: legacyAppSupportDirectoryName
+                )
+            )
+        }
+        return urls
+    }
+
+    private static func snapshotFileURL(
+        suffix: String,
+        bundleIdentifier: String,
+        appSupportDirectory: URL,
+        directoryName: String
+    ) -> URL {
+        let safeBundleId = bundleIdentifier.replacingOccurrences(
             of: "[^A-Za-z0-9._-]",
             with: "_",
             options: .regularExpression
         )
-        return resolvedAppSupport
-            .appendingPathComponent("cmux", isDirectory: true)
+        return appSupportDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
             .appendingPathComponent("session-\(safeBundleId)\(suffix).json", isDirectory: false)
     }
 }

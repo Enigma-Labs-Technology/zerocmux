@@ -766,7 +766,7 @@ final class CmuxConfigDecodingTests: XCTestCase {
         store.loadAll()
         XCTAssertNil(store.resolvedAction(id: "created"))
 
-        let loaded = expectation(description: "created local cmux config is loaded")
+        let loaded = expectation(description: "created local zerocmux config is loaded")
         loaded.assertForOverFulfill = false
         var cancellable: AnyCancellable?
         cancellable = store.$loadedActions.dropFirst().sink { actions in
@@ -809,7 +809,7 @@ final class CmuxConfigDecodingTests: XCTestCase {
         store.loadAll()
         XCTAssertNil(store.resolvedAction(id: "legacy-created"))
 
-        let loaded = expectation(description: "created legacy cmux config is loaded")
+        let loaded = expectation(description: "created legacy zerocmux config is loaded")
         loaded.assertForOverFulfill = false
         var cancellable: AnyCancellable?
         cancellable = store.$loadedActions.dropFirst().sink { actions in

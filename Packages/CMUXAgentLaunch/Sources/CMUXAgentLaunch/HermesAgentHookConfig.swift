@@ -15,9 +15,12 @@ public enum HermesAgentHookConfig {
         }
     }
 
-    private static let beginMarker = "# cmux hooks hermes-agent begin"
-    private static let endMarker = "# cmux hooks hermes-agent end"
+    private static let beginMarker = "# zerocmux hooks hermes-agent begin"
+    private static let endMarker = "# zerocmux hooks hermes-agent end"
+    private static let legacyBeginMarker = "# cmux hooks hermes-agent begin"
+    private static let legacyEndMarker = "# cmux hooks hermes-agent end"
     private static let restoreLineMarkerPrefix = "\(beginMarker) restore-line-base64:"
+    private static let legacyRestoreLineMarkerPrefix = "\(legacyBeginMarker) restore-line-base64:"
 
     public static func installing(events: [Event], in existing: String) -> String {
         guard !events.isEmpty else {
@@ -151,9 +154,7 @@ public enum HermesAgentHookConfig {
                 index += 1
                 continue
             }
-            guard let endIndex = result[(index + 1)...].firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespaces) == endMarker
-            }) else {
+            guard let endIndex = result[(index + 1)...].firstIndex(where: { isEndMarkerLine($0) }) else {
                 index += 1
                 continue
             }
@@ -181,13 +182,28 @@ public enum HermesAgentHookConfig {
 
     private static func isBeginMarkerLine(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return trimmed == beginMarker || trimmed.hasPrefix("\(restoreLineMarkerPrefix) ")
+        return trimmed == beginMarker
+            || trimmed == legacyBeginMarker
+            || trimmed.hasPrefix("\(restoreLineMarkerPrefix) ")
+            || trimmed.hasPrefix("\(legacyRestoreLineMarkerPrefix) ")
+    }
+
+    private static func isEndMarkerLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed == endMarker || trimmed == legacyEndMarker
     }
 
     private static func restoreLine(fromBeginMarkerLine line: String) -> String? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.hasPrefix("\(restoreLineMarkerPrefix) ") else { return nil }
-        let encoded = trimmed.dropFirst(restoreLineMarkerPrefix.count)
+        let prefix: String
+        if trimmed.hasPrefix("\(restoreLineMarkerPrefix) ") {
+            prefix = restoreLineMarkerPrefix
+        } else if trimmed.hasPrefix("\(legacyRestoreLineMarkerPrefix) ") {
+            prefix = legacyRestoreLineMarkerPrefix
+        } else {
+            return nil
+        }
+        let encoded = trimmed.dropFirst(prefix.count)
             .trimmingCharacters(in: .whitespaces)
         guard let data = Data(base64Encoded: encoded) else { return nil }
         return String(data: data, encoding: .utf8)

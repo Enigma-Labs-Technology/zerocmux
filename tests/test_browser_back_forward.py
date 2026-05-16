@@ -8,7 +8,7 @@ Verifies that:
   3. Cmd+[/] are no-ops when a terminal panel is focused
 
 Requires:
-  - cmux running
+  - zerocmux running
   - Debug socket commands enabled (`simulate_shortcut`)
 """
 
@@ -19,7 +19,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def focused_pane_id(client: cmux) -> Optional[str]:

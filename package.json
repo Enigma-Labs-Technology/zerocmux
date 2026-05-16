@@ -3,8 +3,7 @@
     "feed-tui": "bun Resources/feed-tui/index.ts"
   },
   "dependencies": {
-    "@opentui/core": "^0.1.106",
-    "vercel": "^50.9.5"
+    "@opentui/core": "^0.1.106"
   },
   "license": "GPL-3.0-or-later"
 }

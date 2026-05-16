@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 NEW_WORKSPACES = int(os.environ.get("CMUX_LAG_NEW_WORKSPACES", "20"))
 SWITCH_PASSES = int(os.environ.get("CMUX_LAG_SWITCH_PASSES", "1"))
@@ -165,7 +165,7 @@ def get_cmux_pid_for_socket(socket_path: Optional[str]) -> Optional[int]:
                     return pid
 
     result = subprocess.run(
-        ["pgrep", "-f", r"cmux DEV.*\.app/Contents/MacOS/cmux DEV"],
+        ["pgrep", "-f", r"zerocmux DEV.*\.app/Contents/MacOS/zerocmux DEV"],
         capture_output=True,
         text=True,
     )
@@ -179,10 +179,10 @@ def resolve_target_socket() -> str:
     socket_path = os.environ.get("CMUX_SOCKET_PATH")
     if not socket_path:
         raise cmuxError(
-            "CMUX_SOCKET_PATH is required. Point it to a tagged dev socket (for example /tmp/cmux-debug-<tag>.sock)."
+            "CMUX_SOCKET_PATH is required. Point it to a tagged dev socket (for example /tmp/zerocmux-debug-<tag>.sock)."
         )
     base = os.path.basename(socket_path)
-    if not ALLOW_MAIN_SOCKET and base in {"cmux.sock", "cmux-debug.sock"}:
+    if not ALLOW_MAIN_SOCKET and base in {"zerocmux.sock", "zerocmux-debug.sock", "cmux.sock", "cmux-debug.sock"}:
         raise cmuxError(
             f"Refusing to run against main socket '{socket_path}'. Set CMUX_SOCKET_PATH to a tagged dev instance."
         )
@@ -375,7 +375,7 @@ def main() -> int:
 
         pid = get_cmux_pid_for_socket(client.socket_path)
         if pid is None:
-            print("SKIP: cmux process not found for socket")
+            print("SKIP: zerocmux process not found for socket")
             return 0
 
         cpu_monitor = CPUMonitor(pid)

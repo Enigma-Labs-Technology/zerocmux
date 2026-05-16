@@ -243,7 +243,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             "CMUX_AGENT_LAUNCH_EXECUTABLE": scenario.executable,
             "CMUX_AGENT_LAUNCH_ARGV_B64": base64NULSeparated(scenario.launchArguments),
             "CMUX_AGENT_LAUNCH_CWD": workspace.path,
-            "CMUX_CLI_SENTRY_DISABLED": "1",
         ]
         for (key, value) in scenario.extraEnvironment {
             environment[key] = value

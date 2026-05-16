@@ -28,7 +28,7 @@ private struct ConfigSourceProbe {
         if CommandLine.arguments.count >= 3 {
             bundleIdentifier = CommandLine.arguments[2]
         } else {
-            bundleIdentifier = "com.cmuxterm.app"
+            bundleIdentifier = "com.kernelalex.zerocmux"
         }
         let previewDirectoryURL = homeDirectoryURL
             .appendingPathComponent("Library", isDirectory: true)

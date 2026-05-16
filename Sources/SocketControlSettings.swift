@@ -21,7 +21,7 @@ enum SocketControlMode: String, CaseIterable, Identifiable {
         case .off:
             return String(localized: "socketControl.off.name", defaultValue: "Off")
         case .cmuxOnly:
-            return String(localized: "socketControl.cmuxOnly.name", defaultValue: "cmux processes only")
+            return String(localized: "socketControl.cmuxOnly.name", defaultValue: "zerocmux processes only")
         case .automation:
             return String(localized: "socketControl.automation.name", defaultValue: "Automation mode")
         case .password:
@@ -36,7 +36,7 @@ enum SocketControlMode: String, CaseIterable, Identifiable {
         case .off:
             return String(localized: "socketControl.off.description", defaultValue: "Disable the local control socket.")
         case .cmuxOnly:
-            return String(localized: "socketControl.cmuxOnly.description", defaultValue: "Only processes started inside cmux terminals can send commands.")
+            return String(localized: "socketControl.cmuxOnly.description", defaultValue: "Only processes started inside zerocmux terminals can send commands.")
         case .automation:
             return String(localized: "socketControl.automation.description", defaultValue: "Allow external local automation clients from this macOS user (no ancestry check).")
         case .password:
@@ -61,7 +61,7 @@ enum SocketControlMode: String, CaseIterable, Identifiable {
 }
 
 enum SocketControlPasswordStore {
-    static let directoryName = "cmux"
+    static let directoryName = "zerocmux"
     static let fileName = "socket-control-password"
     static let didChangeNotification = Notification.Name("cmux.socketControlPasswordDidChange")
     private static let keychainMigrationDefaultsKey = "socketControlPasswordMigrationVersion"
@@ -295,9 +295,10 @@ struct SocketControlSettings {
     static let allowSocketPathOverrideKey = "CMUX_ALLOW_SOCKET_OVERRIDE"
     static let socketPasswordEnvKey = "CMUX_SOCKET_PASSWORD"
     static let launchTagEnvKey = "CMUX_TAG"
-    static let baseDebugBundleIdentifier = "com.cmuxterm.app.debug"
-    private static let socketDirectoryName = "cmux"
-    private static let stableSocketFileName = "cmux.sock"
+    static let baseDebugBundleIdentifier = "com.kernelalex.zerocmux.debug"
+    static let legacyBaseDebugBundleIdentifier = "com.cmuxterm.app.debug"
+    private static let socketDirectoryName = "zerocmux"
+    private static let stableSocketFileName = "zerocmux.sock"
     private static let lastSocketPathFileName = "last-socket-path"
     static let legacyStableDefaultSocketPath = "/tmp/cmux.sock"
     static let legacyLastSocketPathFile = "/tmp/cmux-last-socket-path"
@@ -473,14 +474,17 @@ struct SocketControlSettings {
         if let taggedDebugPath = taggedDebugSocketPath(bundleIdentifier: bundleIdentifier, environment: [:]) {
             return taggedDebugPath
         }
+        if bundleIdentifier == "com.kernelalex.zerocmux.nightly" {
+            return "/tmp/zerocmux-nightly.sock"
+        }
         if bundleIdentifier == "com.cmuxterm.app.nightly" {
             return "/tmp/cmux-nightly.sock"
         }
         if isDebugLikeBundleIdentifier(bundleIdentifier) || isDebugBuild {
-            return "/tmp/cmux-debug.sock"
+            return usesLegacySocketNamespace(bundleIdentifier) ? "/tmp/cmux-debug.sock" : "/tmp/zerocmux-debug.sock"
         }
         if isStagingBundleIdentifier(bundleIdentifier) {
-            return "/tmp/cmux-staging.sock"
+            return usesLegacySocketNamespace(bundleIdentifier) ? "/tmp/cmux-staging.sock" : "/tmp/zerocmux-staging.sock"
         }
         return resolvedStableDefaultSocketPath(
             currentUserID: currentUserID,
@@ -490,8 +494,8 @@ struct SocketControlSettings {
 
     static func userScopedStableSocketPath(currentUserID: uid_t = getuid()) -> String {
         stableSocketDirectoryURL()?
-            .appendingPathComponent("cmux-\(currentUserID).sock", isDirectory: false)
-            .path ?? "/tmp/cmux-\(currentUserID).sock"
+            .appendingPathComponent("zerocmux-\(currentUserID).sock", isDirectory: false)
+            .path ?? "/tmp/zerocmux-\(currentUserID).sock"
     }
 
     static func resolvedStableDefaultSocketPath(
@@ -532,14 +536,17 @@ struct SocketControlSettings {
 
     static func isDebugLikeBundleIdentifier(_ bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier else { return false }
-        return bundleIdentifier == "com.cmuxterm.app.debug"
-            || bundleIdentifier.hasPrefix("com.cmuxterm.app.debug.")
+        return bundleIdentifier == baseDebugBundleIdentifier
+            || bundleIdentifier.hasPrefix("\(baseDebugBundleIdentifier).")
+            || bundleIdentifier == legacyBaseDebugBundleIdentifier
+            || bundleIdentifier.hasPrefix("\(legacyBaseDebugBundleIdentifier).")
     }
 
-    /// Tagged DEV builds have bundle IDs like `com.cmuxterm.app.debug.<tag>`.
+    /// Tagged DEV builds have bundle IDs like `com.kernelalex.zerocmux.debug.<tag>`.
     static func isTaggedDevBuild(bundleIdentifier: String? = Bundle.main.bundleIdentifier) -> Bool {
         guard let bundleIdentifier else { return false }
         return bundleIdentifier.hasPrefix("\(baseDebugBundleIdentifier).")
+            || bundleIdentifier.hasPrefix("\(legacyBaseDebugBundleIdentifier).")
     }
 
     static func taggedDebugSocketPath(
@@ -547,13 +554,19 @@ struct SocketControlSettings {
         environment: [String: String]
     ) -> String? {
         let bundleId = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if bundleId.hasPrefix("\(baseDebugBundleIdentifier).") {
-            let suffix = String(bundleId.dropFirst(baseDebugBundleIdentifier.count + 1))
+        if bundleId.hasPrefix("\(baseDebugBundleIdentifier).") ||
+            bundleId.hasPrefix("\(legacyBaseDebugBundleIdentifier).") {
+            let base = bundleId.hasPrefix("\(baseDebugBundleIdentifier).")
+                ? baseDebugBundleIdentifier
+                : legacyBaseDebugBundleIdentifier
+            let suffix = String(bundleId.dropFirst(base.count + 1))
             let slug = suffix
                 .replacingOccurrences(of: ".", with: "-")
                 .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
             if !slug.isEmpty {
-                return "/tmp/cmux-debug-\(slug).sock"
+                return base == legacyBaseDebugBundleIdentifier
+                    ? "/tmp/cmux-debug-\(slug).sock"
+                    : "/tmp/zerocmux-debug-\(slug).sock"
             }
         }
 
@@ -565,18 +578,27 @@ struct SocketControlSettings {
             .filter { !$0.isEmpty }
             .joined(separator: "-")
 
-        guard bundleId == baseDebugBundleIdentifier,
+        guard bundleId == baseDebugBundleIdentifier || bundleId == legacyBaseDebugBundleIdentifier,
               let tag,
               !tag.isEmpty else {
             return nil
         }
-        return "/tmp/cmux-debug-\(tag).sock"
+        return bundleId == legacyBaseDebugBundleIdentifier
+            ? "/tmp/cmux-debug-\(tag).sock"
+            : "/tmp/zerocmux-debug-\(tag).sock"
     }
 
     static func isStagingBundleIdentifier(_ bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier else { return false }
-        return bundleIdentifier == "com.cmuxterm.app.staging"
+        return bundleIdentifier == "com.kernelalex.zerocmux.staging"
+            || bundleIdentifier.hasPrefix("com.kernelalex.zerocmux.staging.")
+            || bundleIdentifier == "com.cmuxterm.app.staging"
             || bundleIdentifier.hasPrefix("com.cmuxterm.app.staging.")
+    }
+
+    private static func usesLegacySocketNamespace(_ bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return false }
+        return bundleIdentifier.hasPrefix("com.cmuxterm.app")
     }
 
     static func stableSocketDirectoryURL(fileManager: FileManager = .default) -> URL? {

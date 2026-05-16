@@ -17,7 +17,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from cmux import cmux
+from zerocmux import cmux
 
 
 def _bundle_id(app_path: Path) -> str:
@@ -34,7 +34,7 @@ def _bundle_id(app_path: Path) -> str:
 
 def _snapshot_path(bundle_id: str, suffix: str = "") -> Path:
     safe_bundle = re.sub(r"[^A-Za-z0-9._-]", "_", bundle_id)
-    return Path.home() / "Library/Application Support/cmux" / f"session-{safe_bundle}{suffix}.json"
+    return Path.home() / "Library/Application Support/zerocmux" / f"session-{safe_bundle}{suffix}.json"
 
 
 def _socket_reachable(socket_path: Path) -> bool:
@@ -72,7 +72,7 @@ def _wait_for_socket_closed(socket_path: Path, timeout: float = 20.0) -> None:
 
 
 def _kill_existing(app_path: Path) -> None:
-    exe = app_path / "Contents" / "MacOS" / "cmux DEV"
+    exe = app_path / "Contents" / "MacOS" / "zerocmux DEV"
     subprocess.run(["pkill", "-f", str(exe)], capture_output=True, text=True)
     time.sleep(1.0)
 
@@ -161,20 +161,20 @@ def _write_hook_state(path: Path, session_id: str, workspace_id: str, surface_id
 def main() -> int:
     app_path_str = os.environ.get("CMUX_APP_PATH", "").strip()
     if not app_path_str:
-        print("SKIP: set CMUX_APP_PATH to a built cmux DEV .app path")
+        print("SKIP: set CMUX_APP_PATH to a built zerocmux DEV .app path")
         return 0
     app_path = Path(app_path_str)
     if not app_path.exists():
         print(f"SKIP: CMUX_APP_PATH does not exist: {app_path}")
         return 0
 
-    cli_path = app_path / "Contents" / "Resources" / "bin" / "cmux"
+    cli_path = app_path / "Contents" / "Resources" / "bin" / "zerocmux"
     if not cli_path.exists():
-        print(f"SKIP: bundled cmux CLI not found at {cli_path}")
+        print(f"SKIP: bundled zerocmux CLI not found at {cli_path}")
         return 0
 
     bundle_id = _bundle_id(app_path)
-    socket_path = Path(f"/tmp/cmux-restore-session-codex-{bundle_id.replace('.', '-')}.sock")
+    socket_path = Path(f"/tmp/zerocmux-restore-session-codex-{bundle_id.replace('.', '-')}.sock")
     snapshot = _snapshot_path(bundle_id)
     previous_snapshot = _snapshot_path(bundle_id, suffix="-previous")
 

@@ -9,45 +9,35 @@ enum UpdateSettings {
     static let scheduledCheckIntervalKey = "SUScheduledCheckInterval"
     static let sendProfileInfoKey = "SUSendProfileInfo"
     static let migrationKey = "cmux.sparkle.automaticChecksMigration.v2"
-    static let previousDefaultScheduledCheckInterval: TimeInterval = 60 * 60 * 24
-    static let scheduledCheckInterval: TimeInterval = 60 * 60
+    static let scheduledCheckInterval: TimeInterval = 60 * 60 * 24
 
     static func apply(to defaults: UserDefaults) {
         defaults.register(defaults: [
-            automaticChecksKey: true,
+            automaticChecksKey: false,
             automaticallyUpdateKey: false,
             scheduledCheckIntervalKey: scheduledCheckInterval,
             sendProfileInfoKey: false,
         ])
 
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
-        // Repair older installs that may have ended up with automatic checks disabled
-        // before the updater defaults were embedded in Info.plist.
-        defaults.set(true, forKey: automaticChecksKey)
+        defaults.set(false, forKey: automaticChecksKey)
 
         if let interval = defaults.object(forKey: scheduledCheckIntervalKey) as? NSNumber {
             let currentInterval = interval.doubleValue
-            if currentInterval <= 0 ||
-                abs(currentInterval - previousDefaultScheduledCheckInterval) < 1 {
+            if currentInterval <= 0 {
                 defaults.set(scheduledCheckInterval, forKey: scheduledCheckIntervalKey)
             }
         } else {
             defaults.set(scheduledCheckInterval, forKey: scheduledCheckIntervalKey)
         }
 
-        if defaults.object(forKey: automaticallyUpdateKey) == nil {
-            defaults.set(false, forKey: automaticallyUpdateKey)
-        }
-        if defaults.object(forKey: sendProfileInfoKey) == nil {
-            defaults.set(false, forKey: sendProfileInfoKey)
-        }
+        defaults.set(false, forKey: automaticallyUpdateKey)
+        defaults.set(false, forKey: sendProfileInfoKey)
 
         defaults.set(true, forKey: migrationKey)
     }
 }
 
-/// Controller for managing Sparkle updates in cmux.
+/// Controller for managing Sparkle updates in zerocmux.
 class UpdateController {
     private(set) var updater: SPUUpdater
     private let userDriver: UpdateDriver

@@ -608,7 +608,7 @@ extension Workspace {
         var totalCharacters = 0
         for panelId in panels.keys.sorted(by: { $0.uuidString < $1.uuidString }) {
             guard panels[panelId] is TerminalPanel else { continue }
-            let header = "cmux perf synthetic scrollback workspace=\(id.uuidString) panel=\(panelId.uuidString)\n"
+            let header = "zerocmux perf synthetic scrollback workspace=\(id.uuidString) panel=\(panelId.uuidString)\n"
             let paddingCount = max(0, targetCharacters - header.count)
             let scrollback = String((header + String(repeating: "s", count: paddingCount)).prefix(targetCharacters))
             debugSessionSnapshotSyntheticScrollbackByPanelId[panelId] = scrollback
@@ -3590,7 +3590,7 @@ private final class WorkspaceRemoteCLIRelayServer {
             }
             guard connectResult == 0 else {
                 throw NSError(domain: "cmux.remote.relay", code: 3, userInfo: [
-                    NSLocalizedDescriptionKey: "failed to connect to local cmux socket",
+                    NSLocalizedDescriptionKey: "failed to connect to local zerocmux socket",
                 ])
             }
 
@@ -5539,7 +5539,8 @@ final class WorkspaceRemoteSessionController {
         \(remoteCLIWrapperScript())
         CMUXWRAPPER
         chmod 755 "$wrapper_tmp"
-        mv -f "$wrapper_tmp" "$HOME/.cmux/bin/cmux"
+        mv -f "$wrapper_tmp" "$HOME/.cmux/bin/zerocmux"
+        ln -sf zerocmux "$HOME/.cmux/bin/cmux"
         """
     }
 
@@ -6258,7 +6259,7 @@ final class WorkspaceRemoteSessionController {
     }
 
     private func shouldUseFallbackRemotePortPollingLocked() -> Bool {
-        // `cmux ssh` owns the remote shell bootstrap and can report the remote
+        // `zerocmux ssh` owns the remote shell bootstrap and can report the remote
         // TTY precisely. Falling back to host-wide port scans in that path leaks
         // unrelated listeners from the remote machine into the workspace card.
         let startupCommand = configuration.terminalStartupCommand?
@@ -6267,7 +6268,7 @@ final class WorkspaceRemoteSessionController {
     }
 
     private func shouldUseTTYFallbackRemotePortPollingLocked() -> Bool {
-        // `cmux ssh` can still land in shells without our command hooks, such as
+        // `zerocmux ssh` can still land in shells without our command hooks, such as
         // `/bin/sh` in the Docker fixture. Once the workspace knows the TTY,
         // keep a low-frequency TTY-scoped poll so unsupported shells still
         // surface ports without bringing back noisy host-wide scans.
@@ -7723,8 +7724,8 @@ final class Workspace: Identifiable, ObservableObject {
         // Remove the default "Welcome" tab that bonsplit creates
         let welcomeTabIds = bonsplitController.allTabIds
 
-        // When the workspace boots with an explicit initial command (`cmux ssh` /
-        // `cmux vm new` both funnel their ssh startup script through this path),
+        // When the workspace boots with an explicit initial command (`zerocmux ssh` /
+        // `zerocmux vm new` both funnel their ssh startup script through this path),
         // hold the PTY open after that command exits. Without this Ghostty
         // silently respawns a local login shell and the user can't tell a dead
         // VM apart from a healthy local prompt.
@@ -9683,7 +9684,7 @@ final class Workspace: Identifiable, ObservableObject {
 
     private func rememberTerminalConfigInheritanceSource(_ terminalPanel: TerminalPanel) {
         lastTerminalConfigInheritancePanelId = terminalPanel.id
-        if let sourceSurface = terminalPanel.surface.surface,
+        if let sourceSurface = terminalPanel.surface.liveSurfaceForGhosttyAccess(reason: "config.inheritance.remember"),
            let runtimePoints = cmuxCurrentSurfaceFontSizePoints(sourceSurface) {
             let existing = terminalInheritanceFontPointsByPanelId[terminalPanel.id]
             if existing == nil || abs((existing ?? runtimePoints) - runtimePoints) > 0.05 {
@@ -9787,7 +9788,7 @@ final class Workspace: Identifiable, ObservableObject {
             // ghostty_surface_inherited_config or cmuxCurrentSurfaceFontSizePoints
             // is still reading through the pointer.
             let surface = terminalPanel.surface
-            guard let sourceSurface = surface.surface else { continue }
+            guard let sourceSurface = surface.liveSurfaceForGhosttyAccess(reason: "config.inheritance.split") else { continue }
             var config = cmuxInheritedSurfaceConfig(
                 sourceSurface: sourceSurface,
                 context: GHOSTTY_SURFACE_CONTEXT_SPLIT
@@ -10271,7 +10272,7 @@ final class Workspace: Identifiable, ObservableObject {
 
         // Keyboard/browser-open paths want "new tab at end" regardless of global new-tab placement.
         if insertAtEnd {
-            let targetIndex = max(0, bonsplitController.tabs(inPane: paneId).count - 1)
+            let targetIndex = bonsplitController.tabs(inPane: paneId).count
             _ = bonsplitController.reorderTab(newTabId, toIndex: targetIndex)
         }
         publishCmuxSurfaceCreated(browserPanel.id, paneId: paneId, kind: "browser", origin: "browser_tab", focused: shouldFocusNewTab)
@@ -11344,8 +11345,6 @@ final class Workspace: Identifiable, ObservableObject {
             "currentPanel=\(currentPanelShort)"
         )
 #endif
-        if shouldSuppressReentrantRefocus, currentlyFocusedPanelId == panelId { return }
-
         if let targetPaneId, !selectionAlreadyConverged {
 #if DEBUG
             cmuxDebugLog(
@@ -11645,11 +11644,11 @@ final class Workspace: Identifiable, ObservableObject {
         // POSIX printf inside the shell wrapper, not by Swift's String(format:).
         let endedLineFormat = String(
             localized: "remote.disconnectBanner.sessionEnded",
-            defaultValue: "[cmux] remote ssh session ended: %s"
+            defaultValue: "[zerocmux] remote ssh session ended: %s"
         )
         let reconnectLine = String(
             localized: "remote.disconnectBanner.reconnectHint",
-            defaultValue: "[cmux] falling back to a local shell. Reconnect with the original cmux ssh or cmux vm attach command."
+            defaultValue: "[zerocmux] falling back to a local shell. Reconnect with the original zerocmux ssh or zerocmux vm attach command."
         )
         // Encode the localized lines the same way as the target, so a translator using
         // backticks or $(…) in a translation string can't unexpectedly execute in the
@@ -11698,7 +11697,7 @@ final class Workspace: Identifiable, ObservableObject {
         // local shell that first prints a clearly-coloured banner explaining what happened.
         // Without this banner a dead VM surfaces as an ordinary local `lawrence@mac ~ %`
         // prompt, which looks identical to "I never connected" and was mis-read during
-        // dogfood as "cmux disconnected silently".
+        // dogfood as "zerocmux disconnected silently".
         let bannerTarget = pendingReplacementBannerRemoteTarget
         pendingReplacementBannerRemoteTarget = nil
         let replacementInitialCommand: String? = bannerTarget.map { Self.replacementShellScriptWithBanner(target: $0) }
@@ -12520,7 +12519,7 @@ final class Workspace: Identifiable, ObservableObject {
         let failure = NSAlert()
         failure.alertStyle = .warning
         failure.messageText = String(localized: "alert.moveTab.failed.title", defaultValue: "Move Failed")
-        failure.informativeText = String(localized: "alert.moveTab.failed.message", defaultValue: "cmux could not move this tab to the selected destination.")
+        failure.informativeText = String(localized: "alert.moveTab.failed.message", defaultValue: "zerocmux could not move this tab to the selected destination.")
         failure.addButton(withTitle: String(localized: "alert.ok", defaultValue: "OK"))
         _ = failure.runModal()
     }

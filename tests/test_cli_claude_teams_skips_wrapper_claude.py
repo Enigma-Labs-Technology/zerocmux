@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams` skips cmux wrapper scripts on PATH.
+Regression test: `zerocmux claude-teams` skips zerocmux wrapper scripts on PATH.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def main() -> int:
         make_executable(
             wrapper_bin / "claude",
             """#!/usr/bin/env bash
-# cmux claude wrapper - injects hooks and session tracking
+# zerocmux claude wrapper - injects hooks and session tracking
 set -euo pipefail
 echo WRAPPER_EXECUTED >&2
 exit 91
@@ -67,7 +67,7 @@ printf 'REAL\\n' > {real_hit}
         )
 
         if proc.returncode != 0:
-            print("FAIL: `cmux claude-teams --version` executed a wrapper instead of the real claude binary")
+            print("FAIL: `zerocmux claude-teams --version` executed a wrapper instead of the real claude binary")
             print(f"exit={proc.returncode}")
             print(f"stdout={proc.stdout.strip()}")
             print(f"stderr={proc.stderr.strip()}")
@@ -77,7 +77,7 @@ printf 'REAL\\n' > {real_hit}
             print("FAIL: real claude binary was not reached")
             return 1
 
-    print("PASS: cmux claude-teams skips cmux wrapper scripts on PATH")
+    print("PASS: zerocmux claude-teams skips zerocmux wrapper scripts on PATH")
     return 0
 
 

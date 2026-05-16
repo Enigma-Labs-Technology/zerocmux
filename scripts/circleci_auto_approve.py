@@ -60,7 +60,7 @@ def load_config() -> Config:
     pr_head_sha=require_env("PR_HEAD_SHA"),
     pr_author=require_env("PR_AUTHOR"),
     pr_author_id=int(require_env("PR_AUTHOR_ID")),
-    trusted_org=os.environ.get("TRUSTED_GITHUB_ORG", "manaflow-ai"),
+    trusted_org=os.environ.get("TRUSTED_GITHUB_ORG", "kernelalex"),
     trusted_users=parse_trusted_users(os.environ.get("TRUSTED_GITHUB_USERS", "")),
     github_token=require_env("GITHUB_TOKEN"),
     circleci_token=os.environ.get("CIRCLECI_TOKEN", ""),

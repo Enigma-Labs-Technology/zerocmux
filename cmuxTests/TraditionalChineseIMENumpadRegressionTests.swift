@@ -57,13 +57,14 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
         text: String,
         keyCode: UInt16,
         modifierFlags: NSEvent.ModifierFlags = [.numericPad],
+        timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime,
         windowNumber: Int = 0
     ) throws -> NSEvent {
         try XCTUnwrap(NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
             modifierFlags: modifierFlags,
-            timestamp: ProcessInfo.processInfo.systemUptime,
+            timestamp: timestamp,
             windowNumber: windowNumber,
             context: nil,
             characters: text,
@@ -84,6 +85,28 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
             eventNumber: 1,
             clickCount: 0,
             pressure: 0
+        ))
+    }
+
+    func testDeduplicatorIgnoresStaleNumericPadCurrentEvent() throws {
+        var deduplicator = NumpadIMECommitDeduplicator()
+        let staleCurrentEvent = try keypadEvent(
+            text: "2",
+            keyCode: 84,
+            timestamp: ProcessInfo.processInfo.systemUptime - 1.0
+        )
+        deduplicator.recordFallback(
+            text: "1",
+            event: try keypadEvent(text: "1", keyCode: 83),
+            sourceId: "com.apple.inputmethod.TCIM.Pinyin"
+        )
+
+        XCTAssertTrue(deduplicator.shouldSuppressCommit(
+            "1",
+            currentEvent: staleCurrentEvent,
+            sourceId: "com.apple.inputmethod.TCIM.Pinyin",
+            externalCommittedTextDepth: 0,
+            keyTextAccumulatorIsActive: false
         ))
     }
 
@@ -164,9 +187,10 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
 
     func testDeduplicatorClearsOnlyMatchedFallbackAfterKeyMismatch() throws {
         var deduplicator = NumpadIMECommitDeduplicator()
+        let firstEvent = try keypadEvent(text: "1", keyCode: 83)
         deduplicator.recordFallback(
             text: "1",
-            event: try keypadEvent(text: "1", keyCode: 83),
+            event: firstEvent,
             sourceId: "com.apple.inputmethod.TCIM.Pinyin"
         )
         deduplicator.recordFallback(
@@ -177,7 +201,11 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
 
         XCTAssertFalse(deduplicator.shouldSuppressCommit(
             "1",
-            currentEvent: try keypadEvent(text: "1", keyCode: 84),
+            currentEvent: try keypadEvent(
+                text: "1",
+                keyCode: 84,
+                timestamp: firstEvent.timestamp
+            ),
             sourceId: "com.apple.inputmethod.TCIM.Pinyin",
             externalCommittedTextDepth: 0,
             keyTextAccumulatorIsActive: false
@@ -209,6 +237,29 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
         XCTAssertTrue(deduplicator.shouldSuppressCommit(
             "1",
             currentEvent: try mouseMovedEvent(),
+            sourceId: "com.apple.inputmethod.TCIM.Pinyin",
+            externalCommittedTextDepth: 0,
+            keyTextAccumulatorIsActive: false
+        ))
+    }
+
+    func testDeduplicatorIgnoresUnrelatedKeyDownCurrentEvent() throws {
+        var deduplicator = NumpadIMECommitDeduplicator()
+        let event = try keypadEvent(text: "1", keyCode: 83)
+        deduplicator.recordFallback(
+            text: "1",
+            event: event,
+            sourceId: "com.apple.inputmethod.TCIM.Pinyin"
+        )
+
+        XCTAssertTrue(deduplicator.shouldSuppressCommit(
+            "1",
+            currentEvent: try keypadEvent(
+                text: "a",
+                keyCode: 0,
+                modifierFlags: [],
+                timestamp: event.timestamp + 0.5
+            ),
             sourceId: "com.apple.inputmethod.TCIM.Pinyin",
             externalCommittedTextDepth: 0,
             keyTextAccumulatorIsActive: false
@@ -295,7 +346,7 @@ final class TraditionalChineseIMENumpadRegressionTests: XCTestCase {
         }
 
         XCTAssertEqual(
-            pressedText,
+            pressedText.filter { $0 == "1" },
             ["1"],
             "Traditional Chinese IME numpad commits should not double-dispatch a keypad digit after keyDown fallback"
         )

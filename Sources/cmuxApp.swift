@@ -67,7 +67,7 @@ struct cmuxApp: App {
     }
 
     private static func terminateForMissingLaunchTag() -> Never {
-        let message = "error: refusing to launch untagged cmux DEV; start with ./scripts/reload.sh --tag <name> (or set CMUX_TAG for test harnesses)"
+        let message = "error: refusing to launch untagged zerocmux DEV; start with ./scripts/reload.sh --tag <name> (or set CMUX_TAG for test harnesses)"
         fputs("\(message)\n", stderr)
         fflush(stderr)
         NSLog("%@", message)
@@ -229,7 +229,7 @@ struct cmuxApp: App {
             }
 
             CommandGroup(replacing: .appInfo) {
-                Button(String(localized: "menu.app.about", defaultValue: "About cmux")) {
+                Button(String(localized: "menu.app.about", defaultValue: "About zerocmux")) {
                     showAboutPanel()
                 }
                 Button(String(localized: "menu.app.checkForUpdates", defaultValue: "Check for Updates…")) {
@@ -239,7 +239,7 @@ struct cmuxApp: App {
             }
 
             CommandGroup(replacing: .appTermination) {
-                splitCommandButton(title: String(localized: "menu.quitCmux", defaultValue: "Quit cmux"), shortcut: menuShortcut(for: .quit)) {
+                splitCommandButton(title: String(localized: "menu.quitCmux", defaultValue: "Quit zerocmux"), shortcut: menuShortcut(for: .quit)) {
                     NSApp.terminate(nil)
                 }
             }
@@ -466,11 +466,6 @@ struct cmuxApp: App {
                     appDelegate.copyFocusLogs(nil)
                 }
 
-                Divider()
-
-                Button("Trigger Sentry Test Crash") {
-                    appDelegate.triggerSentryTestCrash(nil)
-                }
             }
 #endif
 
@@ -1182,7 +1177,7 @@ private enum AboutWindowKind: String, CaseIterable, Identifiable {
     var fallbackTitle: String {
         switch self {
         case .about:
-            return "About cmux"
+            return "About zerocmux"
         }
     }
 
@@ -1278,7 +1273,7 @@ private struct AboutTitlebarDebugOptions: Equatable {
         case .about:
             return AboutTitlebarDebugOptions(
                 overridesEnabled: false,
-                windowTitle: "About cmux",
+                windowTitle: "About zerocmux",
                 titleVisibility: .hidden,
                 titlebarAppearsTransparent: true,
                 movableByWindowBackground: false,
@@ -2636,8 +2631,8 @@ private final class SidebarDebugWindowController: NSWindowController, NSWindowDe
 private struct AboutPanelView: View {
     @Environment(\.openURL) private var openURL
 
-    private let githubURL = URL(string: "https://github.com/manaflow-ai/cmux")
-    private let docsURL = URL(string: "https://cmux.com/docs")
+    private let githubURL = URL(string: "https://github.com/kernelalex/zerocmux")
+    private let docsURL = URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#documentation")
 
     private var version: String? { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
     private var build: String? { Bundle.main.infoDictionary?["CFBundleVersion"] as? String }
@@ -2660,7 +2655,7 @@ private struct AboutPanelView: View {
 
             VStack(alignment: .center, spacing: 32) {
                 VStack(alignment: .center, spacing: 8) {
-                    Text(String(localized: "about.appName", defaultValue: "cmux"))
+                    Text(String(localized: "about.appName", defaultValue: "zerocmux"))
                         .bold()
                         .font(.title)
                     Text(String(localized: "about.description", defaultValue: "A Ghostty-based terminal with vertical tabs\nand a notification panel for macOS."))
@@ -2681,7 +2676,7 @@ private struct AboutPanelView: View {
                     }
                     let commitText = commit ?? "—"
                     let commitURL = commit.flatMap { hash in
-                        URL(string: "https://github.com/manaflow-ai/cmux/commit/\(hash)")
+                        URL(string: "https://github.com/kernelalex/zerocmux/commit/\(hash)")
                     }
                     AboutPropertyRow(label: String(localized: "about.commit", defaultValue: "Commit"), text: commitText, url: commitURL)
                 }
@@ -3814,7 +3809,7 @@ private struct TabBarBackdropLabSample: View {
 
         let titles = [
             String(localized: "debug.tabBarBackdropLab.tab.agentBrowserLogs", defaultValue: "agent-browser logs"),
-            String(localized: "debug.tabBarBackdropLab.tab.terminalTransparency", defaultValue: "cmux terminal transparency"),
+            String(localized: "debug.tabBarBackdropLab.tab.terminalTransparency", defaultValue: "zerocmux terminal transparency"),
             String(localized: "debug.tabBarBackdropLab.tab.underlayText", defaultValue: "underlay tab text visible here"),
             String(localized: "debug.tabBarBackdropLab.tab.backdropCheck", defaultValue: "split button backdrop check"),
             String(localized: "debug.tabBarBackdropLab.tab.rightEdgeOverflow", defaultValue: "right edge overflow sample"),
@@ -4525,7 +4520,7 @@ enum AppIconLaunchState {
 enum AppIconSettings {
     static let modeKey = "appIconMode"
     static let defaultMode: AppIconMode = .automatic
-    private static let dockTileIconDidChangeNotification = Notification.Name("com.cmuxterm.appIconDidChange")
+    private static let dockTileIconDidChangeNotification = Notification.Name("com.kernelalex.zerocmux.appIconDidChange")
     private static var liveEnvironmentProvider: () -> Environment = { .live() }
 
     private static func isRunningUnderXCTest(_ env: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -4821,21 +4816,6 @@ enum WelcomeSettings {
     static let shownKey = "cmuxWelcomeShown"
 }
 
-enum TelemetrySettings {
-    static let sendAnonymousTelemetryKey = "sendAnonymousTelemetry"
-    static let defaultSendAnonymousTelemetry = true
-
-    static func isEnabled(defaults: UserDefaults = .standard) -> Bool {
-        if defaults.object(forKey: sendAnonymousTelemetryKey) == nil {
-            return defaultSendAnonymousTelemetry
-        }
-        return defaults.bool(forKey: sendAnonymousTelemetryKey)
-    }
-
-    // Freeze telemetry enablement once per launch. Settings changes apply on next restart.
-    static let enabledForCurrentLaunch = isEnabled()
-}
-
 enum CmdClickMarkdownRouteSettings {
     static let key = "openMarkdownInCmuxViewer"
     static let defaultValue = false
@@ -5028,7 +5008,7 @@ enum CmuxRuntimeDebugCapture {
         var payload: [String: Any] = [
             "session_id": configuration.sessionID,
             "hypothesis_id": hypothesisID,
-            "service": "cmux-macos",
+            "service": "zerocmux-macos",
             "source": source,
             "name": name,
             "ts": ISO8601DateFormatter().string(from: Date()),
@@ -5072,8 +5052,8 @@ func openCmuxSettingsFileInEditor() {
 struct SettingsView: View {
     private let pickerColumnWidth: CGFloat = 196
     private let notificationSoundControlWidth: CGFloat = 280
-    private let shortcutChordsDocsURL = URL(string: "https://cmux.com/docs/keyboard-shortcuts#shortcut-chords")!
-    private let settingsJSONDocsURL = URL(string: "https://cmux.com/docs/configuration#cmux-json")!
+    private let shortcutChordsDocsURL = URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#keyboard-shortcuts")!
+    private let settingsJSONDocsURL = URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/data/cmux.schema.json")!
     @Environment(\.openWindow) private var openWindow
     @State private var highlightedSearchAnchorID: String?
     @State private var searchHighlightToken = 0
@@ -5094,8 +5074,6 @@ struct SettingsView: View {
     private var cursorHooksEnabled = CursorIntegrationSettings.defaultHooksEnabled
     @AppStorage(GeminiIntegrationSettings.hooksEnabledKey)
     private var geminiHooksEnabled = GeminiIntegrationSettings.defaultHooksEnabled
-    @AppStorage(TelemetrySettings.sendAnonymousTelemetryKey)
-    private var sendAnonymousTelemetry = TelemetrySettings.defaultSendAnonymousTelemetry
     @AppStorage(PreferredEditorSettings.key) private var preferredEditorCommand = ""
     @AppStorage(CmdClickMarkdownRouteSettings.key) private var openMarkdownInCmuxViewer = CmdClickMarkdownRouteSettings.defaultValue
     @AppStorage("cmuxPortBase") private var cmuxPortBase = 9100
@@ -5180,7 +5158,6 @@ struct SettingsView: View {
     private var rightSidebarDockEnabled = RightSidebarBetaFeatureSettings.defaultDockEnabled
 
     @ObservedObject private var notificationStore = TerminalNotificationStore.shared
-    @ObservedObject private var authManager = AuthManager.shared
     @StateObject private var keyboardShortcutSettingsObserver = KeyboardShortcutSettingsObserver.shared
     @State private var shortcutResetToken = UUID()
     @State private var showClearBrowserHistoryConfirmation = false
@@ -5196,7 +5173,6 @@ struct SettingsView: View {
     @State private var notificationCustomSoundStatusIsError = false
     @State private var showNotificationCustomSoundErrorAlert = false
     @State private var notificationCustomSoundErrorAlertMessage = ""
-    @State private var telemetryValueAtLaunch = TelemetrySettings.enabledForCurrentLaunch
     @State private var showLanguageRestartAlert = false
     @State private var isResettingSettings = false
     @State private var workspaceTabPaletteEntries = WorkspaceTabColorSettings.palette()
@@ -5373,7 +5349,7 @@ struct SettingsView: View {
     private var browserEnabledSettingsRows: some View {
         SettingsCardRow(
             configurationReview: .settingsOnly,
-            String(localized: "settings.browser.enabled", defaultValue: "Enable cmux Browser"),
+            String(localized: "settings.browser.enabled", defaultValue: "Enable zerocmux Browser"),
             subtitle: browserEnabledSubtitle,
             searchAnchorID: SettingsSearchIndex.settingID(for: .browser, idSuffix: "enable-browser")
         ) {
@@ -5750,13 +5726,6 @@ struct SettingsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    SettingsSectionHeader(title: String(localized: "settings.section.account", defaultValue: "Account"))
-                        .settingsSearchAnchor(SettingsSearchIndex.sectionID(for: .account))
-                    SettingsCard {
-                        AuthSettingsRow(authManager: authManager)
-                    }
-                    .settingsSearchAnchor(SettingsSearchIndex.settingID(for: .account, idSuffix: "account"))
-
                     SettingsSectionHeader(title: String(localized: "settings.section.app", defaultValue: "App"))
                         .settingsSearchAnchor(SettingsSearchIndex.sectionID(for: .app))
                     SettingsCard {
@@ -5909,7 +5878,7 @@ struct SettingsView: View {
                             String(localized: "settings.app.configWindow", defaultValue: "Terminal Config"),
                             subtitle: String(
                                 localized: "settings.app.configWindow.subtitle",
-                                defaultValue: "Open the cmux terminal config and generated preview in one utility window."
+                                defaultValue: "Open the zerocmux terminal config and generated preview in one utility window."
                             ),
                             controlWidth: pickerColumnWidth,
                             searchAnchorID: SettingsSearchIndex.settingID(for: .app, idSuffix: "terminal-config")
@@ -5928,14 +5897,14 @@ struct SettingsView: View {
 
                         SettingsCardRow(
                             configurationReview: .json("app.openMarkdownInCmuxViewer"),
-                            String(localized: "settings.app.openMarkdownInCmuxViewer", defaultValue: "Open Markdown in cmux Viewer"),
-                            subtitle: String(localized: "settings.app.openMarkdownInCmuxViewer.subtitle", defaultValue: "Cmd-clicking .md/.markdown/.mkd/.mdx files opens the cmux markdown viewer panel instead of the preferred editor.")
+                            String(localized: "settings.app.openMarkdownInCmuxViewer", defaultValue: "Open Markdown in zerocmux Viewer"),
+                            subtitle: String(localized: "settings.app.openMarkdownInCmuxViewer.subtitle", defaultValue: "Cmd-clicking .md/.markdown/.mkd/.mdx files opens the zerocmux markdown viewer panel instead of the preferred editor.")
                         ) {
                             Toggle("", isOn: $openMarkdownInCmuxViewer)
                                 .labelsHidden()
                                 .controlSize(.small)
                                 .accessibilityLabel(
-                                    String(localized: "settings.app.openMarkdownInCmuxViewer", defaultValue: "Open Markdown in cmux Viewer")
+                                    String(localized: "settings.app.openMarkdownInCmuxViewer", defaultValue: "Open Markdown in zerocmux Viewer")
                                 )
                         }
 
@@ -6150,20 +6119,6 @@ struct SettingsView: View {
                         SettingsCardDivider()
 
                         SettingsCardRow(
-                            configurationReview: .json("app.sendAnonymousTelemetry"),
-                            String(localized: "settings.app.telemetry", defaultValue: "Send anonymous telemetry"),
-                            subtitle: sendAnonymousTelemetry != telemetryValueAtLaunch
-                                ? String(localized: "settings.app.telemetry.subtitleChanged", defaultValue: "Change takes effect on next launch.")
-                                : String(localized: "settings.app.telemetry.subtitle", defaultValue: "Share anonymized crash and usage data to help improve cmux.")
-                        ) {
-                            Toggle("", isOn: $sendAnonymousTelemetry)
-                                .labelsHidden()
-                                .controlSize(.small)
-                        }
-
-                        SettingsCardDivider()
-
-                        SettingsCardRow(
                             configurationReview: .json("app.warnBeforeQuit"),
                             String(localized: "settings.app.warnBeforeQuit", defaultValue: "Warn Before Quit"),
                             subtitle: warnBeforeQuitShortcut
@@ -6335,16 +6290,16 @@ struct SettingsView: View {
                         SettingsCardDivider()
                         SettingsCardRow(
                             configurationReview: .json("sidebar.openPullRequestLinksInCmuxBrowser"),
-                            String(localized: "settings.app.openSidebarPRLinks", defaultValue: "Open Sidebar PR Links in cmux Browser"),
-                            subtitle: !sidebarShowPullRequest ? String(localized: "settings.app.openSidebarPRLinks.subtitleHidden", defaultValue: "Enable sidebar PR visibility to choose where PR links open.") : (!sidebarMakePullRequestClickable ? String(localized: "settings.app.openSidebarPRLinks.subtitleDisabled", defaultValue: "Enable sidebar PR clickability to choose where PR links open.") : (openSidebarPullRequestLinksInCmuxBrowser ? String(localized: "settings.app.openSidebarPRLinks.subtitleOn", defaultValue: "Clicks open inside cmux browser.") : String(localized: "settings.app.openSidebarPRLinks.subtitleOff", defaultValue: "Clicks open in your default browser.")))
+                            String(localized: "settings.app.openSidebarPRLinks", defaultValue: "Open Sidebar PR Links in zerocmux Browser"),
+                            subtitle: !sidebarShowPullRequest ? String(localized: "settings.app.openSidebarPRLinks.subtitleHidden", defaultValue: "Enable sidebar PR visibility to choose where PR links open.") : (!sidebarMakePullRequestClickable ? String(localized: "settings.app.openSidebarPRLinks.subtitleDisabled", defaultValue: "Enable sidebar PR clickability to choose where PR links open.") : (openSidebarPullRequestLinksInCmuxBrowser ? String(localized: "settings.app.openSidebarPRLinks.subtitleOn", defaultValue: "Clicks open inside zerocmux browser.") : String(localized: "settings.app.openSidebarPRLinks.subtitleOff", defaultValue: "Clicks open in your default browser.")))
                         ) { Toggle("", isOn: $openSidebarPullRequestLinksInCmuxBrowser).labelsHidden().controlSize(.small) }
                         .disabled(sidebarHideAllDetails || !sidebarShowPullRequest || !sidebarMakePullRequestClickable)
                         SettingsCardDivider()
                         SettingsCardRow(
                             configurationReview: .json("sidebar.openPortLinksInCmuxBrowser"),
-                            String(localized: "settings.app.openSidebarPortLinks", defaultValue: "Open Sidebar Port Links in cmux Browser"),
+                            String(localized: "settings.app.openSidebarPortLinks", defaultValue: "Open Sidebar Port Links in zerocmux Browser"),
                             subtitle: openSidebarPortLinksInCmuxBrowser
-                                ? String(localized: "settings.app.openSidebarPortLinks.subtitleOn", defaultValue: "Port clicks open inside cmux browser.")
+                                ? String(localized: "settings.app.openSidebarPortLinks.subtitleOn", defaultValue: "Port clicks open inside zerocmux browser.")
                                 : String(localized: "settings.app.openSidebarPortLinks.subtitleOff", defaultValue: "Port clicks open in your default browser.")
                         ) {
                             Toggle("", isOn: $openSidebarPortLinksInCmuxBrowser)
@@ -6539,7 +6494,7 @@ struct SettingsView: View {
 
                         SettingsCardDivider()
 
-                        SettingsCardNote(String(localized: "settings.automation.cursor.note", defaultValue: "Hooks must be installed with `cmux hooks cursor install`. They no-op outside cmux terminals."))
+                        SettingsCardNote(String(localized: "settings.automation.cursor.note", defaultValue: "Hooks must be installed with `zerocmux hooks cursor install`. They no-op outside zerocmux terminals."))
                     }
 
                     SettingsCard {
@@ -6558,7 +6513,7 @@ struct SettingsView: View {
 
                         SettingsCardDivider()
 
-                        SettingsCardNote(String(localized: "settings.automation.gemini.note", defaultValue: "Hooks must be installed with `cmux hooks gemini install`. They no-op outside cmux terminals."))
+                        SettingsCardNote(String(localized: "settings.automation.gemini.note", defaultValue: "Hooks must be installed with `zerocmux hooks gemini install`. They no-op outside zerocmux terminals."))
                     }
 
                     SettingsCard {
@@ -6627,7 +6582,7 @@ struct SettingsView: View {
 
                         SettingsCardRow(
                             configurationReview: .json("browser.openTerminalLinksInCmuxBrowser"),
-                            String(localized: "settings.browser.openTerminalLinks", defaultValue: "Open Terminal Links in cmux Browser"),
+                            String(localized: "settings.browser.openTerminalLinks", defaultValue: "Open Terminal Links in zerocmux Browser"),
                             subtitle: String(localized: "settings.browser.openTerminalLinks.subtitle", defaultValue: "When off, links clicked in terminal output open in your default browser.")
                         ) {
                             Toggle("", isOn: $openTerminalLinksInCmuxBrowser)
@@ -6654,7 +6609,7 @@ struct SettingsView: View {
                                 SettingsCardRow(
                                     configurationReview: .json("browser.hostsToOpenInEmbeddedBrowser"),
                                     String(localized: "settings.browser.hostWhitelist", defaultValue: "Hosts to Open in Embedded Browser"),
-                                    subtitle: String(localized: "settings.browser.hostWhitelist.subtitle", defaultValue: "Applies to terminal link clicks and intercepted `open https://...` calls. Only these hosts open in cmux. Others open in your default browser. One host or wildcard per line (for example: example.com, *.internal.example). Leave empty to open all hosts in cmux.")
+                                    subtitle: String(localized: "settings.browser.hostWhitelist.subtitle", defaultValue: "Applies to terminal link clicks and intercepted `open https://...` calls. Only these hosts open in zerocmux. Others open in your default browser. One host or wildcard per line (for example: example.com, *.internal.example). Leave empty to open all hosts in zerocmux.")
                                 ) {
                                     EmptyView()
                                 }
@@ -6707,7 +6662,7 @@ struct SettingsView: View {
                             Text(String(localized: "settings.browser.httpAllowlist", defaultValue: "HTTP Hosts Allowed in Embedded Browser"))
                                 .font(.system(size: 13, weight: .semibold))
 
-                            Text(String(localized: "settings.browser.httpAllowlist.description", defaultValue: "Controls which HTTP (non-HTTPS) hosts can open in cmux without a warning prompt. Defaults include localhost, 127.0.0.1, ::1, 0.0.0.0, and *.localtest.me."))
+                            Text(String(localized: "settings.browser.httpAllowlist.description", defaultValue: "Controls which HTTP (non-HTTPS) hosts can open in zerocmux without a warning prompt. Defaults include localhost, 127.0.0.1, ::1, 0.0.0.0, and *.localtest.me."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
@@ -6879,7 +6834,7 @@ struct SettingsView: View {
                         SettingsCardRow(
                             configurationReview: .action,
                             String(localized: "settings.shortcuts.chords", defaultValue: "Shortcut Chords"),
-                            subtitle: String(localized: "settings.shortcuts.chords.subtitle", defaultValue: "Add tmux-style multi-step shortcuts in cmux.json, for example [\"ctrl+b\", \"c\"]."),
+                            subtitle: String(localized: "settings.shortcuts.chords.subtitle", defaultValue: "Add tmux-style multi-step shortcuts in zerocmux.json, for example [\"ctrl+b\", \"c\"]."),
                             searchAnchorID: SettingsSearchIndex.settingID(for: .keyboardShortcuts, idSuffix: "shortcut-chords")
                         ) {
                             HStack(spacing: 8) {
@@ -7052,7 +7007,7 @@ struct SettingsView: View {
                             SettingsCardNote(
                                 String(
                                     localized: "settings.workspaceColors.emptyPalette",
-                                    defaultValue: "No palette entries. Add colors in cmux.json or use \"Choose Custom Color...\" from a workspace context menu."
+                                    defaultValue: "No palette entries. Add colors in zerocmux.json or use \"Choose Custom Color...\" from a workspace context menu."
                                 )
                             )
                         } else {
@@ -7122,7 +7077,7 @@ struct SettingsView: View {
                         SettingsCardRow(
                             configurationReview: .action,
                             String(localized: "settings.settingsJSON.file", defaultValue: "User config file"),
-                            subtitle: String(localized: "settings.settingsJSON.file.subtitle", defaultValue: "Edit cmux-owned app settings, shortcuts, automation, sidebar, notifications, and browser behavior."),
+                            subtitle: String(localized: "settings.settingsJSON.file.subtitle", defaultValue: "Edit zerocmux-owned app settings, shortcuts, automation, sidebar, notifications, and browser behavior."),
                             controlWidth: 330,
                             searchAnchorID: SettingsSearchIndex.settingID(for: .settingsJSON, idSuffix: "open-file")
                         ) {
@@ -7322,7 +7277,6 @@ struct SettingsView: View {
         customClaudePath = ""
         cursorHooksEnabled = CursorIntegrationSettings.defaultHooksEnabled
         geminiHooksEnabled = GeminiIntegrationSettings.defaultHooksEnabled
-        sendAnonymousTelemetry = TelemetrySettings.defaultSendAnonymousTelemetry
         preferredEditorCommand = ""
         openMarkdownInCmuxViewer = CmdClickMarkdownRouteSettings.defaultValue
         browserSearchEngine = BrowserSearchSettings.defaultSearchEngine.rawValue
@@ -7477,84 +7431,6 @@ struct SettingsSectionHeader: View {
             .foregroundColor(.secondary)
             .padding(.leading, 2)
             .padding(.bottom, -2)
-    }
-}
-
-private struct AuthSettingsRow: View {
-    @ObservedObject var authManager: AuthManager
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(titleText)
-                    .font(.system(size: 13, weight: .medium))
-                if let subtitle = subtitleText {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-            }
-            Spacer(minLength: 12)
-            if authManager.isLoading || authManager.isRestoringSession {
-                ProgressView().controlSize(.small)
-            }
-            Button(action: buttonAction) {
-                Text(buttonTitle)
-            }
-            .controlSize(.small)
-            .disabled(authManager.isLoading || authManager.isRestoringSession)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private var titleText: String {
-        if authManager.isAuthenticated {
-            if let email = authManager.currentUser?.primaryEmail, !email.isEmpty {
-                return email
-            }
-            return String(
-                localized: "settings.account.signedIn.title",
-                defaultValue: "Signed in"
-            )
-        }
-        return String(
-            localized: "settings.account.signedOut.title",
-            defaultValue: "Not signed in"
-        )
-    }
-
-    private var subtitleText: String? {
-        if authManager.isAuthenticated {
-            return authManager.currentUser?.displayName
-        }
-        return String(
-            localized: "settings.account.signedOut.subtitle",
-            defaultValue: "Sign in with your cmux account to enable sync across devices."
-        )
-    }
-
-    private var buttonTitle: String {
-        if authManager.isAuthenticated {
-            return String(
-                localized: "settings.account.signOut",
-                defaultValue: "Sign Out"
-            )
-        }
-        return String(
-            localized: "settings.account.signIn",
-            defaultValue: "Sign In…"
-        )
-    }
-
-    private func buttonAction() {
-        if authManager.isAuthenticated {
-            Task { @MainActor in
-                await authManager.signOut()
-            }
-        } else {
-            authManager.beginSignIn()
-        }
     }
 }
 
@@ -8128,13 +8004,14 @@ private struct GlobalHotkeySection: View {
 }
 
 private struct SettingsRootView: View {
-    @SceneStorage("selectedSettingsSection") private var selectedSectionRaw = SettingsNavigationTarget.account.rawValue
+    @SceneStorage("selectedSettingsSection") private var selectedSectionRaw = SettingsNavigationTarget.app.rawValue
     @SceneStorage("selectedSettingsSidebarEntry") private var selectedSidebarEntryID = SettingsSearchIndex.defaultSelectionID
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var searchText = ""
 
     private var selectedSection: SettingsNavigationTarget {
-        SettingsNavigationTarget(rawValue: selectedSectionRaw) ?? .account
+        let target = SettingsNavigationTarget(rawValue: selectedSectionRaw) ?? .app
+        return SettingsNavigationTarget.displayedTargets.contains(target) ? target : .app
     }
 
     private var sidebarEntries: [SettingsSearchEntry] {
@@ -8210,12 +8087,13 @@ private struct SettingsRootView: View {
         preferSectionSelection: Bool = true,
         postRequest: Bool
     ) {
-        selectedSectionRaw = target.rawValue
+        let resolvedTarget = SettingsNavigationTarget.displayedTargets.contains(target) ? target : .app
+        selectedSectionRaw = resolvedTarget.rawValue
         if preferSectionSelection {
-            selectedSidebarEntryID = SettingsSearchIndex.sectionID(for: target)
+            selectedSidebarEntryID = SettingsSearchIndex.sectionID(for: resolvedTarget)
         }
         if postRequest {
-            SettingsNavigationRequest.post(target)
+            SettingsNavigationRequest.post(resolvedTarget)
         }
     }
 }

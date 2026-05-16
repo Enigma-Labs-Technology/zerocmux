@@ -1,7 +1,7 @@
 import Foundation
 
 /// Wire frame sent from hook subcommands and the OpenCode plugin to the
-/// cmux socket, then materialized into a `WorkstreamItem` by the store.
+/// zerocmux socket, then materialized into a `WorkstreamItem` by the store.
 ///
 /// Field names mirror Vibe Island's hook payload format exactly so existing
 /// agent payloads pass through untouched: `session_id`, `hook_event_name`,

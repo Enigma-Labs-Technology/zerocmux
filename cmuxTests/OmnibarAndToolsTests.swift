@@ -61,11 +61,11 @@ final class FinderServicePathResolverTests: XCTestCase {
     }
 
     func testOrderedUniqueDirectoriesSkipsBundleAndEmbeddedPathsWhenExcludingBundleRoot() {
-        let bundleURL = URL(fileURLWithPath: "/Applications/Tools/../cmux.app", isDirectory: true)
+        let bundleURL = URL(fileURLWithPath: "/Applications/Tools/../zerocmux.app", isDirectory: true)
         let input: [URL] = [
             bundleURL,
-            URL(fileURLWithPath: "/Applications/cmux.app/Contents/MacOS/cmux", isDirectory: false),
-            URL(fileURLWithPath: "/Applications/cmux.app/Contents/Resources/bin/cmux", isDirectory: false),
+            URL(fileURLWithPath: "/Applications/zerocmux.app/Contents/MacOS/zerocmux", isDirectory: false),
+            URL(fileURLWithPath: "/Applications/zerocmux.app/Contents/Resources/bin/zerocmux", isDirectory: false),
             URL(fileURLWithPath: "/Users/tester/Projects/cmux", isDirectory: true),
             URL(fileURLWithPath: "/Users/tester/Projects/cmux/README.md", isDirectory: false),
         ]
@@ -84,10 +84,10 @@ final class FinderServicePathResolverTests: XCTestCase {
     }
 
     func testOrderedUniqueDirectoriesExclusionDoesNotFilterSiblingPaths() {
-        let bundleURL = URL(fileURLWithPath: "/Applications/cmux.app", isDirectory: true)
+        let bundleURL = URL(fileURLWithPath: "/Applications/zerocmux.app", isDirectory: true)
         let input: [URL] = [
-            URL(fileURLWithPath: "/Applications/cmux.app backup/project", isDirectory: true),
-            URL(fileURLWithPath: "/Applications/cmux.app.beta/project/file.txt", isDirectory: false),
+            URL(fileURLWithPath: "/Applications/zerocmux.app backup/project", isDirectory: true),
+            URL(fileURLWithPath: "/Applications/zerocmux.app.beta/project/file.txt", isDirectory: false),
         ]
 
         let directories = FinderServicePathResolver.orderedUniqueDirectories(
@@ -98,8 +98,8 @@ final class FinderServicePathResolverTests: XCTestCase {
         XCTAssertEqual(
             directories,
             [
-                "/Applications/cmux.app backup/project",
-                "/Applications/cmux.app.beta/project",
+                "/Applications/zerocmux.app backup/project",
+                "/Applications/zerocmux.app.beta/project",
             ]
         )
     }
@@ -143,8 +143,8 @@ final class FinderServicePathResolverTests: XCTestCase {
     func testOrderedUniqueDirectoriesResolvesSymlinksOnlyForExcludedRootComparison() throws {
         try withTemporaryDirectory { root in
             let applicationsDirectory = root.appendingPathComponent("Applications", isDirectory: true)
-            let actualBundle = applicationsDirectory.appendingPathComponent("cmux.app", isDirectory: true)
-            let actualBinary = actualBundle.appendingPathComponent("Contents/MacOS/cmux", isDirectory: false)
+            let actualBundle = applicationsDirectory.appendingPathComponent("zerocmux.app", isDirectory: true)
+            let actualBinary = actualBundle.appendingPathComponent("Contents/MacOS/zerocmux", isDirectory: false)
             let aliasApplications = root.appendingPathComponent("Launcher", isDirectory: true)
             let aliasWorkspace = aliasApplications.appendingPathComponent("workspace", isDirectory: true)
 
@@ -158,8 +158,8 @@ final class FinderServicePathResolverTests: XCTestCase {
 
             let directories = FinderServicePathResolver.orderedUniqueDirectories(
                 from: [
-                    aliasApplications.appendingPathComponent("cmux.app", isDirectory: true),
-                    aliasApplications.appendingPathComponent("cmux.app/Contents/MacOS/cmux", isDirectory: false),
+                    aliasApplications.appendingPathComponent("zerocmux.app", isDirectory: true),
+                    aliasApplications.appendingPathComponent("zerocmux.app/Contents/MacOS/zerocmux", isDirectory: false),
                     aliasWorkspace,
                 ],
                 excludingDescendantsOf: [actualBundle]

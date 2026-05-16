@@ -14,14 +14,14 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def _resolve_socket_path() -> str:
     socket_path = os.environ.get("CMUX_SOCKET_PATH", "").strip()
     if not socket_path:
-        raise cmuxError("CMUX_SOCKET_PATH is required (expected /tmp/cmux-debug-<tag>.sock)")
-    if not re.fullmatch(r"/tmp/cmux-debug-[^/]+\.sock", socket_path):
+        raise cmuxError("CMUX_SOCKET_PATH is required (expected /tmp/zerocmux-debug-<tag>.sock)")
+    if not re.fullmatch(r"/tmp/zerocmux-debug-[^/]+\.sock", socket_path):
         raise cmuxError(f"CMUX_SOCKET_PATH must be a tagged debug socket, got: {socket_path!r}")
     return socket_path
 
@@ -39,18 +39,18 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
     candidates = glob.glob(
-        os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"),
+        os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"),
         recursive=True,
     )
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     return candidates[0]
 

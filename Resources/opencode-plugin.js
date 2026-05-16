@@ -1,7 +1,7 @@
-// cmux-feed-plugin-marker v1
-// Bridges OpenCode's plugin event bus to the cmux socket's feed.* verbs.
-// Installed by `cmux hooks setup` or `cmux hooks opencode install`.
-// DO NOT EDIT MANUALLY - cmux upgrades this file in place.
+// zerocmux-feed-plugin-marker v1
+// Bridges OpenCode's plugin event bus to the zerocmux socket's feed.* verbs.
+// Installed by `zerocmux hooks setup` or `zerocmux hooks opencode install`.
+// DO NOT EDIT MANUALLY - zerocmux upgrades this file in place.
 
 const net = require("node:net");
 const os = require("node:os");
@@ -296,7 +296,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        `User rejected the plan via cmux Feed and wants this change: ${feedback}\n\nUpdate the plan file, then call plan_exit again.`
+        `User rejected the plan via zerocmux Feed and wants this change: ${feedback}\n\nUpdate the plan file, then call plan_exit again.`
       );
       return;
     }
@@ -310,7 +310,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        "User chose Ultraplan via cmux Feed. Refine the plan more deeply, update the plan file, then call plan_exit again."
+        "User chose Ultraplan via zerocmux Feed. Refine the plan more deeply, update the plan file, then call plan_exit again."
       );
       return;
     }
@@ -326,7 +326,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        "cmux could not apply the selected permission mode. Ask the user to approve the plan again before switching to build mode."
+        "zerocmux could not apply the selected permission mode. Ask the user to approve the plan again before switching to build mode."
       );
       return;
     }
@@ -565,7 +565,7 @@ export const CMUXFeed = async (ctx) => {
                 sessionId: sid,
                 requestId,
                 reply: permissionReplyForMode(mode),
-                message: mode === "deny" ? "User denied permission via cmux Feed." : undefined,
+                message: mode === "deny" ? "User denied permission via zerocmux Feed." : undefined,
               });
             } catch (e) { /* ignore - opencode already moved on */ }
           }

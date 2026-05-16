@@ -624,7 +624,7 @@ final class TabManagerPullRequestProbeTests: XCTestCase {
         try runGit(["add", "README.md"], in: repoURL)
         try runGit(["commit", "-m", "Initial commit"], in: repoURL)
 
-        let manager = TabManager()
+        let manager = TabManager(initialWorkingDirectory: repoURL.path)
         guard let workspace = manager.selectedWorkspace,
               let panelId = workspace.focusedPanelId else {
             XCTFail("Expected selected workspace with focused panel")
@@ -671,7 +671,7 @@ final class TabManagerPullRequestProbeTests: XCTestCase {
         try runGit(["add", "README.md"], in: repoURL)
         try runGit(["commit", "-m", "Initial commit"], in: repoURL)
 
-        let manager = TabManager()
+        let manager = TabManager(initialWorkingDirectory: repoURL.path)
         guard let workspace = manager.selectedWorkspace,
               let panelId = workspace.focusedPanelId else {
             XCTFail("Expected selected workspace with focused panel")
@@ -780,7 +780,7 @@ final class TabManagerPullRequestProbeTests: XCTestCase {
         try runGit(["commit", "-m", "Initial commit"], in: repoURL)
         try runGit(["checkout", "-b", "feature/sidebar-pr"], in: repoURL)
 
-        let manager = TabManager()
+        let manager = TabManager(initialWorkingDirectory: repoURL.path)
         guard let workspace = manager.selectedWorkspace,
               let panelId = workspace.focusedPanelId else {
             XCTFail("Expected selected workspace with focused panel")
@@ -1279,19 +1279,27 @@ final class TabManagerCloseCurrentPanelTests: XCTestCase {
         let appDelegate = AppDelegate.shared ?? AppDelegate()
         let manager = TabManager()
         let store = TerminalNotificationStore.shared
+        let defaults = UserDefaults.standard
 
         let originalTabManager = appDelegate.tabManager
         let originalNotificationStore = appDelegate.notificationStore
+        let originalCloseLastSurfaceShortcut = defaults.object(forKey: lastSurfaceCloseShortcutDefaultsKey)
         store.replaceNotificationsForTesting([])
         store.configureNotificationDeliveryHandlerForTesting { _, _ in }
         appDelegate.tabManager = manager
         appDelegate.notificationStore = store
+        defaults.set(false, forKey: lastSurfaceCloseShortcutDefaultsKey)
 
         defer {
             store.replaceNotificationsForTesting([])
             store.resetNotificationDeliveryHandlerForTesting()
             appDelegate.tabManager = originalTabManager
             appDelegate.notificationStore = originalNotificationStore
+            if let originalCloseLastSurfaceShortcut {
+                defaults.set(originalCloseLastSurfaceShortcut, forKey: lastSurfaceCloseShortcutDefaultsKey)
+            } else {
+                defaults.removeObject(forKey: lastSurfaceCloseShortcutDefaultsKey)
+            }
         }
 
         guard let workspace = manager.selectedWorkspace,
@@ -1365,6 +1373,7 @@ final class TabManagerNotificationFocusTests: XCTestCase {
         let originalAppFocusOverride = AppFocusState.overrideIsFocused
         let originalExperimentEnabled = defaults.object(forKey: TmuxOverlayExperimentSettings.enabledKey)
         let originalExperimentTarget = defaults.object(forKey: TmuxOverlayExperimentSettings.targetKey)
+        let originalPaneFlashEnabled = defaults.object(forKey: NotificationPaneFlashSettings.enabledKey)
 
         store.replaceNotificationsForTesting([])
         store.configureNotificationDeliveryHandlerForTesting { _, _ in }
@@ -1373,6 +1382,7 @@ final class TabManagerNotificationFocusTests: XCTestCase {
         AppFocusState.overrideIsFocused = true
         defaults.set(true, forKey: TmuxOverlayExperimentSettings.enabledKey)
         defaults.set(TmuxOverlayExperimentTarget.bonsplitPane.rawValue, forKey: TmuxOverlayExperimentSettings.targetKey)
+        defaults.set(true, forKey: NotificationPaneFlashSettings.enabledKey)
 
         defer {
             store.replaceNotificationsForTesting([])
@@ -1389,6 +1399,11 @@ final class TabManagerNotificationFocusTests: XCTestCase {
                 defaults.set(originalExperimentTarget, forKey: TmuxOverlayExperimentSettings.targetKey)
             } else {
                 defaults.removeObject(forKey: TmuxOverlayExperimentSettings.targetKey)
+            }
+            if let originalPaneFlashEnabled {
+                defaults.set(originalPaneFlashEnabled, forKey: NotificationPaneFlashSettings.enabledKey)
+            } else {
+                defaults.removeObject(forKey: NotificationPaneFlashSettings.enabledKey)
             }
         }
 
@@ -1414,11 +1429,11 @@ final class TabManagerNotificationFocusTests: XCTestCase {
 
         XCTAssertTrue(manager.focusTabFromNotification(workspace.id, surfaceId: rightPanel.id))
 
-        let expectation = XCTestExpectation(description: "notification focus flash")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(
+            waitForCondition(timeout: 3.0) {
+                workspace.tmuxWorkspaceFlashToken == 1
+            }
+        )
 
         XCTAssertEqual(workspace.focusedPanelId, rightPanel.id)
         XCTAssertFalse(store.hasUnreadNotification(forTabId: workspace.id, surfaceId: rightPanel.id))

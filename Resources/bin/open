@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# cmux open wrapper - routes HTTP(S) URLs to cmux's in-app browser
+# zerocmux open wrapper - routes HTTP(S) URLs to zerocmux's in-app browser
 #
-# When running inside a cmux terminal (CMUX_SOCKET_PATH is set), this wrapper
-# intercepts `open https://...` invocations and opens them in cmux's built-in
+# When running inside a zerocmux terminal (CMUX_SOCKET_PATH is set), this wrapper
+# intercepts `open https://...` invocations and opens them in zerocmux's built-in
 # browser within the same workspace. All other arguments pass through to
 # /usr/bin/open unchanged.
 
@@ -375,7 +375,7 @@ load_whitelist_patterns() {
     done <<< "$raw"
 }
 
-# Pass through immediately if not in a cmux terminal.
+# Pass through immediately if not in a zerocmux terminal.
 if [[ -z "$CMUX_SOCKET_PATH" ]]; then
     system_open "$@"
 fi
@@ -386,7 +386,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 # Scan for flags that indicate explicit user intent → pass through.
-# Also collect non-flag arguments and route eligible browser targets to cmux.
+# Also collect non-flag arguments and route eligible browser targets to zerocmux.
 passthrough=false
 cmux_targets=()
 passthrough_args=()
@@ -459,16 +459,19 @@ if [[ -n "$settings_domain" ]]; then
 
 fi
 
-# Find cmux CLI (same directory as this script).
+# Find zerocmux CLI (same directory as this script).
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
-CMUX_CLI="$SELF_DIR/cmux"
+CMUX_CLI="$SELF_DIR/zerocmux"
+if [[ ! -x "$CMUX_CLI" ]]; then
+    CMUX_CLI="$SELF_DIR/cmux"
+fi
 
 if [[ ! -x "$CMUX_CLI" ]]; then
     system_open "$@"
     exit $?
 fi
 
-# Open each URL in cmux's in-app browser; track failures individually.
+# Open each URL in zerocmux's in-app browser; track failures individually.
 # External-open pattern rules are evaluated in-app (NSRegularExpression) so
 # terminal link clicks and intercepted `open` commands share one regex dialect.
 failed_urls=()

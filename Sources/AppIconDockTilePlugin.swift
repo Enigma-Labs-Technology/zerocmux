@@ -1,7 +1,7 @@
 import AppKit
 import CoreServices
 
-private let cmuxAppIconDidChangeNotification = Notification.Name("com.cmuxterm.appIconDidChange")
+private let cmuxAppIconDidChangeNotification = Notification.Name("com.kernelalex.zerocmux.appIconDidChange")
 private let cmuxAppIconModeKey = "appIconMode"
 
 private enum DockTileAppIconMode: String {
@@ -90,7 +90,7 @@ final class CmuxDockTilePlugin: NSObject, NSDockTilePlugIn {
         guard let appBundleURL else { return false }
         // The default untagged Debug app is rebuilt and re-signed in place during CI.
         // Persisting a custom icon there leaves Finder metadata behind and breaks codesign.
-        return appBundleURL.lastPathComponent != "cmux DEV.app"
+        return appBundleURL.lastPathComponent != "zerocmux DEV.app"
     }
 
     private var appDefaults: UserDefaults? {

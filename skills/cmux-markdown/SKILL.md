@@ -15,13 +15,13 @@ Use this skill to display markdown files in a dedicated panel with rich formatti
 
 ```bash
 # Open a markdown file as a split panel next to the current terminal
-cmux markdown open plan.md
+zerocmux markdown open plan.md
 
 # Absolute path
-cmux markdown open /path/to/PLAN.md
+zerocmux markdown open /path/to/PLAN.md
 
 # Target a specific workspace
-cmux markdown open design.md --workspace workspace:2
+zerocmux markdown open design.md --workspace workspace:2
 ```
 
 ## When to Use
@@ -58,7 +58,7 @@ cat > plan.md << 'EOF'
 4. Verify the build
 EOF
 
-cmux markdown open plan.md
+zerocmux markdown open plan.md
 ```
 
 ### Updating a plan in real-time
@@ -79,7 +79,7 @@ Add this to your project's `AGENTS.md` to instruct coding agents to use the mark
 
 When creating a plan or task list, write it to a `.md` file and open it in cmux:
 
-    cmux markdown open plan.md
+    zerocmux markdown open plan.md
 
 The panel renders markdown with rich formatting and auto-updates when the file changes.
 ```
@@ -88,16 +88,16 @@ The panel renders markdown with rich formatting and auto-updates when the file c
 
 ```bash
 # Open in the caller's workspace (default -- uses CMUX_WORKSPACE_ID)
-cmux markdown open plan.md
+zerocmux markdown open plan.md
 
 # Open in a specific workspace
-cmux markdown open plan.md --workspace workspace:2
+zerocmux markdown open plan.md --workspace workspace:2
 
 # Open splitting from a specific surface
-cmux markdown open plan.md --surface surface:5
+zerocmux markdown open plan.md --surface surface:5
 
 # Open in a specific window
-cmux markdown open plan.md --window window:1
+zerocmux markdown open plan.md --window window:1
 ```
 
 ## Deep-Dive References

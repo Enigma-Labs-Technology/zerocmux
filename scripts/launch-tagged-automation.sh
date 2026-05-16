@@ -104,11 +104,11 @@ fi
 
 TAG_ID="$(sanitize_bundle "$TAG")"
 TAG_SLUG="$(sanitize_path "$TAG")"
-APP="$HOME/Library/Developer/Xcode/DerivedData/cmux-${TAG_SLUG}/Build/Products/Debug/cmux DEV ${TAG}.app"
-BID="com.cmuxterm.app.debug.${TAG_ID}"
-SOCK="/tmp/cmux-debug-${TAG_SLUG}.sock"
-DSOCK="$HOME/Library/Application Support/cmux/cmuxd-dev-${TAG_SLUG}.sock"
-LOG="/tmp/cmux-debug-${TAG_SLUG}.log"
+APP="$HOME/Library/Developer/Xcode/DerivedData/zerocmux-${TAG_SLUG}/Build/Products/Debug/zerocmux DEV ${TAG}.app"
+BID="com.kernelalex.zerocmux.debug.${TAG_ID}"
+SOCK="/tmp/zerocmux-debug-${TAG_SLUG}.sock"
+DSOCK="$HOME/Library/Application Support/zerocmux/cmuxd-dev-${TAG_SLUG}.sock"
+LOG="/tmp/zerocmux-debug-${TAG_SLUG}.log"
 
 if [[ ! -d "$APP" ]]; then
   echo "error: tagged app not found at $APP" >&2
@@ -117,7 +117,7 @@ fi
 
 /usr/bin/osascript -e "tell application id \"${BID}\" to quit" >/dev/null 2>&1 || true
 sleep 0.5
-pkill -f "cmux DEV ${TAG}.app/Contents/MacOS/cmux DEV" || true
+pkill -f "zerocmux DEV ${TAG}.app/Contents/MacOS/zerocmux DEV" || true
 rm -f "$SOCK" "$DSOCK"
 sleep 0.5
 

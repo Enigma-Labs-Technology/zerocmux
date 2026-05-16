@@ -167,7 +167,7 @@ final class CloseWorkspacesConfirmDialogUITests: XCTestCase {
         XCTAssertEqual(
             presentation?["closeConfirmationPresentation"],
             "sheet",
-            "Workspace close confirmation should be attached to the cmux window so it cannot get stranded as a separate app-modal alert. recorder=\(presentation ?? loadJSON(atPath: recorderPath) ?? [:])"
+            "Workspace close confirmation should be attached to the zerocmux window so it cannot get stranded as a separate app-modal alert. recorder=\(presentation ?? loadJSON(atPath: recorderPath) ?? [:])"
         )
         XCTAssertEqual(
             presentation?["closeConfirmationAttachedSheet"],

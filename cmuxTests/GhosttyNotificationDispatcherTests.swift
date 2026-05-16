@@ -62,23 +62,23 @@ final class GhosttyDefaultBackgroundNotificationDispatcherTests: XCTestCase {
         let expectation = expectation(description: "two notifications")
         expectation.expectedFulfillmentCount = 2
         var postedHexes: [String] = []
-        let dispatcher = GhosttyDefaultBackgroundNotificationDispatcher(
+        var dispatcher: GhosttyDefaultBackgroundNotificationDispatcher!
+        dispatcher = GhosttyDefaultBackgroundNotificationDispatcher(
             delay: 0.01,
             postNotification: { userInfo in
                 let hex = (userInfo[GhosttyNotificationKey.backgroundColor] as? NSColor)?.hexString() ?? "nil"
                 postedHexes.append(hex)
                 expectation.fulfill()
+                guard postedHexes.count == 1 else { return }
+                self.signal(dispatcher, backgroundColor: light, opacity: 1.0, eventId: 2, source: "test.light")
             }
         )
 
         DispatchQueue.main.async {
             self.signal(dispatcher, backgroundColor: dark, opacity: 1.0, eventId: 1, source: "test.dark")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.signal(dispatcher, backgroundColor: light, opacity: 1.0, eventId: 2, source: "test.light")
-            }
         }
 
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [expectation], timeout: 3.0)
         XCTAssertEqual(postedHexes, ["#272822", "#FDF6E3"])
     }
 

@@ -323,7 +323,7 @@ final class PiVaultAgentPersistenceTests: XCTestCase {
         XCTAssertEqual(loadedAgent.sessionId, sessionPath)
         XCTAssertEqual(
             loadedAgent.resumeCommand,
-            "cd '/tmp/pi repo' && '/opt/homebrew/bin/pi' '--session' '\(sessionPath)'"
+            "cd '/tmp/pi repo' && 'env' 'PI_CODING_AGENT_SESSION_DIR=\(tempDir.path)' '/opt/homebrew/bin/pi' '--session' '\(sessionPath)' '--session-dir' '\(tempDir.path)'"
         )
     }
 

@@ -1,11 +1,11 @@
 import Foundation
 
 extension CMUXCLI {
-    static let settingsDocsURL = "https://cmux.com/docs/configuration#cmux-json"
-    static let settingsSchemaURL = "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json"
+    static let settingsDocsURL = "https://github.com/kernelalex/zerocmux/blob/main/README.md#documentation"
+    static let settingsSchemaURL = "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux.schema.json"
     static let primarySettingsDisplayPath = "~/.config/cmux/cmux.json"
     static let legacySettingsDisplayPath = "~/.config/cmux/settings.json"
-    static let fallbackSettingsDisplayPath = "~/Library/Application Support/com.cmuxterm.app/settings.json"
+    static let fallbackSettingsDisplayPath = "~/Library/Application Support/com.kernelalex.zerocmux/settings.json"
 
     private struct DocsResource {
         let label: String
@@ -25,92 +25,91 @@ extension CMUXCLI {
         DocsReference(
             topic: "settings",
             aliases: ["configuration", "config", "cmux-json", "settings-json", "settingsjson", "schema"],
-            summary: "cmux-owned settings, cmux.json locations, schema, and reload flow.",
+            summary: "zerocmux-owned settings, cmux.json locations, schema, and reload flow.",
             webURL: settingsDocsURL,
             rawResources: [
                 DocsResource(label: "settings schema", url: settingsSchemaURL),
-                DocsResource(label: "cmux skill", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/skills/cmux/SKILL.md"),
+                DocsResource(label: "zerocmux skill", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/skills/cmux/SKILL.md"),
             ],
             commands: [
-                "cmux settings path",
-                "cmux settings cmux-json",
-                "cmux config doctor",
-                "cmux reload-config",
+                "zerocmux settings path",
+                "zerocmux settings cmux-json",
+                "zerocmux config doctor",
+                "zerocmux reload-config",
             ]
         ),
         DocsReference(
             topic: "shortcuts",
             aliases: ["keyboard", "keybindings", "keys"],
-            summary: "cmux-owned keyboard shortcuts and two-step chord syntax.",
-            webURL: "https://cmux.com/docs/keyboard-shortcuts",
+            summary: "zerocmux-owned keyboard shortcuts and two-step chord syntax.",
+            webURL: "https://github.com/kernelalex/zerocmux/blob/main/README.md#keyboard-shortcuts",
             rawResources: [
-                DocsResource(label: "shortcut data", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux-shortcuts.ts"),
+                DocsResource(label: "shortcut data", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux-shortcuts.ts"),
                 DocsResource(label: "settings schema", url: settingsSchemaURL),
             ],
             commands: [
-                "cmux shortcuts",
-                "cmux settings shortcuts",
-                "cmux docs settings",
+                "zerocmux shortcuts",
+                "zerocmux settings shortcuts",
+                "zerocmux docs settings",
             ]
         ),
         DocsReference(
             topic: "api",
             aliases: ["cli", "socket", "automation", "handles"],
             summary: "CLI/socket API, handle model, windows, workspaces, panes, and surfaces.",
-            webURL: "https://cmux.com/docs/api",
+            webURL: "https://github.com/kernelalex/zerocmux/blob/main/docs/cli-contract.md",
             rawResources: [
-                DocsResource(label: "CLI contract", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/cli-contract.md"),
-                DocsResource(label: "cmux skill", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/skills/cmux/SKILL.md"),
+                DocsResource(label: "CLI contract", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/cli-contract.md"),
+                DocsResource(label: "zerocmux skill", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/skills/cmux/SKILL.md"),
             ],
             commands: [
-                "cmux identify --json",
-                "cmux tree --all",
+                "zerocmux identify --json",
+                "zerocmux tree --all",
             ]
         ),
         DocsReference(
             topic: "browser",
             aliases: ["browser-automation", "webview"],
             summary: "Browser panel automation commands and snapshot-driven web interaction.",
-            webURL: "https://cmux.com/docs/browser-automation",
+            webURL: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-browser-port-spec.md",
             rawResources: [
-                DocsResource(label: "browser skill", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/skills/cmux-browser/SKILL.md"),
-                DocsResource(label: "browser commands", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/skills/cmux-browser/references/commands.md"),
+                DocsResource(label: "browser skill", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/skills/cmux-browser/SKILL.md"),
+                DocsResource(label: "browser commands", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/skills/cmux-browser/references/commands.md"),
             ],
             commands: [
-                "cmux browser --help",
-                "cmux browser snapshot",
+                "zerocmux browser --help",
+                "zerocmux browser snapshot",
             ]
         ),
         DocsReference(
             topic: "agents",
             aliases: ["integrations", "agent-integrations"],
             summary: "Agent hook integrations, Feed approvals, notifications, and session restore.",
-            webURL: "https://cmux.com/docs/agent-integrations/oh-my-codex",
+            webURL: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-hooks.md",
             rawResources: [
-                DocsResource(label: "agent hook docs", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/agent-hooks.md"),
-                DocsResource(label: "feed docs", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/feed.md"),
-                DocsResource(label: "notifications docs", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/notifications.md"),
+                DocsResource(label: "agent hook docs", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/agent-hooks.md"),
+                DocsResource(label: "feed docs", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/feed.md"),
+                DocsResource(label: "notifications docs", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/notifications.md"),
             ],
             commands: [
-                "cmux hooks setup",
-                "cmux hooks setup <agent>",
-                "cmux hooks hermes-agent install",
-                "cmux hooks hermes-agent uninstall",
-                "cmux hooks <agent> uninstall",
+                "zerocmux hooks setup",
+                "zerocmux hooks setup <agent>",
+                "zerocmux hooks hermes-agent install",
+                "zerocmux hooks hermes-agent uninstall",
+                "zerocmux hooks <agent> uninstall",
             ]
         ),
         DocsReference(
             topic: "dock",
             aliases: ["doc", "controls", "right-sidebar", "dock-json"],
             summary: "Custom right-sidebar terminal controls from .cmux/dock.json or ~/.config/cmux/dock.json.",
-            webURL: "https://cmux.com/docs/dock",
+            webURL: "https://github.com/kernelalex/zerocmux/blob/main/docs/dock.md",
             rawResources: [
-                DocsResource(label: "dock docs", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/dock.md"),
-                DocsResource(label: "dock web copy", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/messages/en.json"),
+                DocsResource(label: "dock docs", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/dock.md"),
             ],
             commands: [
-                "cmux docs dock",
-                "cmux docs dock --json",
+                "zerocmux docs dock",
+                "zerocmux docs dock --json",
                 "python3 -m json.tool .cmux/dock.json",
             ]
         ),
@@ -136,7 +135,7 @@ extension CMUXCLI {
         }
 
         guard args.count == 1 else {
-            throw CLIError(message: "Usage: cmux docs [settings|shortcuts|api|browser|agents|dock]")
+            throw CLIError(message: "Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]")
         }
 
         if topic == "list" || topic == "all" {
@@ -149,7 +148,7 @@ extension CMUXCLI {
         }
 
         guard let reference = docsReference(for: topic) else {
-            throw CLIError(message: "Unknown docs topic '\(topic)'. Run 'cmux docs' for topics.")
+            throw CLIError(message: "Unknown docs topic '\(topic)'. Run 'zerocmux docs' for topics.")
         }
 
         if wantsJSON {
@@ -161,14 +160,14 @@ extension CMUXCLI {
 
     func docsUsage() -> String {
         return """
-        Usage: cmux docs [settings|shortcuts|api|browser|agents|dock]
+        Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]
 
-        Print the canonical docs URL, raw GitHub resources, and useful commands for a cmux topic.
-        This command does not require a running cmux app or socket.
+        Print the canonical docs URL, raw GitHub resources, and useful commands for a zerocmux topic.
+        This command does not require a running zerocmux app or socket.
 
         Agents:
-          Use `cmux docs settings` before editing ~/.config/cmux/cmux.json.
-          Use `cmux docs dock` before creating or editing .cmux/dock.json.
+          Use `zerocmux docs settings` before editing ~/.config/cmux/cmux.json.
+          Use `zerocmux docs dock` before creating or editing .cmux/dock.json.
           Back up any existing cmux.json file to a timestamped .bak copy before editing so the user can revert.
           Fetch raw resources with the printed curl commands when you need the latest schema.
         """
@@ -203,20 +202,20 @@ extension CMUXCLI {
                 "fallback": Self.fallbackSettingsDisplayPath,
             ]
             payload["backup"] = "Back up any existing cmux.json file to a timestamped .bak copy before editing so the user can revert."
-            payload["reload_command"] = "cmux reload-config"
+            payload["reload_command"] = "zerocmux reload-config"
         }
         return payload
     }
 
     private func printDocsIndex() {
-        print("cmux docs")
+        print("zerocmux docs")
         print()
         print("Topics:")
         for reference in Self.docsReferences {
             print("  \(reference.topic.padding(toLength: 10, withPad: " ", startingAt: 0)) \(reference.summary)")
         }
         print()
-        print("Run `cmux docs <topic>` for URLs, raw resources, and next commands.")
+        print("Run `zerocmux docs <topic>` for URLs, raw resources, and next commands.")
     }
 
     private func printDocsReference(_ reference: DocsReference) {
@@ -254,7 +253,7 @@ extension CMUXCLI {
             print("  Back up any existing cmux.json file to a timestamped .bak copy so the user can revert.")
             print()
             print("After editing cmux.json:")
-            print("  cmux reload-config")
+            print("  zerocmux reload-config")
         }
     }
 
@@ -277,13 +276,13 @@ extension CMUXCLI {
         switch subcommand {
         case "path", "paths":
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux settings path")
+                throw CLIError(message: "Usage: zerocmux settings path")
             }
             printSettingsPaths(jsonOutput: wantsJSON)
             return
         case "docs", "documentation":
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux settings docs")
+                throw CLIError(message: "Usage: zerocmux settings docs")
             }
             if wantsJSON, let reference = docsReference(for: "settings") {
                 print(jsonString(docsPayload(reference)))
@@ -294,10 +293,10 @@ extension CMUXCLI {
         case "open":
             let targetRaw: String?
             if args.count > 2 {
-                throw CLIError(message: "Usage: cmux settings open [target]")
+                throw CLIError(message: "Usage: zerocmux settings open [target]")
             } else if let rawTarget = args.dropFirst().first {
                 guard let target = settingsTargetRawValue(for: rawTarget) else {
-                    throw CLIError(message: "Unknown settings target '\(rawTarget)'. Run 'cmux settings --help'.")
+                    throw CLIError(message: "Unknown settings target '\(rawTarget)'. Run 'zerocmux settings --help'.")
                 }
                 targetRaw = target
             } else {
@@ -312,10 +311,10 @@ extension CMUXCLI {
             return
         default:
             guard let targetRaw = settingsTargetRawValue(for: subcommand) else {
-                throw CLIError(message: "Unknown settings subcommand '\(subcommand)'. Run 'cmux settings --help'.")
+                throw CLIError(message: "Unknown settings subcommand '\(subcommand)'. Run 'zerocmux settings --help'.")
             }
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux settings [open [target]|path|docs|<target>]")
+                throw CLIError(message: "Usage: zerocmux settings [open [target]|path|docs|<target>]")
             }
             try openSettingsTarget(
                 targetRaw,
@@ -335,14 +334,14 @@ extension CMUXCLI {
 
     func settingsUsage() -> String {
         return """
-        Usage: cmux settings [open [target]|path|docs|<target>]
+        Usage: zerocmux settings [open [target]|path|docs|<target>]
 
-        Open cmux Settings, print cmux.json paths, or show settings documentation.
+        Open zerocmux Settings, print cmux.json paths, or show settings documentation.
 
         Subcommands:
           open [target]       Open Settings, optionally to a target section.
           path                Print cmux.json paths, docs URL, and schema URL.
-          docs                Print the same output as `cmux docs settings`.
+          docs                Print the same output as `zerocmux docs settings`.
 
         Targets:
           account, app, terminal, sidebar-appearance, automation, browser,
@@ -358,7 +357,7 @@ extension CMUXCLI {
           Back up any existing cmux.json file to a timestamped .bak copy so the user can revert.
 
         After editing cmux.json:
-          cmux reload-config
+          zerocmux reload-config
         """
     }
 

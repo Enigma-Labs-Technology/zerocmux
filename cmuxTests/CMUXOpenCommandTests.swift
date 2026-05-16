@@ -123,8 +123,6 @@ final class CMUXOpenCommandTests: XCTestCase {
     private func runCLI(cliPath: String, socketPath: String, arguments: [String]) -> ProcessRunResult {
         var environment = ProcessInfo.processInfo.environment
         environment["CMUX_SOCKET_PATH"] = socketPath
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
-        environment["CMUX_CLAUDE_HOOK_SENTRY_DISABLED"] = "1"
         return runProcess(executablePath: cliPath, arguments: arguments, environment: environment, timeout: 5)
     }
 
@@ -138,14 +136,14 @@ final class CMUXOpenCommandTests: XCTestCase {
         let enumerator = fileManager.enumerator(at: appBundleURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
 
         while let item = enumerator?.nextObject() as? URL {
-            guard item.lastPathComponent == "cmux",
-                  item.path.contains(".app/Contents/Resources/bin/cmux") else {
+            guard item.lastPathComponent == "zerocmux",
+                  item.path.contains(".app/Contents/Resources/bin/zerocmux") else {
                 continue
             }
             return item.path
         }
 
-        throw XCTSkip("Bundled cmux CLI not found in \(appBundleURL.path)")
+        throw XCTSkip("Bundled zerocmux CLI not found in \(appBundleURL.path)")
     }
 
     private func runProcess(

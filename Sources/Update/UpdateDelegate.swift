@@ -2,7 +2,7 @@ import Sparkle
 import Cocoa
 
 enum UpdateFeedResolver {
-    static let fallbackFeedURL = "https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml"
+    static let fallbackFeedURL = "https://github.com/kernelalex/zerocmux/releases/latest/download/appcast.xml"
 
     static func resolvedFeedURLString(infoFeedURL: String?) -> (url: String, isNightly: Bool, usedFallback: Bool) {
         guard let infoFeedURL, !infoFeedURL.isEmpty else {
@@ -28,7 +28,7 @@ extension UpdateDriver: SPUUpdaterDelegate {
 #endif
         // The feed URL is baked into Info.plist at build time:
         // - Stable releases use the stable appcast URL
-        // - cmux NIGHTLY has the nightly appcast URL injected by CI
+        // - zerocmux NIGHTLY has the nightly appcast URL injected by CI
         let infoFeedURL = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
         let resolved = UpdateFeedResolver.resolvedFeedURLString(infoFeedURL: infoFeedURL)
         UpdateLogStore.shared.append("update channel: \(resolved.isNightly ? "nightly" : "stable")")

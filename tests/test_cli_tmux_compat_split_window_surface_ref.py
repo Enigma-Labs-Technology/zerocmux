@@ -111,7 +111,7 @@ class FakeCmuxState:
             }
         if method == "workspace.equalize_splits":
             return {"ok": True}
-        raise RuntimeError(f"Unsupported fake cmux method: {method}")
+        raise RuntimeError(f"Unsupported fake zerocmux method: {method}")
 
 
 class FakeCmuxHandler(socketserver.StreamRequestHandler):

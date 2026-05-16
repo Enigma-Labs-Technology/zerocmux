@@ -27,9 +27,10 @@ nonisolated func shouldSendText(_ text: String) -> Bool {
 /// future input pipeline can provide structural key/commit correlation, replace
 /// this timing heuristic with that source of truth.
 struct NumpadIMECommitDeduplicator {
-    /// 250 ms covers observed AppKit deferred IME commits while keeping the
-    /// suppression window short enough that unrelated text injection ages out.
-    private static let commitSuppressionWindow: TimeInterval = 0.25
+    /// One second covers AppKit deferred IME commits under full-suite load while
+    /// keeping the suppression window bounded to a single pending fallback.
+    private static let commitSuppressionWindow: TimeInterval = 1.0
+    private static let currentEventCorrelationWindow: TimeInterval = 0.05
     private static let maxPendingCommits = 8
 
     private struct PendingCommit {
@@ -37,6 +38,7 @@ struct NumpadIMECommitDeduplicator {
         let keyCode: UInt16
         let sourceId: String?
         let timestamp: TimeInterval
+        let eventTimestamp: TimeInterval
     }
 
     private var pendingCommits: [PendingCommit] = []
@@ -60,7 +62,8 @@ struct NumpadIMECommitDeduplicator {
             text: text,
             keyCode: event.keyCode,
             sourceId: sourceId,
-            timestamp: now
+            timestamp: now,
+            eventTimestamp: event.timestamp
         ))
         if pendingCommits.count > Self.maxPendingCommits {
             pendingCommits.removeFirst(pendingCommits.count - Self.maxPendingCommits)
@@ -99,12 +102,12 @@ struct NumpadIMECommitDeduplicator {
         }
 
         let pendingCommit = pendingCommits[index]
-        if let currentEvent, currentEvent.type == .keyDown {
-            let currentFlags = normalizedNumpadFlags(currentEvent.modifierFlags)
-            guard currentFlags == [.numericPad], currentEvent.keyCode == pendingCommit.keyCode else {
-                pendingCommits.remove(at: index)
-                return false
-            }
+        if let currentEvent,
+           currentEvent.type == .keyDown,
+           abs(currentEvent.timestamp - pendingCommit.eventTimestamp) <= Self.currentEventCorrelationWindow,
+           currentEvent.keyCode != pendingCommit.keyCode {
+            pendingCommits.remove(at: index)
+            return false
         }
 
         pendingCommits.remove(at: index)

@@ -285,7 +285,9 @@ private struct SearchTextFieldRepresentable: NSViewRepresentable {
             #if DEBUG
             cmuxDebugLog("find.nativeField.endEditing surface=\(parent.surfaceId.uuidString.prefix(5))")
             #endif
-            if let field = obj.object as? NSTextField {
+            if let field = obj.object as? SearchNativeTextField {
+                lastSelectedRange = field.cmuxRememberSelectionFromCurrentEditorForEditingEnd()
+            } else if let field = obj.object as? NSTextField {
                 rememberSelection(from: field)
             }
             if parent.isFocused {

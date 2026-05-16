@@ -254,7 +254,9 @@ private struct BrowserSearchTextFieldRepresentable: NSViewRepresentable {
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
-            if let field = obj.object as? NSTextField {
+            if let field = obj.object as? BrowserSearchNativeTextField {
+                lastSelectedRange = field.cmuxRememberSelectionFromCurrentEditorForEditingEnd()
+            } else if let field = obj.object as? NSTextField {
                 rememberSelection(from: field)
             }
             if parent.isFocused {

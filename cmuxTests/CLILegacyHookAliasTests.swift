@@ -42,7 +42,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
         environment["CMUX_AGENT_LAUNCH_ARGV_B64"] = base64NULSeparated(["/usr/local/bin/codex", "--model", "gpt-5.4"])
         environment["CMUX_AGENT_LAUNCH_CWD"] = "/tmp/repo"
         environment["CODEX_HOME"] = root.appendingPathComponent("codex-home", isDirectory: true).path
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
 
         let result = runProcess(
             executablePath: cliPath,
@@ -73,7 +72,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
         environment["CMUX_SOCKET_PATH"] = makeSocketPath("legacy-feed")
         environment.removeValue(forKey: "CMUX_WORKSPACE_ID")
         environment.removeValue(forKey: "CMUX_SURFACE_ID")
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
 
         let result = runProcess(
             executablePath: cliPath,

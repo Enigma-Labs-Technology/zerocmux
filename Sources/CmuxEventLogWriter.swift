@@ -1,13 +1,13 @@
 import Foundation
 import os
 
-nonisolated private let cmuxEventLogLogger = Logger(subsystem: "com.cmuxterm.app", category: "event-log")
+nonisolated private let cmuxEventLogLogger = Logger(subsystem: "com.kernelalex.zerocmux", category: "event-log")
 
 // Sendable safety: pending state is protected by `lock`; file IO runs on `queue`.
 final class CmuxEventLogWriter: @unchecked Sendable {
     static let defaultMaxPendingLines = 1_024
 
-    private static let queue = DispatchQueue(label: "com.cmuxterm.event-log", qos: .utility)
+    private static let queue = DispatchQueue(label: "com.kernelalex.zerocmux.event-log", qos: .utility)
 
     private let eventLogURL: URL
     private let maxEventLogBytes: UInt64
@@ -114,7 +114,7 @@ final class CmuxEventLogWriter: @unchecked Sendable {
                 droppedLineCount = 0
                 lock.unlock()
                 if droppedCount > 0 {
-                    cmuxEventLogLogger.warning("Dropped \(droppedCount, privacy: .public) cmux event log line(s) under disk backpressure")
+                    cmuxEventLogLogger.warning("Dropped \(droppedCount, privacy: .public) zerocmux event log line(s) under disk backpressure")
                 }
                 return
             }
@@ -152,7 +152,7 @@ final class CmuxEventLogWriter: @unchecked Sendable {
                 currentSize += UInt64(data.count)
             }
         } catch {
-            cmuxEventLogLogger.error("Failed to append cmux event log: \(String(describing: error), privacy: .private)")
+            cmuxEventLogLogger.error("Failed to append zerocmux event log: \(String(describing: error), privacy: .private)")
         }
     }
 

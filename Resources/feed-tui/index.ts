@@ -298,7 +298,7 @@ class FeedApp {
         justifyContent: "space-between",
         alignItems: "center",
       },
-      Text({ content: "cmux feed", fg: theme.accentStrong }),
+      Text({ content: "zerocmux feed", fg: theme.accentStrong }),
       Text({ content: right, fg: theme.textMuted }),
     );
   }
@@ -1205,6 +1205,6 @@ async function main() {
 }
 
 void main().catch((error) => {
-  console.error(`cmux feed tui failed: ${formatError(error)}`);
+  console.error(`zerocmux feed tui failed: ${formatError(error)}`);
   process.exit(1);
 });

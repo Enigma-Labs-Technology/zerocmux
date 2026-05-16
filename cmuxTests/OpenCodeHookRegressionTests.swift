@@ -27,14 +27,13 @@ final class OpenCodeHookRegressionTests: XCTestCase {
         var environment = ProcessInfo.processInfo.environment
         environment["OPENCODE_CONFIG_DIR"] = configDir.path
         environment["PATH"] = "\(binDir.path):\(environment["PATH"] ?? "/usr/bin")"
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
         let result = runProcess(executablePath: cliPath, arguments: ["hooks", "opencode", "install", "--yes"], environment: environment, timeout: 5)
 
         XCTAssertFalse(result.timedOut, result.stderr)
         XCTAssertEqual(result.status, 0, result.stderr)
-        let pluginURL = configDir.appendingPathComponent("plugins", isDirectory: true).appendingPathComponent("cmux-session.js", isDirectory: false)
+        let pluginURL = configDir.appendingPathComponent("plugins", isDirectory: true).appendingPathComponent("zerocmux-session.js", isDirectory: false)
         let pluginSource = try String(contentsOf: pluginURL, encoding: .utf8)
-        XCTAssertTrue(pluginSource.contains("cmux-opencode-session-plugin-marker"))
+        XCTAssertTrue(pluginSource.contains("zerocmux-opencode-session-plugin-marker"))
         XCTAssertTrue(pluginSource.contains("\"hooks\", \"opencode\""))
 
         let secondResult = runProcess(executablePath: cliPath, arguments: ["setup-hooks", "--agent", "opencode"], environment: environment, timeout: 5)
@@ -42,16 +41,15 @@ final class OpenCodeHookRegressionTests: XCTestCase {
         XCTAssertEqual(secondResult.status, 0, secondResult.stderr)
         XCTAssertFalse(secondResult.stdout.contains("Will write OpenCode cmux plugin"), secondResult.stdout)
         XCTAssertTrue(secondResult.stdout.contains("OpenCode hooks already up to date"), secondResult.stdout)
-        XCTAssertTrue(try String(contentsOf: configDir.appendingPathComponent("plugins/cmux-feed.js"), encoding: .utf8).contains("cmux-feed-plugin-marker"))
+        XCTAssertTrue(try String(contentsOf: configDir.appendingPathComponent("plugins/zerocmux-feed.js"), encoding: .utf8).contains("zerocmux-feed-plugin-marker"))
 
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try Data(contentsOf: configURL), options: []) as? [String: Any])
-        XCTAssertEqual(try XCTUnwrap(json["plugin"] as? [String]), ["other-plugin", "./plugins/cmux-session.js"])
+        XCTAssertEqual(try XCTUnwrap(json["plugin"] as? [String]), ["other-plugin", "./plugins/zerocmux-session.js"])
     }
 
     func testLegacyHookAliasesAreHiddenFromHelp() throws {
         let cliPath = try bundledCLIPath()
         var environment = ProcessInfo.processInfo.environment
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
 
         let result = runProcess(executablePath: cliPath, arguments: ["help"], environment: environment, timeout: 5)
 
@@ -70,10 +68,10 @@ final class OpenCodeHookRegressionTests: XCTestCase {
         let appBundleURL = Bundle(for: Self.self).bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let enumerator = fileManager.enumerator(at: appBundleURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
         while let item = enumerator?.nextObject() as? URL {
-            guard item.lastPathComponent == "cmux", item.path.contains(".app/Contents/Resources/bin/cmux") else { continue }
+            guard item.lastPathComponent == "zerocmux", item.path.contains(".app/Contents/Resources/bin/zerocmux") else { continue }
             return item.path
         }
-        throw XCTSkip("Bundled cmux CLI not found in \(appBundleURL.path)")
+        throw XCTSkip("Bundled zerocmux CLI not found in \(appBundleURL.path)")
     }
 
     private func runProcess(

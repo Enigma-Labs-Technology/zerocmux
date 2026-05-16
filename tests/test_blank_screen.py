@@ -10,7 +10,7 @@ Usage:
     python3 test_blank_screen.py
 
 Requirements:
-    - cmux must be running with the socket controller enabled
+    - zerocmux must be running with the socket controller enabled
 """
 
 import os
@@ -19,7 +19,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class TestResult:
@@ -93,7 +93,7 @@ def run_tests():
     socket_path = cmux().socket_path
     if not os.path.exists(socket_path):
         print(f"Error: Socket not found at {socket_path}")
-        print("Please make sure cmux is running.")
+        print("Please make sure zerocmux is running.")
         print("Tip: set CMUX_TAG=<tag> or CMUX_SOCKET_PATH=<path> to target a tagged instance.")
         return 1
 

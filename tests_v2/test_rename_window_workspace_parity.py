@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 
 
 def _must(cond: bool, msg: str) -> None:
@@ -26,22 +26,22 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
-    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"), recursive=True)
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"), recursive=True)
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     return candidates[0]
 
 
 def _run_cli(cli: str, args: List[str], env_overrides: Optional[Dict[str, str]] = None) -> str:
     env = dict(os.environ)
-    # Keep this test deterministic when running from inside another cmux shell.
+    # Keep this test deterministic when running from inside another zerocmux shell.
     env.pop("CMUX_WORKSPACE_ID", None)
     env.pop("CMUX_SURFACE_ID", None)
     if env_overrides:
@@ -82,17 +82,17 @@ def main() -> int:
 
         cli_title = f"tmux cli {stamp}"
         _run_cli(cli, ["rename-workspace", "--workspace", ws_id, cli_title])
-        _must(_workspace_title(c, ws_id) == cli_title, "cmux rename-workspace did not update workspace title")
+        _must(_workspace_title(c, ws_id) == cli_title, "zerocmux rename-workspace did not update workspace title")
 
         alias_title = f"tmux alias {stamp}"
         _run_cli(cli, ["rename-window", "--workspace", ws_id, alias_title])
-        _must(_workspace_title(c, ws_id) == alias_title, "cmux rename-window did not update workspace title")
+        _must(_workspace_title(c, ws_id) == alias_title, "zerocmux rename-window did not update workspace title")
 
         current_title = f"tmux current {stamp}"
         _run_cli(cli, ["rename-window", current_title])
         _must(
             _workspace_title(c, ws_id) == current_title,
-            "cmux rename-window without --workspace should target current workspace",
+            "zerocmux rename-window without --workspace should target current workspace",
         )
 
         env_title = f"tmux env {stamp}"
@@ -103,7 +103,7 @@ def main() -> int:
         )
         _must(
             _workspace_title(c, ws_id) == env_title,
-            "cmux rename-workspace should default to CMUX_WORKSPACE_ID",
+            "zerocmux rename-workspace should default to CMUX_WORKSPACE_ID",
         )
 
         env = dict(os.environ)

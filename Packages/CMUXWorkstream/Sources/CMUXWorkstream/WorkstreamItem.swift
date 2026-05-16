@@ -20,7 +20,7 @@ public enum WorkstreamStatus: Codable, Sendable, Equatable {
     case resolved(WorkstreamDecision, at: Date)
     /// Actionable item that timed out before the user acted.
     case expired(at: Date)
-    /// Telemetry item (non-actionable). Always starts and stays here.
+    /// Non-actionable activity item. Always starts and stays here.
     case telemetry
 
     public var isPending: Bool {

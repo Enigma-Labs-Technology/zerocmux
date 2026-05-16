@@ -13,7 +13,7 @@ This test opens a browser panel, triggers Cmd+L, and asserts that CPU stays
 below threshold for a few seconds afterward.
 
 Requires:
-  - cmux running (debug build)
+  - zerocmux running (debug build)
 """
 
 import os
@@ -23,7 +23,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 MAX_CPU_PERCENT = 30.0
 SETTLE_AFTER_FOCUS_S = 1.5
@@ -57,12 +57,12 @@ def get_cmux_pid() -> int | None:
                     return pid
 
     result = subprocess.run(
-        ["pgrep", "-f", r"cmux\.app/Contents/MacOS/cmux$"],
+        ["pgrep", "-f", r"zerocmux\.app/Contents/MacOS/zerocmux$"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
         result = subprocess.run(
-            ["pgrep", "-f", r"cmux DEV\.app/Contents/MacOS/cmux"],
+            ["pgrep", "-f", r"zerocmux DEV\.app/Contents/MacOS/zerocmux"],
             capture_output=True, text=True,
         )
     if result.returncode != 0:
@@ -100,7 +100,7 @@ def main() -> int:
 
     pid = get_cmux_pid()
     if pid is None:
-        print("\nSKIP: cmux is not running")
+        print("\nSKIP: zerocmux is not running")
         return 0
 
     client = cmux()

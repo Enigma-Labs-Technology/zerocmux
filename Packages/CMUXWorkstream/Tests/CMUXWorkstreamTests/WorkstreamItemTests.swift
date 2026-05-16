@@ -4,7 +4,7 @@ import Testing
 
 @Suite("WorkstreamItem")
 struct WorkstreamItemTests {
-    @Test("Actionable kinds default to pending, telemetry kinds to telemetry")
+    @Test("Actionable kinds default to pending, non-actionable kinds keep their status")
     func defaultStatusByKind() {
         let perm = WorkstreamItem(
             workstreamId: "claude-1",
@@ -23,7 +23,7 @@ struct WorkstreamItemTests {
         if case .telemetry = tool.status {
             // ok
         } else {
-            Issue.record("telemetry kind should default to .telemetry status")
+            Issue.record("non-actionable kind should default to .telemetry status")
         }
     }
 
@@ -73,7 +73,7 @@ struct WorkstreamItemTests {
     }
 
     @Test("Non-actionable kinds normalize explicit actionable statuses")
-    func nonActionableStatusNormalizesToTelemetry() {
+    func nonActionableStatusNormalizesToActivityStatus() {
         let item = WorkstreamItem(
             workstreamId: "s",
             source: .claude,
@@ -84,7 +84,7 @@ struct WorkstreamItemTests {
         if case .telemetry = item.status {
             // ok
         } else {
-            Issue.record("non-actionable item should normalize to telemetry")
+            Issue.record("non-actionable item should normalize to .telemetry status")
         }
     }
 

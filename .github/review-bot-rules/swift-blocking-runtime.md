@@ -6,7 +6,7 @@ Report a failure when the diff introduces or materially expands any of these in 
 
 - `DispatchSemaphore`, `semaphore.wait()`, `DispatchGroup.wait()`, or other thread-blocking waits for async work.
 - `Thread.sleep`, `usleep`, `sleep`, `Task.sleep`, `DispatchQueue.asyncAfter`, timers, or polling loops in shipped app/runtime code. Treat these as failures by default, even when the delay is small.
-- `DispatchQueue.main.sync`, especially in socket, telemetry, terminal, rendering, focus, or input paths.
+- `DispatchQueue.main.sync`, especially in socket, diagnostics, terminal, rendering, focus, or input paths.
 - `NSLock`, `pthread_mutex`, or similar manual locking around shared mutable state when an actor or MainActor-isolated model would be the safer shape.
 
 Allowed cases:
@@ -19,9 +19,9 @@ Allowed cases:
 
 Do not allow `Task.sleep` in production code just because it is inside an async function, including for animation timing. Retry backoff, keepalive loops, readiness waits, delayed dispatch, and polling still need a real cancellation-aware scheduler, timer abstraction, async sequence, callback, notification, or state transition unless the changed code is marked test-only.
 
-cmux-specific emphasis:
+zerocmux-specific emphasis:
 
-- Typing, terminal rendering, socket telemetry, and focus paths are latency-sensitive. Blocking or sleep-based coordination in these paths should fail CI.
+- Typing, terminal rendering, socket diagnostics, and focus paths are latency-sensitive. Blocking or sleep-based coordination in these paths should fail CI.
 - A fix should wait on a real signal, callback, state transition, actor message, notification, or explicit completion point.
 
 When reporting, identify the changed wait or timing primitive and the real event that should replace it.

@@ -18,7 +18,7 @@ permissions:
 jobs:
   update-cask:
     runs-on: ubuntu-latest
-    # Only run if the release workflow succeeded (or manual trigger)
+    # Only run if the release workflow succeeded (or manual trigger).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -43,23 +43,41 @@ jobs:
               exit 1
             fi
             echo "Skipping homebrew cask update for non-release ref: ${VERSION}"
-            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "skip=false" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Updating homebrew cask to version $VERSION"
+
+      - name: Check Homebrew tap configuration
+        id: tap_config
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN is not set; skipping Homebrew tap update."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! gh repo view kernelalex/homebrew-zerocmux >/dev/null 2>&1; then
+            echo "kernelalex/homebrew-zerocmux is not available; skipping Homebrew tap update."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Download DMG and get SHA256
         id: sha
-        if: steps.version.outputs.skip != 'true'
+        if: steps.version.outputs.skip != 'true' && steps.tap_config.outputs.skip != 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          URL="https://github.com/manaflow-ai/cmux/releases/download/v${VERSION}/cmux-macos.dmg"
+          URL="https://github.com/kernelalex/zerocmux/releases/download/v${VERSION}/zerocmux-macos.dmg"
           MAX_RETRIES=5
-          for i in $(seq 1 $MAX_RETRIES); do
-            HTTP_CODE=$(curl -sL -w '%{http_code}' "$URL" -o cmux.dmg)
-            FILE_SIZE=$(stat --printf="%s" cmux.dmg 2>/dev/null || stat -f%z cmux.dmg)
+          for i in $(seq 1 "$MAX_RETRIES"); do
+            HTTP_CODE=$(curl -sL -w '%{http_code}' "$URL" -o zerocmux.dmg)
+            FILE_SIZE=$(stat --printf="%s" zerocmux.dmg 2>/dev/null || stat -f%z zerocmux.dmg)
             if [ "$HTTP_CODE" = "200" ] && [ "$FILE_SIZE" -gt 1000000 ]; then
               echo "Download OK: HTTP $HTTP_CODE, size $FILE_SIZE bytes"
               break
@@ -71,33 +89,33 @@ jobs:
             fi
             sleep 30
           done
-          SHA256=$(shasum -a 256 cmux.dmg | cut -d' ' -f1)
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          SHA256=$(shasum -a 256 zerocmux.dmg | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "DMG SHA256: $SHA256"
 
       - name: Checkout homebrew-cmux
-        if: steps.version.outputs.skip != 'true'
+        if: steps.version.outputs.skip != 'true' && steps.tap_config.outputs.skip != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: manaflow-ai/homebrew-cmux
+          repository: kernelalex/homebrew-zerocmux
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-cmux
 
       - name: Update cask formula
-        if: steps.version.outputs.skip != 'true'
+        if: steps.version.outputs.skip != 'true' && steps.tap_config.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
           SHA256: ${{ steps.sha.outputs.sha256 }}
         run: |
-          cat > homebrew-cmux/Casks/cmux.rb << CASKEOF
-          cask "cmux" do
+          cat > homebrew-cmux/Casks/zerocmux.rb << CASKEOF
+          cask "zerocmux" do
             version "${VERSION}"
             sha256 "${SHA256}"
 
-            url "https://github.com/manaflow-ai/cmux/releases/download/v#{version}/cmux-macos.dmg"
-            name "cmux"
-            desc "Lightweight native macOS terminal with vertical tabs for AI coding agents"
-            homepage "https://cmux.com"
+            url "https://github.com/kernelalex/zerocmux/releases/download/v#{version}/zerocmux-macos.dmg"
+            name "zerocmux"
+            desc "Zero-telemetry native macOS terminal workspace for AI coding agents"
+            homepage "https://github.com/kernelalex/zerocmux"
 
             livecheck do
               url :url
@@ -106,10 +124,13 @@ jobs:
 
             depends_on macos: ">= :sonoma"
 
-            app "cmux.app"
-            binary "#{appdir}/cmux.app/Contents/Resources/bin/cmux"
+            app "zerocmux.app"
+            binary "#{appdir}/zerocmux.app/Contents/Resources/bin/zerocmux"
 
             zap trash: [
+              "~/Library/Application Support/zerocmux",
+              "~/Library/Caches/zerocmux",
+              "~/Library/Preferences/com.kernelalex.zerocmux.plist",
               "~/Library/Application Support/cmux",
               "~/Library/Caches/cmux",
               "~/Library/Preferences/ai.manaflow.cmuxterm.plist",
@@ -117,13 +138,13 @@ jobs:
           end
           CASKEOF
           # Remove leading whitespace from heredoc
-          sed -i 's/^          //' homebrew-cmux/Casks/cmux.rb
+          sed -i 's/^          //' homebrew-cmux/Casks/zerocmux.rb
 
       - name: Verify cask SHA matches DMG
-        if: steps.version.outputs.skip != 'true'
+        if: steps.version.outputs.skip != 'true' && steps.tap_config.outputs.skip != 'true'
         run: |
-          CASK_SHA=$(grep 'sha256' homebrew-cmux/Casks/cmux.rb | sed 's/.*"\(.*\)".*/\1/')
-          ACTUAL_SHA=$(shasum -a 256 cmux.dmg | cut -d' ' -f1)
+          CASK_SHA=$(grep 'sha256' homebrew-cmux/Casks/zerocmux.rb | sed 's/.*"\(.*\)".*/\1/')
+          ACTUAL_SHA=$(shasum -a 256 zerocmux.dmg | cut -d' ' -f1)
           if [ "$CASK_SHA" != "$ACTUAL_SHA" ]; then
             echo "SHA mismatch! Cask: $CASK_SHA, Actual: $ACTUAL_SHA" >&2
             exit 1
@@ -131,17 +152,17 @@ jobs:
           echo "SHA verification passed: $CASK_SHA"
 
       - name: Commit and push
-        if: steps.version.outputs.skip != 'true'
+        if: steps.version.outputs.skip != 'true' && steps.tap_config.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd homebrew-cmux
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/cmux.rb
+          git add Casks/zerocmux.rb
           if git diff --staged --quiet; then
             echo "No changes - cask already up to date"
           else
-            git commit -m "Update cmux to ${VERSION}"
+            git commit -m "Update zerocmux to ${VERSION}"
             git push
           fi

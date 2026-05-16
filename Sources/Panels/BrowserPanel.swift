@@ -364,6 +364,7 @@ final class BrowserProfileStore: ObservableObject {
 
     private let defaults: UserDefaults
     private var dataStores: [UUID: WKWebsiteDataStore] = [:]
+    private var remoteWorkspaceDataStores: [UUID: WKWebsiteDataStore] = [:]
     private var historyStores: [UUID: BrowserHistoryStore] = [:]
 
     init(defaults: UserDefaults = .standard) {
@@ -449,6 +450,15 @@ final class BrowserProfileStore: ObservableObject {
         }
         let store = WKWebsiteDataStore(forIdentifier: profileID)
         dataStores[profileID] = store
+        return store
+    }
+
+    func remoteWorkspaceWebsiteDataStore(for workspaceID: UUID) -> WKWebsiteDataStore {
+        if let existing = remoteWorkspaceDataStores[workspaceID] {
+            return existing
+        }
+        let store = WKWebsiteDataStore(forIdentifier: workspaceID)
+        remoteWorkspaceDataStores[workspaceID] = store
         return store
     }
 
@@ -960,6 +970,12 @@ enum BrowserUserAgentSettings {
 }
 
 func normalizedBrowserHistoryNamespace(bundleIdentifier: String) -> String {
+    if bundleIdentifier.hasPrefix("com.kernelalex.zerocmux.debug.") {
+        return "com.kernelalex.zerocmux.debug"
+    }
+    if bundleIdentifier.hasPrefix("com.kernelalex.zerocmux.staging.") {
+        return "com.kernelalex.zerocmux.staging"
+    }
     if bundleIdentifier.hasPrefix("com.cmuxterm.app.debug.") {
         return "com.cmuxterm.app.debug"
     }
@@ -1961,6 +1977,44 @@ final class BrowserPanel: Panel, ObservableObject {
     private var suppressWebViewFocusUntil: Date?
     private var suppressWebViewFocusForAddressBar: Bool = false
     private var addressBarFocusRestoreGeneration: UInt64 = 0
+    private struct AddressBarPageFocusState {
+        let id: String
+        let elementId: String?
+        let selectionStart: Int?
+        let selectionEnd: Int?
+
+        var javaScriptObjectLiteral: String {
+            var payload: [String: Any] = ["id": id]
+            payload["elementId"] = elementId ?? ""
+            payload["selectionStart"] = selectionStart.map { NSNumber(value: $0) } ?? NSNull()
+            payload["selectionEnd"] = selectionEnd.map { NSNumber(value: $0) } ?? NSNull()
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let literal = String(data: data, encoding: .utf8) else {
+                return "null"
+            }
+            return literal
+        }
+    }
+    private final class AddressBarFocusStateMessageHandler: NSObject, WKScriptMessageHandler {
+        weak var panel: BrowserPanel?
+
+        init(panel: BrowserPanel) {
+            self.panel = panel
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            Task { @MainActor [weak panel] in
+                panel?.receiveAddressBarPageFocusStateMessage(message.body)
+            }
+        }
+    }
+
+    private static let addressBarFocusStateMessageHandlerName = "cmuxAddressBarFocusState"
+    private var addressBarFocusStateMessageHandler: AddressBarFocusStateMessageHandler?
+    private var addressBarPageFocusState: AddressBarPageFocusState?
     private let blankURLString = "about:blank"
     private static let addressBarFocusCaptureScript = """
     (() => {
@@ -1974,40 +2028,176 @@ final class BrowserPanel: Panel, ObservableObject {
               window.top.__cmuxAddressBarFocusState = state;
             }
           } catch (_) {}
+          try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.cmuxAddressBarFocusState) {
+              window.webkit.messageHandlers.cmuxAddressBarFocusState.postMessage(state || null);
+            }
+          } catch (_) {}
+        };
+
+        const readState = () => {
+          let state = window.__cmuxAddressBarFocusState;
+          try {
+            if ((!state || typeof state.id !== "string" || !state.id) &&
+                window.top && window.top.__cmuxAddressBarFocusState) {
+              state = window.top.__cmuxAddressBarFocusState;
+            }
+          } catch (_) {}
+          return state && typeof state.id === "string" && state.id ? state : null;
+        };
+
+        const isEditableElement = (el) => {
+          if (!el) return false;
+          const tag = (el.tagName || "").toLowerCase();
+          const type = (el.type || "").toLowerCase();
+          return !!el.isContentEditable || tag === "textarea" || (tag === "input" && type !== "hidden");
+        };
+
+        const markLastFocused = (el) => {
+          try {
+            document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+              if (candidate !== el) candidate.removeAttribute("data-cmux-addressbar-last-focused");
+            });
+            el.setAttribute("data-cmux-addressbar-last-focused", "true");
+          } catch (_) {}
+        };
+
+        const captureElement = (el, prefix) => {
+          if (!isEditableElement(el)) return null;
+          let id = el.getAttribute("data-cmux-addressbar-focus-id");
+          if (!id) {
+            id = "cmux-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+            el.setAttribute("data-cmux-addressbar-focus-id", id);
+          }
+          markLastFocused(el);
+
+          const state = {
+            id,
+            elementId: typeof el.id === "string" ? el.id : "",
+            selectionStart: null,
+            selectionEnd: null
+          };
+          if (typeof el.selectionStart === "number" && typeof el.selectionEnd === "number") {
+            state.selectionStart = el.selectionStart;
+            state.selectionEnd = el.selectionEnd;
+          }
+          syncState(state);
+          return prefix + id;
         };
 
         const active = document.activeElement;
         if (!active) {
-          syncState(null);
-          return "cleared:none";
+          return readState() ? "preserved:none" : "skipped:none";
         }
 
-        const tag = (active.tagName || "").toLowerCase();
-        const type = (active.type || "").toLowerCase();
-        const isEditable =
-          !!active.isContentEditable ||
-          tag === "textarea" ||
-          (tag === "input" && type !== "hidden");
-        if (!isEditable) {
-          syncState(null);
-          return "cleared:noneditable";
+        if (!isEditableElement(active)) {
+          const existingState = readState();
+          if (existingState) {
+            return "preserved:noneditable";
+          }
+          const lastFocused = document.querySelector("[data-cmux-addressbar-last-focused='true']");
+          const lastFocusedResult = captureElement(lastFocused, "captured:last:");
+          if (lastFocusedResult) return lastFocusedResult;
+          return "skipped:noneditable";
         }
 
-        let id = active.getAttribute("data-cmux-addressbar-focus-id");
-        if (!id) {
-          id = "cmux-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-          active.setAttribute("data-cmux-addressbar-focus-id", id);
-        }
-
-        const state = { id, selectionStart: null, selectionEnd: null };
-        if (typeof active.selectionStart === "number" && typeof active.selectionEnd === "number") {
-          state.selectionStart = active.selectionStart;
-          state.selectionEnd = active.selectionEnd;
-        }
-        syncState(state);
-        return "captured:" + id;
+        return captureElement(active, "captured:");
       } catch (_) {
         return "error";
+      }
+    })();
+    """
+    private static let addressBarFocusCapturePayloadScript = """
+    (() => {
+      try {
+        const syncState = (state) => {
+          window.__cmuxAddressBarFocusState = state;
+          try {
+            if (window.top && window.top !== window) {
+              window.top.postMessage({ cmuxAddressBarFocusState: state }, "*");
+            } else if (window.top) {
+              window.top.__cmuxAddressBarFocusState = state;
+            }
+          } catch (_) {}
+          try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.cmuxAddressBarFocusState) {
+              window.webkit.messageHandlers.cmuxAddressBarFocusState.postMessage(state || null);
+            }
+          } catch (_) {}
+        };
+
+        const readState = () => {
+          let state = window.__cmuxAddressBarFocusState;
+          try {
+            if ((!state || typeof state.id !== "string" || !state.id) &&
+                window.top && window.top.__cmuxAddressBarFocusState) {
+              state = window.top.__cmuxAddressBarFocusState;
+            }
+          } catch (_) {}
+          return state && typeof state.id === "string" && state.id ? state : null;
+        };
+
+        const isEditableElement = (el) => {
+          if (!el) return false;
+          const tag = (el.tagName || "").toLowerCase();
+          const type = (el.type || "").toLowerCase();
+          return !!el.isContentEditable || tag === "textarea" || (tag === "input" && type !== "hidden");
+        };
+
+        const payload = (status, state) => ({
+          status,
+          id: state && typeof state.id === "string" ? state.id : "",
+          elementId: state && typeof state.elementId === "string" ? state.elementId : "",
+          selectionStart: state && typeof state.selectionStart === "number" ? state.selectionStart : null,
+          selectionEnd: state && typeof state.selectionEnd === "number" ? state.selectionEnd : null
+        });
+
+        const markLastFocused = (el) => {
+          try {
+            document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+              if (candidate !== el) candidate.removeAttribute("data-cmux-addressbar-last-focused");
+            });
+            el.setAttribute("data-cmux-addressbar-last-focused", "true");
+          } catch (_) {}
+        };
+
+        const captureElement = (el, status) => {
+          if (!isEditableElement(el)) return null;
+          let id = el.getAttribute("data-cmux-addressbar-focus-id");
+          if (!id) {
+            id = "cmux-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+            el.setAttribute("data-cmux-addressbar-focus-id", id);
+          }
+          markLastFocused(el);
+
+          const state = {
+            id,
+            elementId: typeof el.id === "string" ? el.id : "",
+            selectionStart: null,
+            selectionEnd: null
+          };
+          if (typeof el.selectionStart === "number" && typeof el.selectionEnd === "number") {
+            state.selectionStart = el.selectionStart;
+            state.selectionEnd = el.selectionEnd;
+          }
+          syncState(state);
+          return payload(status, state);
+        };
+
+        const active = document.activeElement;
+        const capturedActive = captureElement(active, "captured");
+        if (capturedActive) return capturedActive;
+
+        const existingState = readState();
+        if (existingState) return payload("preserved", existingState);
+
+        const lastFocused = document.querySelector("[data-cmux-addressbar-last-focused='true']");
+        const capturedLast = captureElement(lastFocused, "captured:last");
+        if (capturedLast) return capturedLast;
+
+        return payload(active ? "skipped:noneditable" : "skipped:none", null);
+      } catch (_) {
+        return { status: "error", id: "", selectionStart: null, selectionEnd: null };
       }
     })();
     """
@@ -2024,6 +2214,11 @@ final class BrowserPanel: Panel, ObservableObject {
               window.top.postMessage({ cmuxAddressBarFocusState: state }, "*");
             } else if (window.top) {
               window.top.__cmuxAddressBarFocusState = state;
+            }
+          } catch (_) {}
+          try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.cmuxAddressBarFocusState) {
+              window.webkit.messageHandlers.cmuxAddressBarFocusState.postMessage(state || null);
             }
           } catch (_) {}
         };
@@ -2055,13 +2250,31 @@ final class BrowserPanel: Panel, ObservableObject {
           return id;
         };
 
+        const markLastFocused = (el) => {
+          try {
+            document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+              if (candidate !== el) candidate.removeAttribute("data-cmux-addressbar-last-focused");
+            });
+            el.setAttribute("data-cmux-addressbar-last-focused", "true");
+          } catch (_) {}
+        };
+
+        const clearLastFocused = () => {
+          try {
+            document.querySelectorAll("[data-cmux-addressbar-last-focused]").forEach((candidate) => {
+              candidate.removeAttribute("data-cmux-addressbar-last-focused");
+            });
+          } catch (_) {}
+        };
+
         const snapshot = (el) => {
           if (!isEditable(el)) {
-            syncState(null);
             return;
           }
+          markLastFocused(el);
           const state = {
             id: ensureFocusId(el),
+            elementId: typeof el.id === "string" ? el.id : "",
             selectionStart: null,
             selectionEnd: null
           };
@@ -2084,6 +2297,7 @@ final class BrowserPanel: Panel, ObservableObject {
         document.addEventListener("mousedown", (ev) => {
           const target = ev && ev.target ? ev.target : null;
           if (!isEditable(target)) {
+            clearLastFocused();
             syncState(null);
           }
         }, true);
@@ -2098,9 +2312,34 @@ final class BrowserPanel: Panel, ObservableObject {
       }
     })();
     """
-    private static let addressBarFocusRestoreScript = """
+    private static func addressBarFocusRestoreScript(nativeState: AddressBarPageFocusState?) -> String {
+        addressBarFocusRestoreScriptTemplate.replacingOccurrences(
+            of: "__CMUX_NATIVE_ADDRESS_BAR_FOCUS_STATE__",
+            with: nativeState?.javaScriptObjectLiteral ?? "null"
+        )
+    }
+
+    private static let addressBarFocusRestoreScriptTemplate = """
     (() => {
       try {
+        const nativeState = __CMUX_NATIVE_ADDRESS_BAR_FOCUS_STATE__;
+
+        const syncState = (state) => {
+          window.__cmuxAddressBarFocusState = state;
+          try {
+            if (window.top && window.top !== window) {
+              window.top.postMessage({ cmuxAddressBarFocusState: state }, "*");
+            } else if (window.top) {
+              window.top.__cmuxAddressBarFocusState = state;
+            }
+          } catch (_) {}
+          try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.cmuxAddressBarFocusState) {
+              window.webkit.messageHandlers.cmuxAddressBarFocusState.postMessage(state || null);
+            }
+          } catch (_) {}
+        };
+
         const readState = () => {
           let state = window.__cmuxAddressBarFocusState;
           try {
@@ -2109,18 +2348,16 @@ final class BrowserPanel: Panel, ObservableObject {
               state = window.top.__cmuxAddressBarFocusState;
             }
           } catch (_) {}
+          if ((!state || typeof state.id !== "string" || !state.id) &&
+              nativeState && typeof nativeState.id === "string" && nativeState.id) {
+            state = nativeState;
+            syncState(nativeState);
+          }
           return state;
         };
 
         const clearState = () => {
-          window.__cmuxAddressBarFocusState = null;
-          try {
-            if (window.top && window.top !== window) {
-              window.top.postMessage({ cmuxAddressBarFocusState: null }, "*");
-            } else if (window.top) {
-              window.top.__cmuxAddressBarFocusState = null;
-            }
-          } catch (_) {}
+          syncState(null);
         };
 
         const state = readState();
@@ -2129,10 +2366,18 @@ final class BrowserPanel: Panel, ObservableObject {
         }
 
         const selector = '[data-cmux-addressbar-focus-id="' + state.id + '"]';
+        const elementId =
+          state && typeof state.elementId === "string" && state.elementId
+            ? state.elementId
+            : "";
         const findTarget = (doc) => {
           if (!doc) return null;
           const direct = doc.querySelector(selector);
           if (direct && direct.isConnected) return direct;
+          if (elementId && typeof doc.getElementById === "function") {
+            const byElementId = doc.getElementById(elementId);
+            if (byElementId && byElementId.isConnected) return byElementId;
+          }
           const frames = doc.querySelectorAll("iframe,frame");
           for (let i = 0; i < frames.length; i += 1) {
             const frame = frames[i];
@@ -2646,8 +2891,17 @@ final class BrowserPanel: Panel, ObservableObject {
         configureMoveTabToNewWorkspaceContextMenu(for: webView); configureNavigationDelegateCallbacks()
         webView.navigationDelegate = navigationDelegate
         webView.uiDelegate = uiDelegate
+        setupAddressBarFocusStateMessageHandler(for: webView)
         setupObservers(for: webView)
         setupReactGrabMessageHandler(for: webView)
+    }
+
+    private func setupAddressBarFocusStateMessageHandler(for webView: WKWebView) {
+        let handler = AddressBarFocusStateMessageHandler(panel: self)
+        addressBarFocusStateMessageHandler = handler
+        let controller = webView.configuration.userContentController
+        controller.removeScriptMessageHandler(forName: Self.addressBarFocusStateMessageHandlerName)
+        controller.add(handler, name: Self.addressBarFocusStateMessageHandlerName)
     }
 
     private func configureNavigationDelegateCallbacks() {
@@ -2709,7 +2963,9 @@ final class BrowserPanel: Panel, ObservableObject {
         self.usesRemoteWorkspaceProxy = isRemoteWorkspace
         self.browserThemeMode = BrowserThemeSettings.mode()
         self.websiteDataStore = isRemoteWorkspace
-            ? WKWebsiteDataStore(forIdentifier: remoteWebsiteDataStoreIdentifier ?? workspaceId)
+            ? BrowserProfileStore.shared.remoteWorkspaceWebsiteDataStore(
+                for: remoteWebsiteDataStoreIdentifier ?? workspaceId
+            )
             : BrowserProfileStore.shared.websiteDataStore(for: resolvedProfileID)
 
         let webView = Self.makeWebView(
@@ -2916,7 +3172,9 @@ final class BrowserPanel: Panel, ObservableObject {
         workspaceId = newWorkspaceId
         usesRemoteWorkspaceProxy = isRemoteWorkspace
         let targetStore = isRemoteWorkspace
-            ? WKWebsiteDataStore(forIdentifier: remoteWebsiteDataStoreIdentifier ?? newWorkspaceId)
+            ? BrowserProfileStore.shared.remoteWorkspaceWebsiteDataStore(
+                for: remoteWebsiteDataStoreIdentifier ?? newWorkspaceId
+            )
             : BrowserProfileStore.shared.websiteDataStore(for: profileID)
         let needsStoreSwap = webView.configuration.websiteDataStore !== targetStore
         websiteDataStore = targetStore
@@ -3117,6 +3375,19 @@ final class BrowserPanel: Panel, ObservableObject {
 
             restoredBackHistoryStack = Self.sanitizedSessionHistoryURLs(newBack)
             restoredForwardHistoryStack = Array(Self.sanitizedSessionHistoryURLs(newForward).reversed())
+            restoredHistoryCurrentURL = liveCurrent
+            refreshNavigationAvailability()
+            return
+        }
+
+        let nativeBack = webView.backForwardList.backList.compactMap {
+            Self.serializableSessionHistoryURLString($0.url)
+        }
+        if nativeBack.isEmpty, let restoredCurrent {
+            var newBack = restoredBack
+            newBack.append(restoredCurrent)
+            restoredBackHistoryStack = Self.sanitizedSessionHistoryURLs(newBack)
+            restoredForwardHistoryStack.removeAll(keepingCapacity: false)
             restoredHistoryCurrentURL = liveCurrent
             refreshNavigationAvailability()
             return
@@ -4024,12 +4295,12 @@ final class BrowserPanel: Panel, ObservableObject {
         let alert = insecureHTTPAlertFactory()
         alert.alertStyle = .warning
         alert.messageText = String(localized: "browser.error.insecure.title", defaultValue: "Connection isn\u{2019}t secure")
-        alert.informativeText = String(localized: "browser.error.insecure.message", defaultValue: "\(host) uses plain HTTP, so traffic can be read or modified on the network.\n\nOpen this URL in your default browser, or proceed in cmux.")
+        alert.informativeText = String(localized: "browser.error.insecure.message", defaultValue: "\(host) uses plain HTTP, so traffic can be read or modified on the network.\n\nOpen this URL in your default browser, or proceed in zerocmux.")
         alert.addButton(withTitle: String(localized: "browser.openInDefaultBrowser", defaultValue: "Open in Default Browser"))
-        alert.addButton(withTitle: String(localized: "browser.proceedInCmux", defaultValue: "Proceed in cmux"))
+        alert.addButton(withTitle: String(localized: "browser.proceedInCmux", defaultValue: "Proceed in zerocmux"))
         alert.addButton(withTitle: String(localized: "common.cancel", defaultValue: "Cancel"))
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = String(localized: "browser.alwaysAllowHost", defaultValue: "Always allow this host in cmux")
+        alert.suppressionButton?.title = String(localized: "browser.alwaysAllowHost", defaultValue: "Always allow this host in zerocmux")
 
         let handleResponse: (NSApplication.ModalResponse) -> Void = { [weak self, weak alert] response in
             self?.handleInsecureHTTPAlertResponse(
@@ -4227,7 +4498,7 @@ func resolveBrowserNavigableURL(_ input: String) -> URL? {
     }
 
     if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() {
-        if scheme == "http" || scheme == "https" {
+        if scheme == "http" || scheme == "https" || scheme == "data" {
             return url
         }
         if scheme == "file", url.isFileURL, url.path.hasPrefix("/") {
@@ -4540,6 +4811,11 @@ extension BrowserPanel {
         }
 
         prepareDeveloperToolsForRevealIfNeeded(inspector)
+        if inspector.cmuxCallBool(selector: isVisibleSelector) ?? false {
+            developerToolsDetachedOpenGraceDeadline = nil
+            developerToolsLastKnownVisibleAt = Date()
+            return true
+        }
 
         let showSelector = NSSelectorFromString("show")
         guard inspector.responds(to: showSelector) else { return false }
@@ -4681,7 +4957,8 @@ extension BrowserPanel {
             forceDeveloperToolsRefreshOnNextAttach = false
         }
 
-        if visible != targetVisible {
+        let shouldCoalesceRapidToggle = source.hasPrefix("toggle") && visible != targetVisible
+        if shouldCoalesceRapidToggle {
             scheduleDeveloperToolsTransitionSettle(source: source)
         } else {
             developerToolsTransitionTargetVisible = nil
@@ -5463,6 +5740,90 @@ extension BrowserPanel {
         }
     }
 
+    func prepareAddressBarPageFocusForAddressBarEntry(completion: @escaping () -> Void) {
+        webView.evaluateJavaScript(Self.addressBarFocusCapturePayloadScript) { [weak self] result, error in
+            guard let self else {
+                completion()
+                return
+            }
+            let status = self.updateAddressBarPageFocusState(from: result, error: error)
+#if DEBUG
+            if let error {
+                cmuxDebugLog(
+                    "browser.focus.addressBar.capture.pre panel=\(self.id.uuidString.prefix(5)) " +
+                    "result=\(status) message=\(error.localizedDescription)"
+                )
+            } else {
+                cmuxDebugLog(
+                    "browser.focus.addressBar.capture.pre panel=\(self.id.uuidString.prefix(5)) " +
+                    "result=\(status)"
+                )
+            }
+#endif
+            completion()
+        }
+    }
+
+    private static func addressBarFocusPayloadInteger(_ value: Any?) -> Int? {
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let intValue = value as? Int {
+            return intValue
+        }
+        return nil
+    }
+
+    private static func shouldPreserveNativeAddressBarPageFocusState(for status: String) -> Bool {
+        status.hasPrefix("skipped")
+    }
+
+    private func updateAddressBarPageFocusState(from result: Any?, error: Error?) -> String {
+        guard error == nil,
+              let payload = result as? [String: Any] else {
+            addressBarPageFocusState = nil
+            return "error"
+        }
+
+        let status = (payload["status"] as? String) ?? "unknown"
+        guard let id = payload["id"] as? String, !id.isEmpty else {
+            if Self.shouldPreserveNativeAddressBarPageFocusState(for: status),
+               let addressBarPageFocusState {
+                return "\(status):preserved_native:\(addressBarPageFocusState.id)"
+            }
+            addressBarPageFocusState = nil
+            return status
+        }
+
+        addressBarPageFocusState = AddressBarPageFocusState(
+            id: id,
+            elementId: {
+                guard let elementId = payload["elementId"] as? String,
+                      !elementId.isEmpty else {
+                    return nil
+                }
+                return elementId
+            }(),
+            selectionStart: Self.addressBarFocusPayloadInteger(payload["selectionStart"]),
+            selectionEnd: Self.addressBarFocusPayloadInteger(payload["selectionEnd"])
+        )
+        return "\(status):\(id)"
+    }
+
+    private func receiveAddressBarPageFocusStateMessage(_ body: Any) {
+        if body is NSNull {
+            addressBarPageFocusState = nil
+#if DEBUG
+            cmuxDebugLog("browser.focus.addressBar.nativeState panel=\(id.uuidString.prefix(5)) result=cleared")
+#endif
+            return
+        }
+        let status = updateAddressBarPageFocusState(from: body, error: nil)
+#if DEBUG
+        cmuxDebugLog("browser.focus.addressBar.nativeState panel=\(id.uuidString.prefix(5)) result=\(status)")
+#endif
+    }
+
     private enum AddressBarPageFocusRestoreStatus: String {
         case restored
         case noState = "no_state"
@@ -5512,7 +5873,9 @@ extension BrowserPanel {
             completion(false)
             return
         }
-        webView.evaluateJavaScript(Self.addressBarFocusRestoreScript) { [weak self] result, error in
+        webView.evaluateJavaScript(
+            Self.addressBarFocusRestoreScript(nativeState: addressBarPageFocusState)
+        ) { [weak self] result, error in
             guard let self else {
                 completion(false)
                 return
@@ -5542,8 +5905,13 @@ extension BrowserPanel {
 #endif
 
             if status == .restored {
+                self.addressBarPageFocusState = nil
                 completion(true)
                 return
+            }
+
+            if status == .noState || status == .missingTarget {
+                self.addressBarPageFocusState = nil
             }
 
             if canRetry && hasNextAttempt {
@@ -7850,13 +8218,13 @@ enum BrowserImportPlanRealizationError: LocalizedError {
         case .missingDestinationProfile:
             return String(
                 localized: "browser.import.error.destinationMissing",
-                defaultValue: "The selected cmux browser profile no longer exists. Pick a destination profile again."
+                defaultValue: "The selected zerocmux browser profile no longer exists. Pick a destination profile again."
             )
         case .profileCreationFailed(let name):
             return String(
                 format: String(
                     localized: "browser.import.error.destinationCreateFailed",
-                    defaultValue: "cmux could not create the destination profile \"%@\"."
+                    defaultValue: "zerocmux could not create the destination profile \"%@\"."
                 ),
                 name
             )
@@ -7976,7 +8344,7 @@ enum BrowserImportOutcomeFormatter {
                 String(
                     format: String(
                         localized: "browser.import.complete.createdProfiles",
-                        defaultValue: "Created cmux profiles: %@"
+                        defaultValue: "Created zerocmux profiles: %@"
                     ),
                     outcome.createdDestinationProfileNames.joined(separator: ", ")
                 )
@@ -9394,7 +9762,7 @@ final class BrowserDataImportCoordinator {
             )
             alert.informativeText = String(
                 localized: "browser.import.noBrowsers.message",
-                defaultValue: "cmux could not find browser profiles to import from on this Mac."
+                defaultValue: "zerocmux could not find browser profiles to import from on this Mac."
             )
             alert.addButton(withTitle: String(localized: "common.ok", defaultValue: "OK"))
             alert.runModal()
@@ -9984,7 +10352,7 @@ final class BrowserDataImportCoordinator {
             sourceProfilesHelpLabel.preferredMaxLayoutWidth = 500
             sourceProfilesHelpLabel.stringValue = String(
                 localized: "browser.import.sourceProfiles.help",
-                defaultValue: "Choose one or more source profiles. Step 3 lets you keep them separate or merge them into one cmux profile."
+                defaultValue: "Choose one or more source profiles. Step 3 lets you keep them separate or merge them into one zerocmux profile."
             )
 
             sourceProfilesContainer.orientation = .vertical
@@ -10029,7 +10397,7 @@ final class BrowserDataImportCoordinator {
             )
             mergeProfilesRadio.title = String(
                 localized: "browser.import.destinationMode.merge",
-                defaultValue: "Merge all into one cmux profile"
+                defaultValue: "Merge all into one zerocmux profile"
             )
             separateProfilesRadio.target = self
             separateProfilesRadio.action = #selector(handleDestinationModeChanged(_:))
@@ -10071,7 +10439,7 @@ final class BrowserDataImportCoordinator {
             let destinationTitleLabel = NSTextField(
                 labelWithString: String(
                     localized: "browser.import.destination.cmux",
-                    defaultValue: "cmux destination"
+                    defaultValue: "zerocmux destination"
                 )
             )
             destinationTitleLabel.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
@@ -10318,13 +10686,13 @@ final class BrowserDataImportCoordinator {
             if presentation.showsSeparateRows {
                 destinationHelpLabel.stringValue = String(
                     localized: "browser.import.destinationProfile.separateHelp",
-                    defaultValue: "Missing cmux profiles are created when import starts."
+                    defaultValue: "Missing zerocmux profiles are created when import starts."
                 )
                 destinationHelpLabel.isHidden = false
             } else if plan.entries.count > 1 {
                 destinationHelpLabel.stringValue = String(
                     localized: "browser.import.destinationProfile.mergeHelp",
-                    defaultValue: "All selected source profiles will be merged into the chosen cmux browser profile."
+                    defaultValue: "All selected source profiles will be merged into the chosen zerocmux browser profile."
                 )
                 destinationHelpLabel.isHidden = false
             } else {

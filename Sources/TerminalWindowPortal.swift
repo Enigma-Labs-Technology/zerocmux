@@ -654,6 +654,7 @@ final class WindowTerminalPortal: NSObject {
     private var installConstraints: [NSLayoutConstraint] = []
     private var hasDeferredFullSyncScheduled = false
     private var hasExternalGeometrySyncScheduled = false
+    private var hasPendingImmediateExternalGeometrySync = false
     private var pendingExternalGeometrySyncRequiresImmediate = false
     private var externalGeometrySyncGeneration: UInt64 = 0
     private var geometryObservers: [NSObjectProtocol] = []
@@ -762,6 +763,9 @@ final class WindowTerminalPortal: NSObject {
         guard !hasExternalGeometrySyncScheduled else {
             pendingExternalGeometrySyncRequiresImmediate =
                 pendingExternalGeometrySyncRequiresImmediate || forceImmediate
+            if forceImmediate {
+                scheduleImmediateExternalGeometrySynchronize()
+            }
             return
         }
         hasExternalGeometrySyncScheduled = true
@@ -769,6 +773,7 @@ final class WindowTerminalPortal: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let performSync = {
+                guard self.hasExternalGeometrySyncScheduled else { return }
                 if self.externalGeometrySyncGeneration != generation {
                     self.hasExternalGeometrySyncScheduled = false
                     let followUpRequiresImmediate = self.pendingExternalGeometrySyncRequiresImmediate
@@ -785,6 +790,19 @@ final class WindowTerminalPortal: NSObject {
             } else {
                 performSync()
             }
+        }
+    }
+
+    private func scheduleImmediateExternalGeometrySynchronize() {
+        guard !hasPendingImmediateExternalGeometrySync else { return }
+        hasPendingImmediateExternalGeometrySync = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hasPendingImmediateExternalGeometrySync = false
+            guard self.hasExternalGeometrySyncScheduled else { return }
+            self.hasExternalGeometrySyncScheduled = false
+            self.pendingExternalGeometrySyncRequiresImmediate = false
+            self.synchronizeAllEntriesFromExternalGeometryChange()
         }
     }
 
@@ -1066,6 +1084,7 @@ final class WindowTerminalPortal: NSObject {
         )
 #endif
         if let hostedView = entry.hostedView, hostedView.superview === hostView {
+            hostedView.isHidden = true
             hostedView.removeFromSuperview()
         }
     }
@@ -1300,24 +1319,7 @@ final class WindowTerminalPortal: NSObject {
             return
         }
         guard let anchorView = entry.anchorView, let window else {
-            if entry.visibleInUI {
-                let shouldPreserveVisibleOnTransient = !hostedView.isHidden &&
-                    scheduleTransientRecoveryRetryIfNeeded(
-                        forHostedId: hostedId,
-                        entry: &entry,
-                        hostedView: hostedView,
-                        reason: "missingAnchorOrWindow"
-                    )
-                if shouldPreserveVisibleOnTransient {
-#if DEBUG
-                    cmuxDebugLog(
-                        "portal.hidden.deferKeep hosted=\(portalDebugToken(hostedView)) " +
-                        "reason=missingAnchorOrWindow frame=\(portalDebugFrame(hostedView.frame))"
-                    )
-#endif
-                    return
-                }
-            } else {
+            if !entry.visibleInUI {
                 resetTransientRecoveryRetryIfNeeded(forHostedId: hostedId, entry: &entry)
             }
 #if DEBUG
@@ -1345,7 +1347,11 @@ final class WindowTerminalPortal: NSObject {
                 )
             }
 #endif
-            if entry.visibleInUI {
+            let canPreserveTransientDetach =
+                entry.visibleInUI &&
+                anchorView.window == nil &&
+                anchorView.superview != nil
+            if canPreserveTransientDetach {
                 let shouldPreserveVisibleOnTransient = !hostedView.isHidden &&
                     scheduleTransientRecoveryRetryIfNeeded(
                         forHostedId: hostedId,
@@ -1618,8 +1624,10 @@ final class WindowTerminalPortal: NSObject {
             if anchorInvalidForCurrentHost {
                 // During aggressive tab drag/reorder churn, SwiftUI/AppKit can briefly
                 // detach/rehome anchor hosts while the terminal should stay visible.
-                // Avoid pruning those visible entries so sync/bind recovery can reattach.
-                return entry.visibleInUI ? nil : hostedId
+                // Avoid pruning those visible entries so sync/bind recovery can reattach
+                // when the recovery path is compiled in; otherwise stale anchors should
+                // be removed immediately.
+                return entry.visibleInUI && Self.transientRecoveryEnabled ? nil : hostedId
             }
             return nil
         }
@@ -1722,7 +1730,7 @@ final class WindowTerminalPortal: NSObject {
     }
 
     func debugHostedSubviewCount() -> Int {
-        hostView.subviews.count
+        hostView.subviews.compactMap { $0 as? GhosttySurfaceScrollView }.count
     }
 #endif
 

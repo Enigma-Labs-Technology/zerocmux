@@ -3,8 +3,8 @@
 ## Opening a Markdown Panel
 
 ```bash
-cmux markdown open <path>
-cmux markdown <path>          # shorthand (implicit "open")
+zerocmux markdown open <path>
+zerocmux markdown <path>          # shorthand (implicit "open")
 ```
 
 ### Options
@@ -41,9 +41,9 @@ With `--json`:
 
 ```bash
 # These are equivalent when run from /Users/me/project
-cmux markdown open plan.md
-cmux markdown open ./plan.md
-cmux markdown open /Users/me/project/plan.md
+zerocmux markdown open plan.md
+zerocmux markdown open ./plan.md
+zerocmux markdown open /Users/me/project/plan.md
 ```
 
 ## Panel Behavior
@@ -61,8 +61,8 @@ Markdown panels are saved and restored across sessions. On restore, the panel re
 ## Help
 
 ```bash
-cmux markdown --help
-cmux markdown -h
+zerocmux markdown --help
+zerocmux markdown -h
 ```
 
 See also:

@@ -100,7 +100,12 @@ final class WorkspaceContentViewVisibilityTests: XCTestCase {
                 layoutSnapshot: snapshot,
                 paneId: paneID
             ),
-            CGRect(x: 677.5, y: 30, width: 500, height: 290)
+            CGRect(
+                x: 677.5,
+                y: MinimalModeChromeMetrics.titlebarHeight,
+                width: 500,
+                height: 320 - MinimalModeChromeMetrics.titlebarHeight
+            )
         )
     }
 
@@ -155,7 +160,14 @@ final class WorkspaceContentViewVisibilityTests: XCTestCase {
                 notificationStore: store,
                 layoutSnapshot: snapshot
             ),
-            [CGRect(x: 677.5, y: 30, width: 500, height: 290)]
+            [
+                CGRect(
+                    x: 677.5,
+                    y: MinimalModeChromeMetrics.titlebarHeight,
+                    width: 500,
+                    height: 320 - MinimalModeChromeMetrics.titlebarHeight
+                )
+            ]
         )
     }
 }

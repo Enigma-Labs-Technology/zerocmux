@@ -13,9 +13,9 @@ When we change the fork, update this document and the parent submodule SHA.
 ## Current fork changes
 
 The fork was refreshed from upstream `main` again on May 1, 2026.
-Current cmux pinned fork head: `22fa801f8`, based on `495316732`, with the
+Current zerocmux pinned fork head: `22fa801f8`, based on `495316732`, with the
 manual embedded IO patch in https://github.com/manaflow-ai/ghostty/pull/53.
-This head keeps the cmux theme picker hooks and exposes the manual surface IO
+This head keeps the zerocmux theme picker hooks and exposes the manual surface IO
 needed by libghostty iOS clients.
 
 ### 1) macOS display link restart on display changes
@@ -59,27 +59,27 @@ tend to conflict together during rebases.
   - Adds a parser for kitty OSC 99 notifications and wires it into the OSC dispatcher.
   - Adapts the parser to upstream's newer capture API so the cmux OSC 99 hook survives the March 30 upstream sync.
 
-### 4) cmux theme picker helper hooks
+### 4) zerocmux theme picker helper hooks
 
 - Commits:
-  - `66ff6ec4d` (Add cmux theme picker helper hooks)
-  - `aa650937d` (Fix cmux theme picker preview writes)
-  - `89d3612c9` (Improve cmux theme picker footer contrast)
-  - `0dc979889` (Respect system theme in cmux picker)
-  - `d9e0ab512` (Skip theme detection in cmux picker)
+  - `66ff6ec4d` (Add zerocmux theme picker helper hooks)
+  - `aa650937d` (Fix zerocmux theme picker preview writes)
+  - `89d3612c9` (Improve zerocmux theme picker footer contrast)
+  - `0dc979889` (Respect system theme in zerocmux picker)
+  - `d9e0ab512` (Skip theme detection in zerocmux picker)
   - `042cbaaab` (Match Ghostty theme picker startup)
-  - `eb34bcdd6` (Harden cmux theme override writes)
-  - `04ec69173` (Apply highlighted cmux theme on Enter)
-  - `4265d3428` (Apply cmux theme from picker search)
+  - `eb34bcdd6` (Harden zerocmux theme override writes)
+  - `04ec69173` (Apply highlighted zerocmux theme on Enter)
+  - `4265d3428` (Apply zerocmux theme from picker search)
 - Files:
   - `build.zig`
   - `src/cli/list_themes.zig`
   - `src/main_ghostty.zig`
 - Summary:
-  - Adds a `zig build cli-helper` step so cmux can bundle Ghostty's CLI helper binary on macOS.
-  - Lets `+list-themes` switch into a cmux-managed mode via env vars, writing the cmux theme override file and posting the existing cmux reload notification for live app-wide preview.
+  - Adds a `zig build cli-helper` step so zerocmux can bundle Ghostty's CLI helper binary on macOS.
+  - Lets `+list-themes` switch into a cmux-managed mode via env vars, writing the zerocmux theme override file and posting the existing zerocmux reload notification for live app-wide preview.
   - Keeps the preview UI readable in light mode, matches upstream picker startup behavior, and hardens writes to the cmux-managed theme override file.
-  - Restores Enter as the cmux apply action by writing the currently highlighted theme before the picker exits.
+  - Restores Enter as the zerocmux apply action by writing the currently highlighted theme before the picker exits.
   - Applies the highlighted search result when Enter is pressed from search mode in cmux-managed picker sessions.
 
 ### 5) Color scheme mode 2031 reporting
@@ -92,18 +92,18 @@ tend to conflict together during rebases.
   - `src/termio/stream_handler.zig`
 - Summary:
   - Keeps Ghostty's mode 2031 color-scheme response aligned with the surface's actual conditional state after config reloads.
-  - Sends the initial DSR 997 report as soon as mode 2031 is enabled, which cmux relies on for immediate color-scheme awareness.
+  - Sends the initial DSR 997 report as soon as mode 2031 is enabled, which zerocmux relies on for immediate color-scheme awareness.
 
 ### 6) Keyboard copy mode selection C API
 
-- Commit: `0b231db94` (Re-export cmux selection APIs removed from upstream)
+- Commit: `0b231db94` (Re-export zerocmux selection APIs removed from upstream)
 - Files:
   - `include/ghostty.h`
   - `src/Surface.zig`
   - `src/apprt/embedded.zig`
 - Summary:
   - Restores `ghostty_surface_select_cursor_cell` and `ghostty_surface_clear_selection`.
-  - Keeps cmux keyboard copy mode working against the refreshed Ghostty base after upstream removed those exports.
+  - Keeps zerocmux keyboard copy mode working against the refreshed Ghostty base after upstream removed those exports.
 
 ### 7) macos-background-from-layer config flag
 
@@ -120,7 +120,7 @@ tend to conflict together during rebases.
   - Adds a `macos-background-from-layer` bool config (default false).
   - When true, sets `bg_color[3] = 0` in the per-frame uniform update so the Metal renderer skips the full-screen background fill.
   - Allows the host app to provide the terminal background via `CALayer.backgroundColor` for instant coverage during view resizes, avoiding alpha double-stacking.
-  - Replays the layer-background restore on top of the refreshed Ghostty base so cmux keeps the resize-coverage fix after the upstream sync.
+  - Replays the layer-background restore on top of the refreshed Ghostty base so zerocmux keeps the resize-coverage fix after the upstream sync.
 
 ### 8) TerminalStream kitty graphics APC handling
 
@@ -140,7 +140,7 @@ tend to conflict together during rebases.
   - `src/config/Config.zig`
 - Summary:
   - Adds a C API for loading Ghostty config from an in-memory string.
-  - Lets cmux parse generated or override config without materializing a separate config file first.
+  - Lets zerocmux parse generated or override config without materializing a separate config file first.
 
 ### 10) Manual embedded IO for libghostty iOS
 
@@ -169,7 +169,7 @@ tend to conflict together during rebases.
     render-now C API, or output C API. Upstream already has internal
     `Termio.processOutput`, so prefer an upstream C bridge if one lands.
 
-The current cmux pin is the head listed above. It is reachable from
+The current zerocmux pin is the head listed above. It is reachable from
 `manaflow-ai/ghostty` `main` through https://github.com/manaflow-ai/ghostty/pull/53.
 Published `xcframework-22fa801f88f96fa842e54ecce6c34a5d36003d19` and pinned
 its archive checksum in `scripts/ghosttykit-checksums.txt`. The release and
@@ -186,12 +186,12 @@ comment-only amends, because the release tag is keyed by the Ghostty commit SHA.
 ### zsh prompt redraw follow-ups
 
 - Were local in the fork as `8ade43ce5`, `0cf559581`, `312c7b23a`, and `404a3f175`.
-- Dropped during the March 30, 2026 rebase because newer Ghostty prompt-marking changes on the refreshed base superseded these fork-only zsh redraw patches, so cmux no longer carries them separately.
+- Dropped during the March 30, 2026 rebase because newer Ghostty prompt-marking changes on the refreshed base superseded these fork-only zsh redraw patches, so zerocmux no longer carries them separately.
 
 ### initial focus seeding and DECSET 1004 startup behavior
 
 - Was local in the fork as `c19c82bfd`.
-- Dropped from the current pinned fork head when cmux removed the corresponding
+- Dropped from the current pinned fork head when zerocmux removed the corresponding
   app-side initial focus seed and went back to post-create focus sync.
 
 ## Merge conflict notes
@@ -201,7 +201,7 @@ These files change frequently upstream; be careful when rebasing the fork:
 - April 28, 2026, upstream merge:
   - Merged upstream `659019666` into `465a9a621` without textual conflicts.
   - Verified with `CMUX_GHOSTTYKIT_NO_PREBUILT=1 ./scripts/ensure-ghosttykit.sh`.
-  - Verified cmux with `./scripts/reload.sh --tag gtyup`.
+  - Verified zerocmux with `./scripts/reload.sh --tag gtyup`.
   - Published `xcframework-d3117e03ea19665bc83a28f7e0428c63937e6140` and pinned
     its archive checksum in `scripts/ghosttykit-checksums.txt`.
   - Merged `d3117e03e` into fork `main` with https://github.com/manaflow-ai/ghostty/pull/48.
@@ -209,8 +209,8 @@ These files change frequently upstream; be careful when rebasing the fork:
     macOS AppleDouble entries such as `._GhosttyKit.xcframework`.
 
 - April 28, 2026, theme picker restore:
-  - Reapplied the section 4 cmux picker hooks on top of `d3117e03e`.
-  - Enter in cmux mode must call the same selection-apply path used by keyboard/mouse navigation
+  - Reapplied the section 4 zerocmux picker hooks on top of `d3117e03e`.
+  - Enter in zerocmux mode must call the same selection-apply path used by keyboard/mouse navigation
     before setting the picker outcome to apply.
   - Verified with `zig build cli-helper -Dapp-runtime=none -Demit-macos-app=false -Demit-xcframework=false -Doptimize=ReleaseFast`.
   - Verified Enter writes `theme = light:0x96f,dark:0x96f` in a PTY temp-config run.
@@ -218,7 +218,7 @@ These files change frequently upstream; be careful when rebasing the fork:
     its archive checksum in `scripts/ghosttykit-checksums.txt`.
 
 - April 30, 2026, theme picker search Enter:
-  - Search-mode Enter in cmux mode must apply the current filtered selection and exit with
+  - Search-mode Enter in zerocmux mode must apply the current filtered selection and exit with
     outcome `apply`.
   - Escape still leaves search mode, and stock Ghostty search Enter still returns to normal mode.
   - Verified with `./scripts/reload.sh --tag thmenter`.
@@ -248,10 +248,10 @@ These files change frequently upstream; be careful when rebasing the fork:
   - Ensure `kitty_notification` stays imported after upstream parser reorganizations.
 
 - `src/cli/list_themes.zig`
-  - cmux now relies on the upstream picker UI plus local env-driven hooks for live preview and restore.
-    If upstream reorganizes the preview loop or key handling, re-check the cmux mode path and keep the
-    stock Ghostty behavior unchanged when the cmux env vars are absent.
-  - The April 28, 2026 restore requires Enter in cmux mode to call the same selection-apply path
+  - zerocmux now relies on the upstream picker UI plus local env-driven hooks for live preview and restore.
+    If upstream reorganizes the preview loop or key handling, re-check the zerocmux mode path and keep the
+    stock Ghostty behavior unchanged when the zerocmux env vars are absent.
+  - The April 28, 2026 restore requires Enter in zerocmux mode to call the same selection-apply path
     used by keyboard/mouse navigation before setting the picker outcome to apply.
   - The April 30, 2026 follow-up requires the same behavior from search mode, while preserving Escape
     as the search cancel path.

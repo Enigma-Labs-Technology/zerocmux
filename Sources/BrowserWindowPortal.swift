@@ -2823,6 +2823,18 @@ final class WindowBrowserPortal: NSObject {
     func updateEntryVisibility(forWebViewId webViewId: ObjectIdentifier, visibleInUI: Bool, zPriority: Int) {
         guard var entry = entriesByWebViewId[webViewId] else { return }
         guard entry.visibleInUI != visibleInUI || entry.zPriority != zPriority else { return }
+        let wasVisibleInUI = entry.visibleInUI
+        if wasVisibleInUI, !visibleInUI,
+           let webView = entry.webView,
+           let containerView = entry.containerView,
+           !containerView.isHidden,
+           webView.superview === containerView {
+            notifyHostedWebKitHidden(
+                in: containerView,
+                primaryWebView: webView,
+                reason: "visibilityUpdate"
+            )
+        }
         entry.visibleInUI = visibleInUI
         entry.zPriority = zPriority
         entriesByWebViewId[webViewId] = entry
@@ -3250,11 +3262,7 @@ final class WindowBrowserPortal: NSObject {
                     hideContainerView(reason: "anchorWindowMismatch")
                     return
                 }
-            }
-            if preserveVisibleDuringTransientDetach(reason: "anchorWindowMismatch") {
-                return
-            }
-            if scheduleTransientDetachRecovery(reason: "anchorWindowMismatch") {
+            } else if scheduleTransientDetachRecovery(reason: "anchorWindowMismatch") {
                 hideContainerView(reason: "anchorWindowMismatch")
                 return
             }

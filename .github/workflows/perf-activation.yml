@@ -11,11 +11,10 @@ on:
       runner:
         description: macOS runner
         required: false
-        default: warp-macos-15-arm64-6x
+        default: macos-latest
         type: choice
         options:
-          - warp-macos-15-arm64-6x
-          - depot-macos-latest
+          - macos-latest
       workspace_count:
         description: Fixture workspace count
         required: false
@@ -35,7 +34,7 @@ concurrency:
 
 jobs:
   activation-session:
-    runs-on: ${{ inputs.runner || 'warp-macos-15-arm64-6x' }}
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 45
     env:
       PERF_TAG: perfci
@@ -92,10 +91,10 @@ jobs:
       - name: Run Cmd-Tab activation benchmark
         run: |
           set -euo pipefail
-          APP_PATH="$HOME/Library/Developer/Xcode/DerivedData/cmux-$PERF_TAG/Build/Products/Debug/cmux DEV $PERF_TAG.app"
+          APP_PATH="$HOME/Library/Developer/Xcode/DerivedData/zerocmux-$PERF_TAG/Build/Products/Debug/zerocmux DEV $PERF_TAG.app"
           swift scripts/bench-window-visibility.swift \
             "$APP_PATH" \
-            "com.cmuxterm.app.debug.$PERF_TAG" \
+            "com.kernelalex.zerocmux.debug.$PERF_TAG" \
             30 \
             --cmd-tab-activation \
             --cg-visibility \
@@ -163,5 +162,5 @@ jobs:
       - name: Cleanup tagged app
         if: always()
         run: |
-          pkill -f "cmux DEV ${PERF_TAG}.app/Contents/MacOS/cmux DEV" || true
-          rm -f "/tmp/cmux-debug-${PERF_TAG}.sock"
+          pkill -f "zerocmux DEV ${PERF_TAG}.app/Contents/MacOS/zerocmux DEV" || true
+          rm -f "/tmp/zerocmux-debug-${PERF_TAG}.sock"

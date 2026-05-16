@@ -307,7 +307,7 @@ final class FeedSidebarUITests: XCTestCase {
         }
         XCTAssertTrue(
             app.wait(for: .runningForeground, timeout: 15),
-            "cmux failed to launch for Feed UI test. state=\(app.state.rawValue)"
+            "zerocmux failed to launch for Feed UI test. state=\(app.state.rawValue)"
         )
     }
 
@@ -352,7 +352,7 @@ final class FeedSidebarUITests: XCTestCase {
             "controls": [[
                 "id": "feed",
                 "title": "Feed",
-                "command": "cmux feed tui --opentui",
+                "command": "zerocmux feed tui --opentui",
                 "env": env
             ]]
         ]

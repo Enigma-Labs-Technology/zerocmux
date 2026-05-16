@@ -6,7 +6,7 @@ Verifies that new split panes and new workspace tabs inherit the current
 working directory from the source terminal.
 
 Requires:
-  - cmux running with allowAll socket mode
+  - zerocmux running with allowAll socket mode
   - bash shell integration sourced (cmux-bash-integration.bash)
 
 Run with a tagged instance:
@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux  # noqa: E402
+from zerocmux import cmux  # noqa: E402
 
 
 def _parse_sidebar_state(text: str) -> dict[str, str]:
@@ -113,7 +113,7 @@ def main() -> int:
 
     socket_path = None
     if tag:
-        socket_path = f"/tmp/cmux-debug-{tag}.sock"
+        socket_path = f"/tmp/zerocmux-debug-{tag}.sock"
     client = cmux(socket_path=socket_path)
     client.connect()
 

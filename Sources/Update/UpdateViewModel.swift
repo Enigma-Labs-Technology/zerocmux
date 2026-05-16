@@ -269,13 +269,13 @@ class UpdateViewModel: ObservableObject {
         if let networkError = networkError(from: nsError) {
             switch networkError.code {
             case NSURLErrorNotConnectedToInternet:
-                return String(localized: "update.error.noInternet.message", defaultValue: "cmux can’t reach the update server. Check your internet connection and try again.")
+                return String(localized: "update.error.noInternet.message", defaultValue: "zerocmux can’t reach the update server. Check your internet connection and try again.")
             case NSURLErrorTimedOut:
                 return String(localized: "update.error.timedOut.message", defaultValue: "The update server took too long to respond. Try again in a moment.")
             case NSURLErrorCannotFindHost:
                 return String(localized: "update.error.serverNotFound.message", defaultValue: "The update server can’t be found. Check your connection or try again later.")
             case NSURLErrorCannotConnectToHost:
-                return String(localized: "update.error.serverUnreachable.message", defaultValue: "cmux couldn’t connect to the update server. Check your connection or try again later.")
+                return String(localized: "update.error.serverUnreachable.message", defaultValue: "zerocmux couldn’t connect to the update server. Check your connection or try again later.")
             case NSURLErrorNetworkConnectionLost:
                 return String(localized: "update.error.connectionLost.message", defaultValue: "The network connection was lost while checking for updates. Try again.")
             case NSURLErrorSecureConnectionFailed,
@@ -291,7 +291,7 @@ class UpdateViewModel: ObservableObject {
         if nsError.domain == SUSparkleErrorDomain {
             switch nsError.code {
             case 2001:
-                return String(localized: "update.error.feedDownload.message", defaultValue: "cmux couldn't download the update feed. Check your connection and try again.")
+                return String(localized: "update.error.feedDownload.message", defaultValue: "zerocmux couldn't download the update feed. Check your connection and try again.")
             case 1000, 1002:
                 return String(localized: "update.error.feedRead.message", defaultValue: "The update feed could not be read. Please try again later.")
             case 4:
@@ -500,7 +500,7 @@ enum UpdateState: Equatable {
 
             if let semver = Self.extractSemanticVersion(from: version) {
                 let tag = semver.hasPrefix("v") ? semver : "v\(semver)"
-                if let url = URL(string: "https://github.com/manaflow-ai/cmux/releases/tag/\(tag)") {
+                if let url = URL(string: "https://github.com/kernelalex/zerocmux/releases/tag/\(tag)") {
                     self = .tagged(url)
                     return
                 }
@@ -510,7 +510,7 @@ enum UpdateState: Equatable {
                 return nil
             }
 
-            if let url = URL(string: "https://github.com/manaflow-ai/cmux/commit/\(newHash)") {
+            if let url = URL(string: "https://github.com/kernelalex/zerocmux/commit/\(newHash)") {
                 self = .commit(url)
             } else {
                 return nil

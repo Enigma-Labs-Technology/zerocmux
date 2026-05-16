@@ -44,15 +44,15 @@ class CmuxPerfRunner:
         self.tag = args.tag
         self.tag_slug = sanitize_path(args.tag)
         self.tag_id = sanitize_bundle(args.tag)
-        self.socket_path = pathlib.Path(f"/tmp/cmux-debug-{self.tag_slug}.sock")
+        self.socket_path = pathlib.Path(f"/tmp/zerocmux-debug-{self.tag_slug}.sock")
         self.cmuxd_socket_path = pathlib.Path(
-            os.path.expanduser(f"~/Library/Application Support/cmux/cmuxd-dev-{self.tag_slug}.sock")
+            os.path.expanduser(f"~/Library/Application Support/zerocmux/cmuxd-dev-{self.tag_slug}.sock")
         )
-        self.debug_log_path = pathlib.Path(f"/tmp/cmux-debug-{self.tag_slug}.log")
-        self.stdout_path = pathlib.Path(f"/tmp/cmux-perf-{self.tag_slug}-stdout.log")
+        self.debug_log_path = pathlib.Path(f"/tmp/zerocmux-debug-{self.tag_slug}.log")
+        self.stdout_path = pathlib.Path(f"/tmp/zerocmux-perf-{self.tag_slug}-stdout.log")
         self.app_path = pathlib.Path(args.app_path).expanduser() if args.app_path else self.default_app_path()
-        self.binary_path = self.app_path / "Contents/MacOS/cmux DEV"
-        self.cli_path = self.app_path / "Contents/Resources/bin/cmux"
+        self.binary_path = self.app_path / "Contents/MacOS/zerocmux DEV"
+        self.cli_path = self.app_path / "Contents/Resources/bin/zerocmux"
         self.fixture_root = self.make_fixture_root(args.fixture_root)
         self.proc: subprocess.Popen | None = None
         self.heavy_scrollback_surfaces: set[str] = set()
@@ -76,19 +76,19 @@ class CmuxPerfRunner:
 
     def default_app_path(self) -> pathlib.Path:
         return pathlib.Path.home() / (
-            f"Library/Developer/Xcode/DerivedData/cmux-{self.tag_slug}/"
-            f"Build/Products/Debug/cmux DEV {self.tag_slug}.app"
+            f"Library/Developer/Xcode/DerivedData/zerocmux-{self.tag_slug}/"
+            f"Build/Products/Debug/zerocmux DEV {self.tag_slug}.app"
         )
 
     def check_paths(self) -> None:
         if not self.binary_path.exists():
             raise PerfFailure(f"app binary not found: {self.binary_path}")
         if not self.cli_path.exists():
-            raise PerfFailure(f"cmux CLI not found: {self.cli_path}")
+            raise PerfFailure(f"zerocmux CLI not found: {self.cli_path}")
 
     def clean_persisted_state(self) -> None:
-        app_support = pathlib.Path.home() / "Library/Application Support/cmux"
-        bundle_id = f"com.cmuxterm.app.debug.{self.tag_id}"
+        app_support = pathlib.Path.home() / "Library/Application Support/zerocmux"
+        bundle_id = f"com.kernelalex.zerocmux.debug.{self.tag_id}"
         for suffix in ("", "-previous"):
             (app_support / f"session-{bundle_id}{suffix}.json").unlink(missing_ok=True)
         self.socket_path.unlink(missing_ok=True)
@@ -187,7 +187,7 @@ class CmuxPerfRunner:
                 proc.kill()
                 proc.wait(timeout=5)
         subprocess.run(
-            ["pkill", "-f", re.escape(f"cmux DEV {self.tag_slug}.app/Contents/MacOS/cmux DEV")],
+            ["pkill", "-f", re.escape(f"zerocmux DEV {self.tag_slug}.app/Contents/MacOS/zerocmux DEV")],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -206,7 +206,7 @@ class CmuxPerfRunner:
         )
         if check and proc.returncode != 0:
             raise PerfFailure(
-                "cmux command failed: "
+                "zerocmux command failed: "
                 + " ".join(args)
                 + f"\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
             )
@@ -249,7 +249,7 @@ class CmuxPerfRunner:
         repo = self.fixture_root / f"project-{index:02d}"
         repo.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "init"], cwd=repo, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        (repo / "README.md").write_text(f"# Project {index}\n\ncmux perf fixture\n", encoding="utf-8")
+        (repo / "README.md").write_text(f"# Project {index}\n\nzerocmux perf fixture\n", encoding="utf-8")
         subprocess.run(["git", "add", "README.md"], cwd=repo, stdout=subprocess.DEVNULL, check=True)
         subprocess.run(
             ["git", "-c", "user.name=cmux", "-c", "user.email=cmux@example.invalid", "commit", "-m", "seed"],
@@ -619,7 +619,7 @@ def print_summary(result: dict) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run cmux activation/session snapshot performance benchmark.")
+    parser = argparse.ArgumentParser(description="Run zerocmux activation/session snapshot performance benchmark.")
     parser.add_argument("--tag", default="perfci", help="Tagged debug app name built by scripts/reload.sh.")
     parser.add_argument("--app-path", default="", help="Override app bundle path.")
     parser.add_argument("--fixture-root", default="", help="Directory for temporary dirty git repos.")

@@ -1,11 +1,11 @@
 ---
 name: release
-description: "Prepare and ship a cmux release end-to-end: choose the next version, curate user-facing changelog entries, bump versions, open and monitor a release PR, merge, tag, and verify published artifacts. Use when asked to cut, prepare, publish, or tag a new release."
+description: "Prepare and ship a zerocmux release end-to-end: choose the next version, curate user-facing changelog entries, bump versions, open and monitor a release PR, merge, tag, and verify published artifacts. Use when asked to cut, prepare, publish, or tag a new release."
 ---
 
 # Release
 
-Run this workflow to prepare and publish a cmux release.
+Run this workflow to prepare and publish a zerocmux release.
 
 ## Workflow
 
@@ -20,15 +20,14 @@ Run this workflow to prepare and publish a cmux release.
 - `git describe --tags --abbrev=0`
 - `git log --oneline <last-tag>..HEAD --no-merges`
 - Keep only end-user visible changes (features, bug fixes, UX/perf behavior).
-- **Collect contributors:** For each PR, get the author with `gh pr view <N> --repo manaflow-ai/cmux --json author --jq '.author.login'`. Also check linked issue reporters with `gh issue view <N> --json author --jq '.author.login'`.
+- **Collect contributors:** For each PR, get the author with `gh pr view <N> --repo kernelalex/zerocmux --json author --jq '.author.login'`. Also check linked issue reporters with `gh issue view <N> --repo kernelalex/zerocmux --json author --jq '.author.login'`.
 - Build a deduplicated list of all contributor `@handle`s.
 
 4. Update changelogs:
-- `CHANGELOG.md` is the source of truth: `web/app/[locale]/docs/changelog/page.tsx` renders the per-version bullet lists directly from it.
+- `CHANGELOG.md` is the source of truth.
 - Update `CHANGELOG.md` using categories `Added`, `Changed`, `Fixed`, `Removed`.
 - **Credit contributors inline** (see Contributor Credits below).
 - **Confirm shipped scope with the user before drafting user-facing entries.** A merged PR is not the same as a shipped feature: features can be behind beta toggles, internal flags, partially landed, reverted later, or otherwise not user-ready. Before writing the `Added`/`Changed` sections, list the candidate user-facing items and ask the user which are actually ready to ship in this version. Drop anything they say is not ready, plus any entries that depend on it. Re-confirm if the version, scope, or shipped surface changes mid-release.
-- Mirror the curated highlights in `web/app/[locale]/docs/changelog/changelog-media.ts` to the same shipped scope. The docs changelog page reads its hero title and feature highlights from this file (bullets still come from `CHANGELOG.md`). If the user drops a feature, also remove it from the version's `features` and update its `title` so the highlights match the bullets.
 - If no user-facing changes exist, confirm with the user before continuing.
 
 5. Bump app version metadata:
@@ -61,8 +60,8 @@ Run this workflow to prepare and publish a cmux release.
 - `git push origin vX.Y.Z`
 
 11. Verify release workflow and assets:
-- `gh run watch --repo manaflow-ai/cmux`
-- Confirm release exists in GitHub Releases and includes `cmux-macos.dmg`.
+- `gh run watch --repo kernelalex/zerocmux`
+- Confirm release exists in GitHub Releases and includes `zerocmux-macos.dmg`.
 
 ## Changelog Rules
 

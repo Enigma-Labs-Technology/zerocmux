@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Regression: the cmux zsh wrapper should prefer a bundled Ghostty zsh
+Regression: the zerocmux zsh wrapper should prefer a bundled Ghostty zsh
 integration file in CMUX_SHELL_INTEGRATION_DIR over the fallback integration
 under GHOSTTY_RESOURCES_DIR.
 
-Without this, tagged cmux builds can silently load Ghostty's installed app
+Without this, tagged zerocmux builds can silently load Ghostty's installed app
 integration instead of the version bundled with the build under test.
 """
 

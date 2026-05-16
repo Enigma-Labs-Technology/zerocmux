@@ -1477,6 +1477,17 @@ final class AccessibilityInsertTextRegressionTests: XCTestCase {
 }
 
 final class GhosttyBackquoteRegressionTests: XCTestCase {
+    private func waitForSurfaceReady(_ surface: TerminalSurface, timeout: TimeInterval = 1.0) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if surface.surface != nil {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        return surface.surface != nil
+    }
+
     func testShiftBackquoteEscFallbackSendsLiteralTilde() {
         _ = NSApplication.shared
 
@@ -1513,16 +1524,17 @@ final class GhosttyBackquoteRegressionTests: XCTestCase {
         hostedView.setVisibleInUI(true)
         hostedView.setActive(true)
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(waitForSurfaceReady(surface), "Expected terminal surface to be ready before sending key input")
 
         var pressText: String?
         var pressUnshiftedCodepoint: UInt32?
         GhosttyNSView.debugGhosttySurfaceKeyEventObserver = { keyEvent in
-            guard keyEvent.action == GHOSTTY_ACTION_PRESS, keyEvent.keycode == 50 else { return }
-            pressUnshiftedCodepoint = keyEvent.unshifted_codepoint
+            guard keyEvent.action == GHOSTTY_ACTION_PRESS else { return }
             if let text = keyEvent.text {
                 pressText = String(cString: text)
-            } else {
-                pressText = nil
+                pressUnshiftedCodepoint = keyEvent.unshifted_codepoint
+            } else if pressText == nil {
+                pressUnshiftedCodepoint = keyEvent.unshifted_codepoint
             }
         }
 

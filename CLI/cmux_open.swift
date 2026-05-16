@@ -27,7 +27,7 @@ extension CMUXCLI {
         let parsedArgs = try parseOpenArguments(commandArgs)
 
         guard !parsedArgs.targets.isEmpty else {
-            throw CLIError(message: "open requires at least one path or URL. Usage: cmux open <path-or-url>...")
+            throw CLIError(message: "open requires at least one path or URL. Usage: zerocmux open <path-or-url>...")
         }
 
         let focus: Bool
@@ -158,7 +158,7 @@ extension CMUXCLI {
                     continue
                 default:
                     if arg.hasPrefix("-") {
-                        throw CLIError(message: "open: unknown flag '\(arg)'. Usage: cmux open <path-or-url>... [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--focus true|false] [--no-focus]")
+                        throw CLIError(message: "open: unknown flag '\(arg)'. Usage: zerocmux open <path-or-url>... [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--focus true|false] [--no-focus]")
                     }
                 }
             }
@@ -198,9 +198,9 @@ extension CMUXCLI {
 
     func openSubcommandUsage() -> String {
         """
-        Usage: cmux open <path-or-url>... [options]
+        Usage: zerocmux open <path-or-url>... [options]
 
-        Open files, directories, or URLs in cmux.
+        Open files, directories, or URLs in zerocmux.
         Files open in file preview tabs and infer the preview UI from the file type.
         Multiple files open as tabs in the same target pane.
 
@@ -213,10 +213,10 @@ extension CMUXCLI {
           --no-focus                   Do not focus opened file previews
 
         Examples:
-          cmux open report.pdf
-          cmux open image-a.png image-b.jpg
-          cmux open ~/Downloads/movie.mov --pane pane:1
-          cmux open https://example.com
+          zerocmux open report.pdf
+          zerocmux open image-a.png image-b.jpg
+          zerocmux open ~/Downloads/movie.mov --pane pane:1
+          zerocmux open https://example.com
         """
     }
 

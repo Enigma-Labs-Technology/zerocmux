@@ -19,10 +19,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 LOG_PATH_OVERRIDE = os.environ.get("CMUX_DEBUG_LOG")
 ITERATIONS = int(os.environ.get("CMUX_PORTAL_ORPHAN_ITERS", "16"))
 PANE_TIMEOUT_S = float(os.environ.get("CMUX_PORTAL_ORPHAN_PANE_TIMEOUT_S", "3.0"))
@@ -45,8 +45,8 @@ def _derive_log_path(socket_path: str) -> str:
     base = os.path.basename(socket_path)
     if base.startswith("cmux-debug-") and base.endswith(".sock"):
         slug = base[len("cmux-debug-") : -len(".sock")]
-        return f"/tmp/cmux-debug-{slug}.log"
-    return "/tmp/cmux-debug.log"
+        return f"/tmp/zerocmux-debug-{slug}.log"
+    return "/tmp/zerocmux-debug.log"
 
 
 def _read_new_lines(log_path: str, offset: int) -> tuple[list[str], int]:

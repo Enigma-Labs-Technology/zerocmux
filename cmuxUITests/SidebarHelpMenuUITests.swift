@@ -53,7 +53,7 @@ final class SidebarHelpMenuUITests: XCTestCase {
         XCTAssertEqual(updatePill.label, "Update Available: 9.9.9")
     }
 
-    func testHelpMenuSendFeedbackOpensComposerSheet() {
+    func testHelpMenuDoesNotExposeFeedback() {
         let app = XCUIApplication()
         app.launchEnvironment["CMUX_UI_TEST_MODE"] = "1"
         launchAndActivate(app)
@@ -67,60 +67,12 @@ final class SidebarHelpMenuUITests: XCTestCase {
         )
         helpButton.click()
 
-        let sendFeedbackItem = requireElement(
-            candidates: helpMenuItemCandidates(in: app, identifier: "SidebarHelpMenuOptionSendFeedback", title: "Send Feedback"),
-            timeout: 3.0,
-            description: "Send Feedback help menu item"
-        )
-        sendFeedbackItem.click()
-
-        XCTAssertTrue(app.staticTexts["Send Feedback"].waitForExistence(timeout: 3.0))
-        XCTAssertTrue(
+        XCTAssertNil(
             firstExistingElement(
-                candidates: [
-                    app.textFields["SidebarFeedbackEmailField"],
-                    app.textFields["Your Email"],
-                ],
-                timeout: 2.0
-            ) != nil
+                candidates: helpMenuItemCandidates(in: app, identifier: "SidebarHelpMenuOptionSendFeedback", title: "Send Feedback"),
+                timeout: 1.0
+            )
         )
-        XCTAssertTrue(
-            firstExistingElement(
-                candidates: [
-                    app.buttons["SidebarFeedbackAttachButton"],
-                    app.buttons["Attach Images"],
-                ],
-                timeout: 2.0
-            ) != nil
-        )
-        XCTAssertTrue(
-            firstExistingElement(
-                candidates: [
-                    app.buttons["SidebarFeedbackSendButton"],
-                    app.buttons["Send"],
-                ],
-                timeout: 2.0
-            ) != nil
-        )
-        XCTAssertTrue(
-            app.staticTexts[
-                "A human will read this! You can also reach us at founders@manaflow.com."
-            ].waitForExistence(timeout: 2.0)
-        )
-
-        let messageEditor = requireElement(
-            candidates: [
-                app.textViews["SidebarFeedbackMessageEditor"],
-                app.scrollViews["SidebarFeedbackMessageEditor"],
-                app.otherElements["SidebarFeedbackMessageEditor"],
-                app.textViews["Message"],
-            ],
-            timeout: 2.0,
-            description: "feedback message editor"
-        )
-        messageEditor.click()
-        app.typeText("hello")
-        XCTAssertTrue(app.staticTexts["5/4000"].waitForExistence(timeout: 2.0))
     }
 
     private func waitForWindowCount(atLeast count: Int, app: XCUIApplication, timeout: TimeInterval) -> Bool {
@@ -209,81 +161,6 @@ final class SidebarHelpMenuUITests: XCTestCase {
                 app.state == .runningForeground
             },
             "App did not become foreground before interactions. state=\(app.state.rawValue)"
-        )
-    }
-}
-
-final class FeedbackComposerShortcutUITests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-    }
-
-    func testCmdOptionFOpensFeedbackComposer() {
-        let app = XCUIApplication()
-        app.launchEnvironment["CMUX_UI_TEST_MODE"] = "1"
-        app.launch()
-        app.activate()
-
-        XCTAssertTrue(
-            sidebarHelpPollUntil(timeout: 6.0) {
-                app.windows.count >= 1
-            }
-        )
-
-        app.typeKey("f", modifierFlags: [.command, .option])
-
-        XCTAssertTrue(app.staticTexts["Send Feedback"].waitForExistence(timeout: 3.0))
-        XCTAssertTrue(
-            app.textFields["SidebarFeedbackEmailField"].waitForExistence(timeout: 2.0)
-                || app.textFields["Your Email"].waitForExistence(timeout: 2.0)
-        )
-    }
-
-    func testCmdOptionFWorksWithHiddenSidebar() {
-        let app = XCUIApplication()
-        app.launchEnvironment["CMUX_UI_TEST_MODE"] = "1"
-        app.launch()
-        app.activate()
-
-        XCTAssertTrue(
-            sidebarHelpPollUntil(timeout: 6.0) {
-                app.windows.count >= 1
-            }
-        )
-
-        app.typeKey("b", modifierFlags: [.command])
-
-        XCTAssertTrue(
-            sidebarHelpPollUntil(timeout: 3.0) {
-                !app.buttons["SidebarHelpMenuButton"].exists && !app.buttons["Help"].exists
-            }
-        )
-
-        app.typeKey("f", modifierFlags: [.command, .option])
-
-        XCTAssertTrue(app.staticTexts["Send Feedback"].waitForExistence(timeout: 3.0))
-    }
-
-    func testCmdOptionFWorksFromSettingsWindow() {
-        let app = XCUIApplication()
-        app.launchEnvironment["CMUX_UI_TEST_MODE"] = "1"
-        app.launchEnvironment["CMUX_UI_TEST_SHOW_SETTINGS"] = "1"
-        app.launch()
-        app.activate()
-
-        XCTAssertTrue(
-            sidebarHelpPollUntil(timeout: 6.0) {
-                app.windows.count >= 2
-            }
-        )
-
-        app.typeKey("f", modifierFlags: [.command, .option])
-
-        XCTAssertTrue(app.staticTexts["Send Feedback"].waitForExistence(timeout: 3.0))
-        XCTAssertTrue(
-            app.textFields["SidebarFeedbackEmailField"].waitForExistence(timeout: 2.0)
-                || app.textFields["Your Email"].waitForExistence(timeout: 2.0)
         )
     }
 }

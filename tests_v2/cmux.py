@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""cmux v2 Python Client
+"""zerocmux v2 Python Client
 
-A client library for programmatically controlling cmux via the Unix socket.
+A client library for programmatically controlling zerocmux via the Unix socket.
 
 This client speaks the v2 JSON line protocol (one JSON request/response per line).
 It intentionally mirrors the existing v1 Python client's convenience API so the
@@ -30,14 +30,17 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class cmuxError(Exception):
-    """Exception raised for cmux errors."""
+    """Exception raised for zerocmux errors."""
 
 
-_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/cmux")
-_STABLE_SOCKET_PATH = os.path.join(_APP_SUPPORT_DIR, "cmux.sock")
+_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/zerocmux")
+_LEGACY_APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/cmux")
+_STABLE_SOCKET_PATH = os.path.join(_APP_SUPPORT_DIR, "zerocmux.sock")
 _LEGACY_STABLE_SOCKET_PATH = "/tmp/cmux.sock"
 _LAST_SOCKET_PATH_FILES = [
     os.path.join(_APP_SUPPORT_DIR, "last-socket-path"),
+    "/tmp/zerocmux-last-socket-path",
+    os.path.join(_LEGACY_APP_SUPPORT_DIR, "last-socket-path"),
     "/tmp/cmux-last-socket-path",
 ]
 
@@ -66,13 +69,21 @@ def _default_socket_path() -> str:
     if last_socket and os.path.exists(last_socket):
         return last_socket
 
-    candidates = ["/tmp/cmux-debug.sock", _STABLE_SOCKET_PATH, _LEGACY_STABLE_SOCKET_PATH]
+    candidates = [
+        "/tmp/zerocmux-debug.sock",
+        _STABLE_SOCKET_PATH,
+        "/tmp/cmux-debug.sock",
+        _LEGACY_STABLE_SOCKET_PATH,
+    ]
     for path in candidates:
         if os.path.exists(path):
             return path
 
-    discovered = glob.glob("/tmp/cmux-debug-*.sock")
+    discovered = glob.glob("/tmp/zerocmux-debug-*.sock")
+    discovered.extend(glob.glob("/tmp/cmux-debug-*.sock"))
+    discovered.extend(glob.glob(os.path.join(_APP_SUPPORT_DIR, "zerocmux*.sock")))
     discovered.extend(glob.glob(os.path.join(_APP_SUPPORT_DIR, "cmux*.sock")))
+    discovered.extend(glob.glob(os.path.join(_LEGACY_APP_SUPPORT_DIR, "cmux*.sock")))
     discovered = [path for path in discovered if os.path.exists(path)]
     if discovered:
         discovered.sort(key=os.path.getmtime, reverse=True)
@@ -139,7 +150,7 @@ def _unescape_backslash_controls(s: str) -> str:
 
 
 class cmux:
-    """Client for controlling cmux via the v2 JSON Unix socket."""
+    """Client for controlling zerocmux via the v2 JSON Unix socket."""
 
     DEFAULT_SOCKET_PATH = _default_socket_path()
 
@@ -161,7 +172,7 @@ class cmux:
         while not os.path.exists(self.socket_path):
             if time.time() - start >= 10.0:
                 raise cmuxError(
-                    f"Socket not found at {self.socket_path}. Is cmux running?"
+                    f"Socket not found at {self.socket_path}. Is zerocmux running?"
                 )
             time.sleep(0.1)
 
@@ -1063,7 +1074,7 @@ class cmux:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="cmux v2 socket client")
+    parser = argparse.ArgumentParser(description="zerocmux v2 socket client")
     parser.add_argument("-s", "--socket", default=cmux.DEFAULT_SOCKET_PATH, help="Socket path")
     parser.add_argument("--method", help="v2 method name")
     parser.add_argument("--params", default="{}", help="JSON params")

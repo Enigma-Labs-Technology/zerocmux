@@ -22,26 +22,26 @@ extension CMUXCLI {
             print(configUsage())
         case "path", "paths":
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux config path")
+                throw CLIError(message: "Usage: zerocmux config path")
             }
             printSettingsPaths(jsonOutput: wantsJSON)
         case "docs", "documentation":
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux config docs")
+                throw CLIError(message: "Usage: zerocmux config docs")
             }
             try runDocsCommand(commandArgs: ["settings"], jsonOutput: wantsJSON)
         case "doctor", "check", "validate":
             let doctorArgs = Array(args.dropFirst())
             let report = try runConfigDoctor(arguments: doctorArgs, jsonOutput: wantsJSON)
             if report.errorCount > 0 {
-                throw CLIError(message: "cmux config doctor found \(report.errorCount) error(s)")
+                throw CLIError(message: "zerocmux config doctor found \(report.errorCount) error(s)")
             }
         case "reload":
             guard args.count == 1 else {
-                throw CLIError(message: "Usage: cmux config reload")
+                throw CLIError(message: "Usage: zerocmux config reload")
             }
             guard let socketPath else {
-                throw CLIError(message: "cmux config reload requires a socket-backed cmux command path")
+                throw CLIError(message: "zerocmux config reload requires a socket-backed zerocmux command path")
             }
             let client = try connectClient(
                 socketPath: socketPath,
@@ -55,7 +55,7 @@ extension CMUXCLI {
             }
             print(response)
         default:
-            throw CLIError(message: "Unknown config subcommand '\(subcommand)'. Run 'cmux config --help'.")
+            throw CLIError(message: "Unknown config subcommand '\(subcommand)'. Run 'zerocmux config --help'.")
         }
     }
 
@@ -68,15 +68,15 @@ extension CMUXCLI {
 
     func configUsage() -> String {
         return """
-        Usage: cmux config <doctor|check|validate|path|paths|docs|documentation|reload>
+        Usage: zerocmux config <doctor|check|validate|path|paths|docs|documentation|reload>
 
         Inspect cmux.json, print configuration references, or reload the running app.
 
         Subcommands:
-          doctor|check|validate [--path <path>]   Validate JSONC syntax for cmux config files.
+          doctor|check|validate [--path <path>]   Validate JSONC syntax for zerocmux config files.
           path|paths                              Print cmux.json paths, docs URL, and schema URL.
-          docs|documentation                      Print the same output as `cmux docs settings`.
-          reload                                  Alias for `cmux reload-config`.
+          docs|documentation                      Print the same output as `zerocmux docs settings`.
+          reload                                  Alias for `zerocmux reload-config`.
 
         Config files:
           \(Self.primarySettingsDisplayPath)
@@ -84,9 +84,9 @@ extension CMUXCLI {
           legacy app support: \(Self.fallbackSettingsDisplayPath)
 
         Examples:
-          cmux config doctor
-          cmux config doctor --path .cmux/cmux.json
-          cmux config reload
+          zerocmux config doctor
+          zerocmux config doctor --path .cmux/cmux.json
+          zerocmux config reload
         """
     }
 
@@ -97,7 +97,7 @@ extension CMUXCLI {
             "fallback": Self.fallbackSettingsDisplayPath,
             "docs_url": Self.settingsDocsURL,
             "schema_url": Self.settingsSchemaURL,
-            "reload_command": "cmux reload-config",
+            "reload_command": "zerocmux reload-config",
             "backup": "Back up any existing cmux.json file to a timestamped .bak copy before editing so the user can revert.",
         ]
 
@@ -121,7 +121,7 @@ extension CMUXCLI {
         print("  Back up any existing cmux.json file to a timestamped .bak copy so the user can revert.")
         print()
         print("After editing cmux.json:")
-        print("  cmux reload-config")
+        print("  zerocmux reload-config")
     }
 
     private struct ConfigDoctorOptions {
@@ -177,7 +177,7 @@ extension CMUXCLI {
                 "ok": errorCount == 0,
                 "error_count": errorCount,
                 "findings": findings.map(\.payload),
-                "reload_command": "cmux reload-config",
+                "reload_command": "zerocmux reload-config",
                 "docs_url": CMUXCLI.settingsDocsURL,
                 "schema_url": CMUXCLI.settingsSchemaURL,
             ]
@@ -216,7 +216,7 @@ extension CMUXCLI {
             if argument == "--path" {
                 let nextIndex = index + 1
                 guard nextIndex < arguments.count else {
-                    throw CLIError(message: "cmux config doctor --path requires a path")
+                    throw CLIError(message: "zerocmux config doctor --path requires a path")
                 }
                 paths.append(arguments[nextIndex])
                 index += 2
@@ -225,7 +225,7 @@ extension CMUXCLI {
             if argument.hasPrefix("--path=") {
                 let rawPath = String(argument.dropFirst("--path=".count))
                 guard !rawPath.isEmpty else {
-                    throw CLIError(message: "cmux config doctor --path requires a path")
+                    throw CLIError(message: "zerocmux config doctor --path requires a path")
                 }
                 paths.append(rawPath)
                 index += 1
@@ -391,7 +391,7 @@ extension CMUXCLI {
     }
 
     private func printConfigDoctorReport(_ report: ConfigDoctorReport) {
-        print("cmux config doctor")
+        print("zerocmux config doctor")
         for finding in report.findings {
             print("\(finding.status.uppercased()) \(finding.label): \(finding.displayPath)")
             print("  path: \(finding.path)")
@@ -408,7 +408,7 @@ extension CMUXCLI {
         print()
         print("Docs: \(Self.settingsDocsURL)")
         print("Schema: \(Self.settingsSchemaURL)")
-        print("Reload: cmux reload-config")
+        print("Reload: zerocmux reload-config")
     }
 
     private static func absoluteConfigPath(_ rawPath: String) -> String {

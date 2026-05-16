@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams --help` passes through to Claude.
+Regression test: `zerocmux claude-teams --help` passes through to Claude.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ printf '%s\\n' "$@" > "$FAKE_ARGV_LOG"
         )
 
         if proc.returncode != 0:
-            print("FAIL: `cmux claude-teams --help` exited non-zero")
+            print("FAIL: `zerocmux claude-teams --help` exited non-zero")
             print(f"exit={proc.returncode}")
             print(f"stdout={proc.stdout.strip()}")
             print(f"stderr={proc.stderr.strip()}")
@@ -78,7 +78,7 @@ printf '%s\\n' "$@" > "$FAKE_ARGV_LOG"
             print(f"FAIL: expected --help to reach Claude, got {argv_lines!r}")
             return 1
 
-    print("PASS: cmux claude-teams forwards --help to Claude")
+    print("PASS: zerocmux claude-teams forwards --help to Claude")
     return 0
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams` supports Claude's tmux teammate flow.
+Regression test: `zerocmux claude-teams` supports Claude's tmux teammate flow.
 """
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ class FakeCmuxState:
                 return {"ok": True}
             if method == "surface.send_text":
                 return {"ok": True}
-            raise RuntimeError(f"Unsupported fake cmux method: {method}")
+            raise RuntimeError(f"Unsupported fake zerocmux method: {method}")
 
     def _pane_by_id(self, pane_id: str) -> dict[str, object]:
         for pane in self.panes:
@@ -301,7 +301,7 @@ tmux list-panes -t "$window_target" -F '#{pane_id}' > "$FAKE_PANE_LIST_LOG"
                 timeout=30,
             )
         except subprocess.TimeoutExpired as exc:
-            print("FAIL: `cmux claude-teams --version` timed out")
+            print("FAIL: `zerocmux claude-teams --version` timed out")
             print(f"cmd={exc.cmd!r}")
             return 1
         finally:
@@ -310,7 +310,7 @@ tmux list-panes -t "$window_target" -F '#{pane_id}' > "$FAKE_PANE_LIST_LOG"
             thread.join(timeout=2)
 
         if proc.returncode != 0:
-            print("FAIL: `cmux claude-teams --version` exited non-zero")
+            print("FAIL: `zerocmux claude-teams --version` exited non-zero")
             print(f"exit={proc.returncode}")
             print(f"stdout={proc.stdout.strip()}")
             print(f"stderr={proc.stderr.strip()}")
@@ -354,7 +354,7 @@ tmux list-panes -t "$window_target" -F '#{pane_id}' > "$FAKE_PANE_LIST_LOG"
             print(f"requests={state.requests!r}")
             return 1
 
-    print("PASS: cmux claude-teams supports Claude's tmux teammate flow")
+    print("PASS: zerocmux claude-teams supports Claude's tmux teammate flow")
     return 0
 
 

@@ -2,20 +2,15 @@ import XCTest
 import Foundation
 
 final class BrowserPaneNavigationKeybindUITests: XCTestCase {
-    private struct WorkspaceContext {
-        let workspaceId: String
-        let windowId: String
-    }
-
     private var dataPath = ""
     private var socketPath = ""
 
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        dataPath = "/tmp/cmux-ui-test-goto-split-\(UUID().uuidString).json"
+        dataPath = "/tmp/zerocmux-ui-test-goto-split-\(UUID().uuidString).json"
         try? FileManager.default.removeItem(atPath: dataPath)
-        socketPath = "/tmp/cmux-ui-test-socket-\(UUID().uuidString).sock"
+        socketPath = "/tmp/zerocmux-ui-test-socket-\(UUID().uuidString).sock"
         try? FileManager.default.removeItem(atPath: socketPath)
     }
 
@@ -84,7 +79,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
 
         let home = fileManager.homeDirectoryForCurrentUser
         let configContents = """
-        # cmux ui test
+        # zerocmux ui test
         working-directory = \(home.path)
         keybind = cmd+ctrl+h=goto_split:left
         """
@@ -183,6 +178,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_PATH"] = dataPath
         app.launchEnvironment["CMUX_UI_TEST_FOCUS_SHORTCUTS"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_INPUT_SETUP"] = "1"
+        app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_BROWSER_URL"] = focusRestorePageURL
         launchAndEnsureForeground(app)
 
         XCTAssertTrue(
@@ -472,9 +468,16 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
             "Expected Cmd+Shift+P to open the command palette while terminal is focused"
         )
 
-        let browserPane = app.otherElements["BrowserPanelContent.\(expectedBrowserPanelId)"].firstMatch
-        XCTAssertTrue(browserPane.waitForExistence(timeout: 5.0), "Expected browser pane content for click target")
-        browserPane.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        XCTAssertTrue(
+            clickBrowserPane(
+                app: app,
+                panelId: expectedBrowserPanelId,
+                setup: setup,
+                timeout: 5.0,
+                preferBackdropSafePoint: true
+            ),
+            "Expected browser pane content for click target. data=\(loadData() ?? setup)"
+        )
         XCTAssertTrue(
             waitForNonExistence(paletteSearchField, timeout: 5.0),
             "Expected clicking the browser pane to dismiss the command palette"
@@ -602,9 +605,10 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
             "Expected browser to finish navigating to the regression page before zoom. value=\(String(describing: omnibar.value))"
         )
 
-        let browserPane = app.otherElements["BrowserPanelContent.\(browserPanelId)"].firstMatch
-        XCTAssertTrue(browserPane.waitForExistence(timeout: 6.0), "Expected browser pane content before zoom")
-        browserPane.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        XCTAssertTrue(
+            clickBrowserPane(app: app, panelId: browserPanelId, setup: setup, timeout: 6.0),
+            "Expected browser pane content before zoom. data=\(loadData() ?? setup)"
+        )
 
         app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [.command, .shift])
         XCTAssertTrue(
@@ -790,6 +794,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         app.launchEnvironment["CMUX_SOCKET_PATH"] = socketPath
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_RECORD_ONLY"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_PATH"] = dataPath
+        app.launchEnvironment["CMUX_UI_TEST_BONSPLIT_SHOW_RIGHT_SIDEBAR"] = "1"
         launchAndEnsureForeground(app)
 
         let window = app.windows.firstMatch
@@ -855,6 +860,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         app.launchEnvironment["CMUX_SOCKET_PATH"] = socketPath
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_RECORD_ONLY"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_PATH"] = dataPath
+        app.launchEnvironment["CMUX_UI_TEST_BONSPLIT_SHOW_RIGHT_SIDEBAR"] = "1"
         launchAndEnsureForeground(app)
 
         let window = app.windows.firstMatch
@@ -910,57 +916,23 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
                 "findValue=\(String(describing: browserFindField.value))"
         )
 
-        XCTAssertFalse(
-            app.textFields["FileExplorerSearchField"].firstMatch.exists,
-            "Expected browser Cmd+F to use browser find rather than right-sidebar Find"
-        )
     }
 
     func testRightSidebarFindFieldKeepsFocusAfterNewWorkspaceRoundTrip() {
         let app = XCUIApplication()
+        app.launchArguments += ["-newWorkspacePlacement", "end"]
         app.launchEnvironment["CMUX_SOCKET_PATH"] = socketPath
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_RECORD_ONLY"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_PATH"] = dataPath
         launchAndEnsureForeground(app)
 
         let window = app.windows.firstMatch
-        _ = window.waitForExistence(timeout: 2.0)
-        XCTAssertTrue(waitForSocketPong(timeout: 12.0), "Expected control socket at \(socketPath)")
+        XCTAssertTrue(window.waitForExistence(timeout: 10.0), "Expected main window to exist")
 
-        guard let originalWorkspace = currentWorkspaceContext() else {
-            XCTFail("Expected current workspace context before leaving the original workspace")
-            return
-        }
+        app.typeKey("f", modifierFlags: [.command, .shift])
 
-        app.typeKey("d", modifierFlags: [.command])
-        XCTAssertTrue(
-            waitForDataMatch(timeout: 6.0) { data in
-                guard data["lastSplitDirection"] == "right" else { return false }
-                guard let paneCountAfterSplit = Int(data["paneCountAfterSplit"] ?? "") else { return false }
-                return paneCountAfterSplit >= 2
-            },
-            "Expected Cmd+D to create a split before opening the browser. data=\(String(describing: loadData()))"
-        )
-
-        app.typeKey("l", modifierFlags: [.command])
-
-        let omnibar = app.textFields["BrowserOmnibarTextField"].firstMatch
-        XCTAssertTrue(omnibar.waitForExistence(timeout: 8.0), "Expected browser omnibar after Cmd+L")
-
-        app.typeKey("a", modifierFlags: [.command])
-        app.typeKey(XCUIKeyboardKey.delete.rawValue, modifierFlags: [])
-        app.typeText("example.com")
-        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
-
-        XCTAssertTrue(
-            waitForOmnibarToContainExampleDomain(omnibar, timeout: 8.0),
-            "Expected browser navigation to example domain before opening find. value=\(String(describing: omnibar.value))"
-        )
-
-        app.typeKey("f", modifierFlags: [.command])
-
-        let findField = app.textFields["FileExplorerSearchField"].firstMatch
-        XCTAssertTrue(findField.waitForExistence(timeout: 6.0), "Expected right sidebar file search after Cmd+F")
+        let findField = app.searchFields["FileExplorerSearchField"].firstMatch
+        XCTAssertTrue(findField.waitForExistence(timeout: 6.0), "Expected right sidebar file search after Cmd+Shift+F")
 
         app.typeText("seed")
         XCTAssertTrue(
@@ -970,13 +942,9 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
             "Expected right sidebar file search to capture initial typing. value=\(String(describing: findField.value))"
         )
 
-        openCommandPaletteForNewWorkspace(app, windowId: originalWorkspace.windowId)
-        XCTAssertTrue(
-            selectWorkspace(originalWorkspace.workspaceId),
-            "Expected to return to the original workspace by identity"
-        )
+        createNewWorkspaceAndReturnToFirstWorkspace(app)
 
-        let restoredFindField = app.textFields["FileExplorerSearchField"].firstMatch
+        let restoredFindField = app.searchFields["FileExplorerSearchField"].firstMatch
         XCTAssertTrue(restoredFindField.waitForExistence(timeout: 6.0), "Expected right sidebar file search after returning to workspace 1")
         XCTAssertTrue(
             waitForCondition(timeout: 4.0) {
@@ -991,7 +959,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
                 ((restoredFindField.value as? String) ?? "") == "seedx"
             },
             "Expected typing after returning from a new workspace to stay in right sidebar file search. " +
-                "findValue=\(String(describing: restoredFindField.value)) omnibarValue=\(String(describing: omnibar.value))"
+            "findValue=\(String(describing: restoredFindField.value))"
         )
     }
 
@@ -1090,7 +1058,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
 
         if useAutofocusRacePage {
             XCTAssertTrue(
-                waitForOmnibarToContain(omnibar, value: "#focused", timeout: 5.0),
+                waitForOmnibarToContainAny(omnibar, values: ["#focused", "%23focused"], timeout: 5.0),
                 "Expected autofocus race page to signal focus handoff via URL hash. value=\(String(describing: omnibar.value))"
             )
         }
@@ -1133,6 +1101,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
 
     private func runSplitFindWorkspaceRoundTripScenario(restoredOwner: SplitFindOwner) {
         let app = XCUIApplication()
+        app.launchArguments += ["-newWorkspacePlacement", "end"]
         app.launchEnvironment["CMUX_SOCKET_PATH"] = socketPath
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_RECORD_ONLY"] = "1"
         app.launchEnvironment["CMUX_UI_TEST_GOTO_SPLIT_PATH"] = dataPath
@@ -1140,12 +1109,6 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
 
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: 10.0), "Expected main window to exist")
-        XCTAssertTrue(waitForSocketPong(timeout: 12.0), "Expected control socket at \(socketPath)")
-
-        guard let originalWorkspace = currentWorkspaceContext() else {
-            XCTFail("Expected current workspace context before leaving workspace 1")
-            return
-        }
 
         app.typeKey("d", modifierFlags: [.command])
         focusRightPaneForFindScenario(app, route: .cmdOptionArrows)
@@ -1201,11 +1164,7 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
             "Expected the intended find owner before leaving workspace 1. data=\(String(describing: loadData()))"
         )
 
-        openCommandPaletteForNewWorkspace(app, windowId: originalWorkspace.windowId)
-        XCTAssertTrue(
-            selectWorkspace(originalWorkspace.workspaceId),
-            "Expected to return to the original workspace by identity"
-        )
+        createNewWorkspaceAndReturnToFirstWorkspace(app)
 
         XCTAssertTrue(
             waitForDataMatch(timeout: 6.0) { data in
@@ -1240,41 +1199,6 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         }
     }
 
-    private func openCommandPaletteForNewWorkspace(_ app: XCUIApplication, windowId: String) {
-        app.typeKey("p", modifierFlags: [.command, .shift])
-
-        let paletteSearchField = app.textFields["CommandPaletteSearchField"].firstMatch
-        XCTAssertTrue(paletteSearchField.waitForExistence(timeout: 5.0), "Expected command palette search field")
-        paletteSearchField.click()
-        paletteSearchField.typeText("New Workspace")
-
-        guard let snapshot = waitForCommandPaletteSnapshot(
-            windowId: windowId,
-            mode: "commands",
-            query: "New Workspace",
-            timeout: 5.0,
-            predicate: { snapshot in
-                guard let firstRow = self.commandPaletteResultRows(from: snapshot).first else { return false }
-                return (firstRow["command_id"] as? String) == "palette.newWorkspace"
-            }
-        ) else {
-            XCTFail("Expected palette.newWorkspace to be the selected command palette result")
-            return
-        }
-        XCTAssertEqual(
-            commandPaletteResultRows(from: snapshot).first?["command_id"] as? String,
-            "palette.newWorkspace",
-            "Expected palette.newWorkspace to be selected before pressing Return"
-        )
-
-        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
-
-        XCTAssertTrue(
-            waitForNonExistence(paletteSearchField, timeout: 5.0),
-            "Expected command palette to dismiss after creating a workspace"
-        )
-    }
-
     private func focusLeftPaneForFindScenario(_ app: XCUIApplication, route: FindFocusRoute) {
         switch route {
         case .cmdOptionArrows:
@@ -1307,91 +1231,39 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         }
     }
 
+    private func waitForOmnibarToContainAny(
+        _ omnibar: XCUIElement,
+        values expectedSubstrings: [String],
+        timeout: TimeInterval
+    ) -> Bool {
+        waitForCondition(timeout: timeout) {
+            let value = (omnibar.value as? String) ?? ""
+            return expectedSubstrings.contains { value.contains($0) }
+        }
+    }
+
     private func waitForElementToBecomeHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
         waitForCondition(timeout: timeout) {
             element.exists && element.isHittable
         }
     }
 
-    private func waitForSocketPong(timeout: TimeInterval) -> Bool {
-        waitForCondition(timeout: timeout) {
-            self.socketCommand("ping") == "PONG"
-        }
-    }
-
-    private func currentWorkspaceContext() -> WorkspaceContext? {
-        guard let envelope = socketJSON(method: "workspace.current", params: [:]),
-              let ok = envelope["ok"] as? Bool,
-              ok,
-              let result = envelope["result"] as? [String: Any],
-              let workspaceId = result["workspace_id"] as? String,
-              let windowId = result["window_id"] as? String else {
-            return nil
-        }
-        return WorkspaceContext(workspaceId: workspaceId, windowId: windowId)
-    }
-
-    private func selectWorkspace(_ workspaceId: String) -> Bool {
-        guard let envelope = socketJSON(
-            method: "workspace.select",
-            params: ["workspace_id": workspaceId]
-        ),
-        let ok = envelope["ok"] as? Bool,
-        ok else {
-            return false
-        }
-
-        return waitForCondition(timeout: 5.0) {
-            self.currentWorkspaceContext()?.workspaceId == workspaceId
-        }
-    }
-
-    private func socketCommand(_ command: String) -> String? {
-        ControlSocketClient(path: socketPath, responseTimeout: 2.0).sendLine(command)
-    }
-
-    private func socketJSON(method: String, params: [String: Any]) -> [String: Any]? {
-        let request: [String: Any] = [
-            "id": UUID().uuidString,
-            "method": method,
-            "params": params,
-        ]
-        return ControlSocketClient(path: socketPath, responseTimeout: 2.0).sendJSON(request)
-    }
-
-    private func commandPaletteResultRows(from snapshot: [String: Any]) -> [[String: Any]] {
-        snapshot["results"] as? [[String: Any]] ?? []
-    }
-
-    private func waitForCommandPaletteSnapshot(
-        windowId: String,
-        mode: String,
-        query: String,
-        timeout: TimeInterval,
-        predicate: (([String: Any]) -> Bool)? = nil
-    ) -> [String: Any]? {
-        var latest: [String: Any]?
-        let matched = waitForCondition(timeout: timeout) {
-            guard let snapshot = self.commandPaletteSnapshot(windowId: windowId) else { return false }
-            latest = snapshot
-            guard (snapshot["visible"] as? Bool) == true else { return false }
-            guard (snapshot["mode"] as? String) == mode else { return false }
-            guard (snapshot["query"] as? String) == query else { return false }
-            return predicate?(snapshot) ?? true
-        }
-        return matched ? latest : nil
-    }
-
-    private func commandPaletteSnapshot(windowId: String) -> [String: Any]? {
-        let envelope = socketJSON(
-            method: "debug.command_palette.results",
-            params: [
-                "window_id": windowId,
-                "limit": 20,
-            ]
+    private func createNewWorkspaceAndReturnToFirstWorkspace(_ app: XCUIApplication) {
+        app.typeKey("n", modifierFlags: [.command])
+        XCTAssertTrue(
+            waitForDataMatch(timeout: 6.0) { data in
+                data["workspaceIndex"] == "2" && data["workspaceCount"] == "2"
+            },
+            "Expected Cmd+N to create and select a second workspace. data=\(String(describing: loadData()))"
         )
-        guard let ok = envelope?["ok"] as? Bool, ok else { return nil }
-        return envelope?["result"] as? [String: Any]
+
+        app.typeKey("1", modifierFlags: [.command])
+        XCTAssertTrue(
+            waitForDataMatch(timeout: 6.0) { data in
+                data["workspaceIndex"] == "1" && data["workspaceCount"] == "2"
+            },
+            "Expected Cmd+1 to return to the first workspace. data=\(String(describing: loadData()))"
+        )
     }
 
     private var autofocusRacePageURL: String {
@@ -1402,28 +1274,120 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         "data:text/html,%3Ctitle%3EIssue%201144%3C/title%3E%3Cbody%20style%3D%22margin:0;background:%231d1f24;color:white;font-family:system-ui;height:2200px%22%3E%3Cmain%20style%3D%22padding:32px%22%3E%3Ch1%3EIssue%201144%20Regression%20Page%3C/h1%3E%3Cp%3EZoom%20should%20not%20leave%20stale%20split%20chrome%20above%20the%20browser%20omnibar.%3C/p%3E%3C/main%3E%3C/body%3E"
     }
 
+    private var focusRestorePageURL: String {
+        let html = """
+        <title>Focus Restore</title>
+        <style>
+          body {
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+          }
+          #cmux-ui-test-focus-container {
+            position: fixed;
+            left: 24px;
+            top: 24px;
+            width: min(520px, calc(100vw - 48px));
+            display: grid;
+            row-gap: 12px;
+            padding: 12px;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(95,99,104,0.55);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 2147483647;
+          }
+          #cmux-ui-test-focus-container input {
+            display: block;
+            width: 100%;
+            margin: 0;
+            padding: 8px 10px;
+            border: 1px solid #5f6368;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: white;
+            color: black;
+          }
+        </style>
+        <body>
+          <main>focus restore</main>
+          <div id="cmux-ui-test-focus-container">
+            <input id="cmux-ui-test-focus-input" data-cmux-addressbar-focus-id="cmux-ui-test-focus-input-tracked" type="text" value="cmux-ui-focus-primary">
+            <input id="cmux-ui-test-focus-input-secondary" data-cmux-addressbar-focus-id="cmux-ui-test-focus-input-secondary-tracked" type="text" value="cmux-ui-focus-secondary">
+          </div>
+        </body>
+        """
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return "data:text/html," + (html.addingPercentEncoding(withAllowedCharacters: allowed) ?? "")
+    }
+
+    private func browserPaneElement(app: XCUIApplication, panelId: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(identifier: "BrowserPanelContent.\(panelId)")
+            .firstMatch
+    }
+
+    private func clickBrowserPane(
+        app: XCUIApplication,
+        panelId: String,
+        setup: [String: String],
+        timeout: TimeInterval,
+        preferBackdropSafePoint: Bool = false
+    ) -> Bool {
+        let browserPane = browserPaneElement(app: app, panelId: panelId)
+        if !preferBackdropSafePoint, browserPane.waitForExistence(timeout: timeout) {
+            browserPane.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+            return true
+        }
+
+        let latest = loadData() ?? setup
+        let xKey = preferBackdropSafePoint ? "browserContentBackdropClickOffsetX" : "browserContentClickOffsetX"
+        let yKey = preferBackdropSafePoint ? "browserContentBackdropClickOffsetY" : "browserContentClickOffsetY"
+        guard let xRaw = latest[xKey] ?? setup[xKey] ?? latest["browserContentClickOffsetX"] ?? setup["browserContentClickOffsetX"],
+              let yRaw = latest[yKey] ?? setup[yKey] ?? latest["browserContentClickOffsetY"] ?? setup["browserContentClickOffsetY"],
+              let x = Double(xRaw),
+              let y = Double(yRaw),
+              x > 0,
+              y > 0 else {
+            return false
+        }
+
+        let window = app.windows.firstMatch
+        guard window.waitForExistence(timeout: timeout) else { return false }
+        window
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.0, dy: 0.0))
+            .withOffset(CGVector(dx: x, dy: y))
+            .click()
+        return true
+    }
+
     private func launchAndEnsureForeground(_ app: XCUIApplication, timeout: TimeInterval = 12.0) {
-        // On headless CI runners (no GUI session), XCUIApplication.launch()
-        // blocks ~60s then fails with "Failed to activate application
-        // (current state: Running Background)". Mark this as an expected
-        // failure so the test can continue — keyboard and element APIs work
-        // via accessibility even when the app is in .runningBackground.
+        app.launchEnvironment["CMUX_UI_TEST_MODE"] = app.launchEnvironment["CMUX_UI_TEST_MODE"] ?? "1"
+        app.launchEnvironment["CMUX_TAG"] = app.launchEnvironment["CMUX_TAG"] ?? "ui-tests-browser-pane-navigation"
+        app.launchEnvironment["CMUX_ALLOW_SOCKET_OVERRIDE"] = app.launchEnvironment["CMUX_ALLOW_SOCKET_OVERRIDE"] ?? "1"
+        app.launchEnvironment["CMUX_SOCKET_ENABLE"] = app.launchEnvironment["CMUX_SOCKET_ENABLE"] ?? "1"
+        app.launchEnvironment["CMUX_SOCKET_MODE"] = app.launchEnvironment["CMUX_SOCKET_MODE"] ?? "automation"
+        app.launchEnvironment["CMUX_UI_TEST_SOCKET_SANITY"] = app.launchEnvironment["CMUX_UI_TEST_SOCKET_SANITY"] ?? "1"
+
         let options = XCTExpectedFailure.Options()
         options.isStrict = false
         XCTExpectFailure("App activation may fail on headless CI runners", options: options) {
             app.launch()
         }
 
-        if app.state == .runningForeground { return }
-
-        if app.state == .runningBackground {
-            // App launched but couldn't activate — continue in background.
-            // XCUIElement queries and keyboard input work through the
-            // accessibility framework regardless of activation state.
+        if app.wait(for: .runningForeground, timeout: timeout) {
             return
         }
 
-        XCTFail("App failed to start. state=\(app.state.rawValue)")
+        if app.state == .runningBackground {
+            app.activate()
+            if app.wait(for: .runningForeground, timeout: 6.0) {
+                return
+            }
+        }
+
+        XCTFail("App failed to reach foreground before keyboard-driven UI test interactions. state=\(app.state.rawValue)")
     }
 
     private func waitForData(keys: [String], timeout: TimeInterval) -> Bool {
@@ -1493,110 +1457,4 @@ final class BrowserPaneNavigationKeybindUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private final class ControlSocketClient {
-        private let path: String
-        private let responseTimeout: TimeInterval
-
-        init(path: String, responseTimeout: TimeInterval) {
-            self.path = path
-            self.responseTimeout = responseTimeout
-        }
-
-        func sendJSON(_ object: [String: Any]) -> [String: Any]? {
-            guard JSONSerialization.isValidJSONObject(object),
-                  let data = try? JSONSerialization.data(withJSONObject: object),
-                  let line = String(data: data, encoding: .utf8),
-                  let response = sendLine(line),
-                  let responseData = response.data(using: .utf8),
-                  let parsed = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
-                return nil
-            }
-            return parsed
-        }
-
-        func sendLine(_ line: String) -> String? {
-            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-            guard fd >= 0 else { return nil }
-            defer { close(fd) }
-
-#if os(macOS)
-            var noSigPipe: Int32 = 1
-            _ = withUnsafePointer(to: &noSigPipe) { ptr in
-                setsockopt(
-                    fd,
-                    SOL_SOCKET,
-                    SO_NOSIGPIPE,
-                    ptr,
-                    socklen_t(MemoryLayout<Int32>.size)
-                )
-            }
-#endif
-
-            var addr = sockaddr_un()
-            memset(&addr, 0, MemoryLayout<sockaddr_un>.size)
-            addr.sun_family = sa_family_t(AF_UNIX)
-
-            let maxLen = MemoryLayout.size(ofValue: addr.sun_path)
-            let bytes = Array(path.utf8CString)
-            guard bytes.count <= maxLen else { return nil }
-            withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-                let raw = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-                memset(raw, 0, maxLen)
-                for index in 0..<bytes.count {
-                    raw[index] = bytes[index]
-                }
-            }
-
-            let pathOffset = MemoryLayout<sockaddr_un>.offset(of: \.sun_path) ?? 0
-            let addrLen = socklen_t(pathOffset + bytes.count)
-#if os(macOS)
-            addr.sun_len = UInt8(min(Int(addrLen), 255))
-#endif
-
-            let connected = withUnsafePointer(to: &addr) { ptr in
-                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                    connect(fd, sa, addrLen)
-                }
-            }
-            guard connected == 0 else { return nil }
-
-            let payload = line + "\n"
-            let wrote: Bool = payload.withCString { cString in
-                var remaining = strlen(cString)
-                var pointer = UnsafeRawPointer(cString)
-                while remaining > 0 {
-                    let written = write(fd, pointer, remaining)
-                    if written <= 0 { return false }
-                    remaining -= written
-                    pointer = pointer.advanced(by: written)
-                }
-                return true
-            }
-            guard wrote else { return nil }
-
-            let deadline = Date().addingTimeInterval(responseTimeout)
-            var buffer = [UInt8](repeating: 0, count: 4096)
-            var accumulator = ""
-            while Date() < deadline {
-                var pollDescriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-                let ready = poll(&pollDescriptor, 1, 100)
-                if ready < 0 {
-                    return nil
-                }
-                if ready == 0 {
-                    continue
-                }
-                let count = read(fd, &buffer, buffer.count)
-                if count <= 0 { break }
-                if let chunk = String(bytes: buffer[0..<count], encoding: .utf8) {
-                    accumulator.append(chunk)
-                    if let newline = accumulator.firstIndex(of: "\n") {
-                        return String(accumulator[..<newline])
-                    }
-                }
-            }
-
-            return accumulator.isEmpty ? nil : accumulator.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-    }
 }

@@ -1323,7 +1323,12 @@ final class MainWindowFocusControllerRightSidebarHideTests: XCTestCase {
         XCTAssertEqual(controller.debugPendingRightSidebarFocusMode, .sessions)
 
         let focusHost = RightSidebarKeyboardFocusView(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
-        defer { _ = window.makeFirstResponder(nil); focusHost.removeFromSuperview(); window.contentView = nil; window.close() }
+        defer {
+            _ = window.makeFirstResponder(nil)
+            focusHost.removeFromSuperview()
+            window.contentView = nil
+            window.orderOut(nil)
+        }
         contentView.addSubview(focusHost)
         controller.registerRightSidebarHost(focusHost)
 
@@ -1612,30 +1617,30 @@ final class UpdateChannelSettingsTests: XCTestCase {
 
 
 final class UpdateSettingsTests: XCTestCase {
-    func testApplyEnablesAutomaticChecksAndDailySchedule() {
+    func testApplyDisablesAutomaticChecksAndProfileSharing() {
         let defaults = makeDefaults()
         UpdateSettings.apply(to: defaults)
 
-        XCTAssertTrue(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
+        XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
         XCTAssertEqual(defaults.double(forKey: UpdateSettings.scheduledCheckIntervalKey), UpdateSettings.scheduledCheckInterval)
         XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticallyUpdateKey))
         XCTAssertFalse(defaults.bool(forKey: UpdateSettings.sendProfileInfoKey))
         XCTAssertTrue(defaults.bool(forKey: UpdateSettings.migrationKey))
     }
 
-    func testApplyRepairsLegacyDisabledAutomaticChecksOnce() {
+    func testApplyAlwaysDisablesLegacyAutomaticChecks() {
         let defaults = makeDefaults()
-        defaults.set(false, forKey: UpdateSettings.automaticChecksKey)
+        defaults.set(true, forKey: UpdateSettings.automaticChecksKey)
         defaults.set(0, forKey: UpdateSettings.scheduledCheckIntervalKey)
         defaults.set(true, forKey: UpdateSettings.automaticallyUpdateKey)
 
         UpdateSettings.apply(to: defaults)
 
-        XCTAssertTrue(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
+        XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
         XCTAssertEqual(defaults.double(forKey: UpdateSettings.scheduledCheckIntervalKey), UpdateSettings.scheduledCheckInterval)
-        XCTAssertTrue(defaults.bool(forKey: UpdateSettings.automaticallyUpdateKey))
+        XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticallyUpdateKey))
 
-        defaults.set(false, forKey: UpdateSettings.automaticChecksKey)
+        defaults.set(true, forKey: UpdateSettings.automaticChecksKey)
         UpdateSettings.apply(to: defaults)
 
         XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticChecksKey))

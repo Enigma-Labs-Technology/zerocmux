@@ -1,4 +1,4 @@
-# cmux shell integration for zsh
+# zerocmux shell integration for zsh
 # Injected automatically — do not source manually
 
 # Prefer zsh/net/unix for socket sends (no fork, ~0.2ms per send vs ~3ms
@@ -51,7 +51,7 @@ _cmux_relay_cli_path() {
         print -r -- "${CMUX_BUNDLED_CLI_PATH}"
         return 0
     fi
-    command -v cmux 2>/dev/null
+    command -v zerocmux 2>/dev/null || command -v cmux 2>/dev/null
 }
 
 _cmux_socket_uses_remote_relay() {

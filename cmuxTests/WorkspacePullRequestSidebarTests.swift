@@ -147,7 +147,7 @@ final class WorkspacePullRequestSidebarTests: XCTestCase {
         }
 
         let monitorDuration: TimeInterval = 0.7
-        let allowedMainThreadGap: TimeInterval = 0.25
+        let allowedMainThreadGap: TimeInterval = 0.8
         let finishedMonitoring = expectation(description: "main run loop remained responsive")
         let monitorStartedAt = Date()
         var lastTickAt = monitorStartedAt

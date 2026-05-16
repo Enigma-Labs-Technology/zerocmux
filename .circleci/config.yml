@@ -147,7 +147,7 @@ jobs:
           no_output_timeout: 35m
           command: ./scripts/download-prebuilt-ghosttykit.sh
       - resolve-swift-packages:
-          scheme: cmux-unit
+          scheme: zerocmux-unit
       - run:
           name: Run unit tests
           no_output_timeout: 35m
@@ -155,7 +155,7 @@ jobs:
             export CMUX_SKIP_ZIG_BUILD=1
             SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
             run_unit_tests() {
-              xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux-unit -configuration Debug \
+              xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
                 -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
                 -disableAutomaticPackageResolution \
                 -destination "platform=macOS" \
@@ -177,7 +177,7 @@ jobs:
               rm -rf ~/Library/Developer/Xcode/DerivedData/GhosttyTabs-*
               rm -rf "$SOURCE_PACKAGES_DIR"
               mkdir -p "$SOURCE_PACKAGES_DIR"
-              xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux-unit -configuration Debug \
+              xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
                 -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
                 -resolvePackageDependencies \
                 CMUX_SKIP_ZIG_BUILD=1
@@ -209,13 +209,13 @@ jobs:
           no_output_timeout: 35m
           command: |
             CLI_BIN="$(
-              find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug/cmux" -exec stat -f '%m %N' {} \; \
+              find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug/zerocmux" -exec stat -f '%m %N' {} \; \
                 | sort -nr \
                 | head -1 \
                 | cut -d' ' -f2-
             )"
             if [ -z "${CLI_BIN:-}" ] || [ ! -x "$CLI_BIN" ]; then
-              echo "cmux CLI binary not found in DerivedData" >&2
+              echo "zerocmux CLI binary not found in DerivedData" >&2
               exit 1
             fi
 
@@ -241,22 +241,22 @@ jobs:
           no_output_timeout: 35m
           command: ./scripts/download-prebuilt-ghosttykit.sh
       - resolve-swift-packages:
-          scheme: cmux
+          scheme: zerocmux
       - run:
           name: Build app and capture warnings
           no_output_timeout: 35m
           command: |
             export CMUX_SKIP_ZIG_BUILD=1
             SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux -configuration Debug \
+            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug \
               -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
               -disableAutomaticPackageResolution \
               -destination "platform=macOS" \
               CMUX_SKIP_ZIG_BUILD=1 \
-              build 2>&1 | tee /tmp/cmux-build-output.txt
+              build 2>&1 | tee /tmp/zerocmux-build-output.txt
       - run:
           name: Validate Swift warning budget
-          command: python3 scripts/swift_warning_budget.py --log /tmp/cmux-build-output.txt
+          command: python3 scripts/swift_warning_budget.py --log /tmp/zerocmux-build-output.txt
       - save-swift-package-cache:
           prefix: debug-build
       - save-zig-cache
@@ -275,14 +275,14 @@ jobs:
           no_output_timeout: 35m
           command: ./scripts/download-prebuilt-ghosttykit.sh
       - resolve-swift-packages:
-          scheme: cmux
+          scheme: zerocmux
           source-packages-dir: .spm-cache
       - run:
           name: Build universal app (Release)
           no_output_timeout: 35m
           command: |
             export CMUX_SKIP_ZIG_BUILD=1
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux -configuration Release -derivedDataPath build-universal \
+            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Release -derivedDataPath build-universal \
               -destination "generic/platform=macOS" \
               -clonedSourcePackagesDirPath .spm-cache \
               -disableAutomaticPackageResolution \

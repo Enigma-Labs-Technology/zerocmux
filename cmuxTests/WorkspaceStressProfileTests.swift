@@ -14,15 +14,44 @@ final class WorkspaceStressProfileTests: XCTestCase {
         let switchPasses: Int
         let createP95BudgetMs: Double?
         let switchP95BudgetMs: Double?
+        let drainMainRunLoop: Bool
 
         static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> StressConfig {
-            StressConfig(
-                workspaceCount: parseInt(environment["CMUX_WORKSPACE_STRESS_WORKSPACES"], default: 48, minimum: 2),
-                tabsPerWorkspace: parseInt(environment["CMUX_WORKSPACE_STRESS_TABS_PER_WORKSPACE"], default: 10, minimum: 1),
-                switchPasses: parseInt(environment["CMUX_WORKSPACE_STRESS_SWITCH_PASSES"], default: 6, minimum: 1),
+            let defaults = defaults(for: environment["CMUX_WORKSPACE_STRESS_PROFILE"])
+            return StressConfig(
+                workspaceCount: parseInt(
+                    environment["CMUX_WORKSPACE_STRESS_WORKSPACES"],
+                    default: defaults.workspaceCount,
+                    minimum: 2
+                ),
+                tabsPerWorkspace: parseInt(
+                    environment["CMUX_WORKSPACE_STRESS_TABS_PER_WORKSPACE"],
+                    default: defaults.tabsPerWorkspace,
+                    minimum: 1
+                ),
+                switchPasses: parseInt(
+                    environment["CMUX_WORKSPACE_STRESS_SWITCH_PASSES"],
+                    default: defaults.switchPasses,
+                    minimum: 1
+                ),
                 createP95BudgetMs: parseDouble(environment["CMUX_WORKSPACE_STRESS_CREATE_P95_BUDGET_MS"]),
-                switchP95BudgetMs: parseDouble(environment["CMUX_WORKSPACE_STRESS_SWITCH_P95_BUDGET_MS"])
+                switchP95BudgetMs: parseDouble(environment["CMUX_WORKSPACE_STRESS_SWITCH_P95_BUDGET_MS"]),
+                drainMainRunLoop: parseBool(
+                    environment["CMUX_WORKSPACE_STRESS_DRAIN_MAIN"],
+                    default: false
+                )
             )
+        }
+
+        private static func defaults(
+            for profile: String?
+        ) -> (workspaceCount: Int, tabsPerWorkspace: Int, switchPasses: Int) {
+            switch profile?.lowercased() {
+            case "full":
+                return (workspaceCount: 48, tabsPerWorkspace: 10, switchPasses: 6)
+            default:
+                return (workspaceCount: 4, tabsPerWorkspace: 1, switchPasses: 1)
+            }
         }
 
         private static func parseInt(_ value: String?, default defaultValue: Int, minimum: Int) -> Int {
@@ -33,6 +62,18 @@ final class WorkspaceStressProfileTests: XCTestCase {
         private static func parseDouble(_ value: String?) -> Double? {
             guard let value, let parsed = Double(value) else { return nil }
             return parsed
+        }
+
+        private static func parseBool(_ value: String?, default defaultValue: Bool) -> Bool {
+            guard let value else { return defaultValue }
+            switch value.lowercased() {
+            case "1", "true", "yes", "on":
+                return true
+            case "0", "false", "no", "off":
+                return false
+            default:
+                return defaultValue
+            }
         }
     }
 
@@ -90,6 +131,9 @@ final class WorkspaceStressProfileTests: XCTestCase {
         let manager = timed("workspace-000-create", collectInto: &creationSamples) {
             TabManager()
         }
+        defer {
+            teardownStressManager(manager, drainMainRunLoop: config.drainMainRunLoop)
+        }
 
         guard let bootstrapWorkspace = manager.selectedWorkspace else {
             XCTFail("Expected bootstrap workspace")
@@ -99,7 +143,7 @@ final class WorkspaceStressProfileTests: XCTestCase {
         timed("workspace-000-populate", collectInto: &populationSamples) {
             populate(workspace: bootstrapWorkspace, tabsPerWorkspace: config.tabsPerWorkspace)
         }
-        settleWorkspaceSelection(manager)
+        settleWorkspaceSelection(manager, drainMainRunLoop: config.drainMainRunLoop)
 
         for workspaceIndex in 1..<config.workspaceCount {
             let workspace = timed("workspace-\(label(for: workspaceIndex))-create", collectInto: &creationSamples) {
@@ -110,12 +154,12 @@ final class WorkspaceStressProfileTests: XCTestCase {
                 )
             }
 
-            settleWorkspaceSelection(manager)
+            settleWorkspaceSelection(manager, drainMainRunLoop: config.drainMainRunLoop)
 
             timed("workspace-\(label(for: workspaceIndex))-populate", collectInto: &populationSamples) {
                 populate(workspace: workspace, tabsPerWorkspace: config.tabsPerWorkspace)
             }
-            settleWorkspaceSelection(manager)
+            settleWorkspaceSelection(manager, drainMainRunLoop: config.drainMainRunLoop)
         }
 
         XCTAssertEqual(manager.tabs.count, config.workspaceCount)
@@ -128,13 +172,13 @@ final class WorkspaceStressProfileTests: XCTestCase {
                         manager.selectNextTab()
                     }
                     timed("pass-\(label(for: pass))-next-drain1-\(label(for: switchIndex))", collectInto: &switchFirstDrainSamples) {
-                        drainMainQueue()
+                        drainMainQueueIfEnabled(config.drainMainRunLoop)
                     }
                     timed("pass-\(label(for: pass))-next-unfocus-\(label(for: switchIndex))", collectInto: &switchUnfocusSamples) {
                         manager.completePendingWorkspaceUnfocus(reason: "workspace_stress_profile")
                     }
                     timed("pass-\(label(for: pass))-next-drain2-\(label(for: switchIndex))", collectInto: &switchSecondDrainSamples) {
-                        drainMainQueue()
+                        drainMainQueueIfEnabled(config.drainMainRunLoop)
                     }
                 }
             }
@@ -145,13 +189,13 @@ final class WorkspaceStressProfileTests: XCTestCase {
                         manager.selectPreviousTab()
                     }
                     timed("pass-\(label(for: pass))-prev-drain1-\(label(for: switchIndex))", collectInto: &switchFirstDrainSamples) {
-                        drainMainQueue()
+                        drainMainQueueIfEnabled(config.drainMainRunLoop)
                     }
                     timed("pass-\(label(for: pass))-prev-unfocus-\(label(for: switchIndex))", collectInto: &switchUnfocusSamples) {
                         manager.completePendingWorkspaceUnfocus(reason: "workspace_stress_profile")
                     }
                     timed("pass-\(label(for: pass))-prev-drain2-\(label(for: switchIndex))", collectInto: &switchSecondDrainSamples) {
-                        drainMainQueue()
+                        drainMainQueueIfEnabled(config.drainMainRunLoop)
                     }
                 }
             }
@@ -168,7 +212,7 @@ final class WorkspaceStressProfileTests: XCTestCase {
         let switchSecondDrainSummary = TimingSummary(samples: switchSecondDrainSamples)
 
         let report = [
-            "Workspace stress config workspaces=\(config.workspaceCount) tabsPerWorkspace=\(config.tabsPerWorkspace) switchPasses=\(config.switchPasses)",
+            "Workspace stress config workspaces=\(config.workspaceCount) tabsPerWorkspace=\(config.tabsPerWorkspace) switchPasses=\(config.switchPasses) drainMainRunLoop=\(config.drainMainRunLoop ? 1 : 0)",
             reportLine(title: "create", summary: creationSummary, slowest: slowest(creationSamples)),
             reportLine(title: "populate", summary: populationSummary, slowest: slowest(populationSamples)),
             reportLine(title: "switch", summary: switchSummary, slowest: slowest(switchSamples)),
@@ -211,9 +255,25 @@ final class WorkspaceStressProfileTests: XCTestCase {
         }
     }
 
-    private func settleWorkspaceSelection(_ manager: TabManager) {
-        drainMainQueue()
+    private func settleWorkspaceSelection(_ manager: TabManager, drainMainRunLoop: Bool) {
+        drainMainQueueIfEnabled(drainMainRunLoop)
         manager.completePendingWorkspaceUnfocus(reason: "workspace_stress_profile")
+        drainMainQueueIfEnabled(drainMainRunLoop)
+    }
+
+    private func teardownStressManager(_ manager: TabManager, drainMainRunLoop: Bool) {
+        for workspace in manager.tabs {
+            AppDelegate.shared?.notificationStore?.clearNotifications(forTabId: workspace.id)
+            workspace.teardownAllPanels()
+            workspace.teardownRemoteConnection()
+            workspace.owningTabManager = nil
+        }
+        drainMainQueueIfEnabled(drainMainRunLoop)
+        drainMainQueueIfEnabled(drainMainRunLoop)
+    }
+
+    private func drainMainQueueIfEnabled(_ enabled: Bool) {
+        guard enabled else { return }
         drainMainQueue()
     }
 

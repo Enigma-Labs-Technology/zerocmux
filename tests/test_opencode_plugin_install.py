@@ -44,8 +44,8 @@ def main() -> int:
                     "plugin": [
                         "oh-my-opencode",
                         ["existing-plugin", {"enabled": True}],
-                        "cmux-session",
-                        "./plugins/cmux-session.js",
+                        "zerocmux-session",
+                        "./plugins/zerocmux-session.js",
                     ]
                 }
             ),
@@ -69,16 +69,16 @@ def main() -> int:
             print(f"stderr={install.stderr.strip()}")
             return 1
 
-        plugin_path = config_dir / "plugins" / "cmux-session.js"
+        plugin_path = config_dir / "plugins" / "zerocmux-session.js"
         if not plugin_path.exists():
             print(f"FAIL: expected plugin at {plugin_path}")
             return 1
-        feed_plugin_path = config_dir / "plugins" / "cmux-feed.js"
+        feed_plugin_path = config_dir / "plugins" / "zerocmux-feed.js"
         if not feed_plugin_path.exists():
             print(f"FAIL: expected feed plugin at {feed_plugin_path}")
             return 1
-        if "cmux-feed-plugin-marker" not in feed_plugin_path.read_text(encoding="utf-8"):
-            print(f"FAIL: expected cmux feed marker in {feed_plugin_path}")
+        if "zerocmux-feed-plugin-marker" not in feed_plugin_path.read_text(encoding="utf-8"):
+            print(f"FAIL: expected zerocmux feed marker in {feed_plugin_path}")
             return 1
 
         try:
@@ -94,13 +94,13 @@ def main() -> int:
             entry
             for entry in plugins
             if (entry if isinstance(entry, str) else entry[0] if isinstance(entry, list) and entry else "")
-            == "cmux-session"
+            == "zerocmux-session"
         ]
         if stale:
-            print(f"FAIL: expected stale cmux plugin registrations removed, got {plugins!r}")
+            print(f"FAIL: expected stale zerocmux plugin registrations removed, got {plugins!r}")
             return 1
-        if "./plugins/cmux-session.js" not in plugins:
-            print(f"FAIL: expected local cmux session plugin registration, got {plugins!r}")
+        if "./plugins/zerocmux-session.js" not in plugins:
+            print(f"FAIL: expected local zerocmux session plugin registration, got {plugins!r}")
             return 1
         if "oh-my-opencode" not in plugins or ["existing-plugin", {"enabled": True}] not in plugins:
             print(f"FAIL: installer did not preserve existing plugin entries: {plugins!r}")
@@ -122,20 +122,20 @@ def main() -> int:
                 print(f"exit={debug.returncode}")
                 print(debug_output[-4000:])
                 return 1
-            if "path=cmux-session loading plugin" in debug_output:
-                print("FAIL: opencode tried to resolve cmux-session as a package")
+            if "path=zerocmux-session loading plugin" in debug_output:
+                print("FAIL: opencode tried to resolve zerocmux-session as a package")
                 print(debug_output[-4000:])
                 return 1
             if f"file://{plugin_path}" not in debug_output:
-                print("FAIL: opencode did not auto-load cmux session plugin file")
+                print("FAIL: opencode did not auto-load zerocmux session plugin file")
                 print(debug_output[-4000:])
                 return 1
 
-        fake_cmux = root / "fake-cmux"
-        fake_args_log = root / "fake-cmux-args.log"
-        fake_stdin_log = root / "fake-cmux-stdin.log"
-        fake_env_log = root / "fake-cmux-env.log"
-        plugin_copy_path = config_dir / "plugins" / "cmux-session-copy.js"
+        fake_cmux = root / "fake-zerocmux"
+        fake_args_log = root / "fake-zerocmux-args.log"
+        fake_stdin_log = root / "fake-zerocmux-stdin.log"
+        fake_env_log = root / "fake-zerocmux-env.log"
+        plugin_copy_path = config_dir / "plugins" / "zerocmux-session-copy.js"
         shutil.copyfile(plugin_path, plugin_copy_path)
         make_executable(
             fake_cmux,

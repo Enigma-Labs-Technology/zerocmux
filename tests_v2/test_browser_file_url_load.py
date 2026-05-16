@@ -8,10 +8,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 
 
 def _must(cond: bool, msg: str) -> None:
@@ -41,7 +41,7 @@ def main() -> int:
             """
 <!doctype html>
 <html>
-  <head><meta charset=\"utf-8\"><title>cmux file url load</title></head>
+  <head><meta charset=\"utf-8\"><title>zerocmux file url load</title></head>
   <body>
     <h1 id=\"headline\">local HTML file loaded</h1>
     <p id=\"path\">This page is loaded via file://</p>
@@ -61,7 +61,7 @@ def main() -> int:
 
             _wait_until(
                 lambda: str((c._call("browser.get.title", {"surface_id": sid}) or {}).get("title") or "")
-                == "cmux file url load",
+                == "zerocmux file url load",
                 timeout_s=5.0,
                 label="browser.get.title(file://)",
             )

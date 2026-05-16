@@ -2,10 +2,10 @@ import Foundation
 import Darwin
 
 extension CMUXCLI {
-    static let cmuxThemeOverrideBundleIdentifier = "com.cmuxterm.app"
-    static let cmuxThemesBlockStart = "# cmux themes start"
-    static let cmuxThemesBlockEnd = "# cmux themes end"
-    static let cmuxThemesReloadNotificationName = "com.cmuxterm.themes.reload-config"
+    static let cmuxThemeOverrideBundleIdentifier = "com.kernelalex.zerocmux"
+    static let cmuxThemesBlockStart = "# zerocmux themes start"
+    static let cmuxThemesBlockEnd = "# zerocmux themes end"
+    static let cmuxThemesReloadNotificationName = "com.kernelalex.zerocmux.themes.reload-config"
 
     struct ThemeSelection {
         let rawValue: String?
@@ -202,7 +202,7 @@ extension CMUXCLI {
             try runThemesClear(jsonOutput: jsonOutput)
         default:
             if subcommand.hasPrefix("-") {
-                throw CLIError(message: "Unknown themes subcommand '\(subcommand)'. Run 'cmux themes --help'.")
+                throw CLIError(message: "Unknown themes subcommand '\(subcommand)'. Run 'zerocmux themes --help'.")
             }
 
             try runThemesSet(

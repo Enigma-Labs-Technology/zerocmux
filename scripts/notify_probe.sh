@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Probe common desktop-notification escape sequences.
-# NOTE: cmux suppresses notifications when the app + surface are focused,
+# NOTE: zerocmux suppresses notifications when the app + surface are focused,
 # so switch to another app/window while this runs.
 
 esc=$'\033'

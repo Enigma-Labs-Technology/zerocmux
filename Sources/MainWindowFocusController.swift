@@ -43,6 +43,17 @@ final class MainWindowFocusController {
             }
             return nil
         }
+
+        var target: RightSidebarFocusTarget? {
+            switch self {
+            case .inactive:
+                return nil
+            case .requested(let request):
+                return request.target
+            case .focused(_, let target):
+                return target
+            }
+        }
     }
 
     let windowId: UUID
@@ -267,6 +278,25 @@ final class MainWindowFocusController {
     }
 
     @discardableResult
+    func restoreTargetAfterWorkspaceHandoff() -> Bool {
+        guard case .rightSidebar(let mode) = intent else {
+            return false
+        }
+        if let responder = window?.firstResponder,
+           rightSidebarModeOwning(responder) == mode {
+            publishFeedFocusSnapshot()
+            return true
+        }
+        let target = rightSidebarFocusState.target ?? rightSidebarFocusTarget(mode: mode, focusFirstItem: false)
+        return focusRightSidebar(
+            mode: mode,
+            target: target,
+            terminalYieldReason: "workspaceHandoffRightSidebarRestore",
+            selectSearchText: false
+        )
+    }
+
+    @discardableResult
     func selectFeedItem(_ id: UUID, focusFeed: Bool) -> Bool {
         feedSelectedItemId = id
         rememberedRightSidebarMode = .feed
@@ -394,7 +424,8 @@ final class MainWindowFocusController {
     private func focusRightSidebar(
         mode: RightSidebarMode,
         target: RightSidebarFocusTarget,
-        terminalYieldReason: String = "rightSidebarFocus"
+        terminalYieldReason: String = "rightSidebarFocus",
+        selectSearchText: Bool = true
     ) -> Bool {
         guard let state = fileExplorerState else { return false }
         guard mode.isAvailable() else { return false }
@@ -411,7 +442,7 @@ final class MainWindowFocusController {
             state.mode = mode
         }
 
-        let modeResult = focusRightSidebarEndpoint(mode: mode, target: target)
+        let modeResult = focusRightSidebarEndpoint(mode: mode, target: target, selectSearchText: selectSearchText)
         if modeResult {
             rightSidebarFocusState = .focused(mode: mode, target: target)
         }
@@ -644,13 +675,14 @@ final class MainWindowFocusController {
 
     private func focusRightSidebarEndpoint(
         mode: RightSidebarMode,
-        target: RightSidebarFocusTarget
+        target: RightSidebarFocusTarget,
+        selectSearchText: Bool = true
     ) -> Bool {
         switch mode {
         case .files:
             return fileExplorerHost?.focusOutline() == true
         case .find:
-            return fileSearchHost?.focusSearchField() == true
+            return fileSearchHost?.focusSearchField(selectText: selectSearchText) == true
         case .sessions:
             return false
         case .feed:

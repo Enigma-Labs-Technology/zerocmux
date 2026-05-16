@@ -11,8 +11,10 @@ public enum RovoDevHookConfig {
         }
     }
 
-    private static let beginMarker = "# cmux hooks rovodev begin"
-    private static let endMarker = "# cmux hooks rovodev end"
+    private static let beginMarker = "# zerocmux hooks rovodev begin"
+    private static let endMarker = "# zerocmux hooks rovodev end"
+    private static let legacyBeginMarker = "# cmux hooks rovodev begin"
+    private static let legacyEndMarker = "# cmux hooks rovodev end"
 
     public static func installing(events: [Event], in existing: String) -> String {
         var lines = normalizedLines(existing)
@@ -85,14 +87,12 @@ public enum RovoDevHookConfig {
         var result = lines
         var index = 0
         while index < result.count {
-            guard result[index].trimmingCharacters(in: .whitespaces) == beginMarker else {
+            guard isBeginMarkerLine(result[index]) else {
                 index += 1
                 continue
             }
 
-            guard let endIndex = result[(index + 1)...].firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespaces) == endMarker
-            }) else {
+            guard let endIndex = result[(index + 1)...].firstIndex(where: { isEndMarkerLine($0) }) else {
                 index += 1
                 continue
             }
@@ -105,6 +105,16 @@ public enum RovoDevHookConfig {
             index = removalStart
         }
         return result
+    }
+
+    private static func isBeginMarkerLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed == beginMarker || trimmed == legacyBeginMarker
+    }
+
+    private static func isEndMarkerLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed == endMarker || trimmed == legacyEndMarker
     }
 
     private static func eventHooksLineIndex(in lines: [String]) -> Int? {

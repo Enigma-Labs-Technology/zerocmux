@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: `cmux claude-teams` reuses an existing tmux shim.
+Regression test: `zerocmux claude-teams` reuses an existing tmux shim.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ printf 'shim=%s\\n' "$(command -v tmux)"
         shim_path.chmod(0o755)
 
         if proc.returncode != 0:
-            print("FAIL: `cmux claude-teams --version` failed with an existing shim")
+            print("FAIL: `zerocmux claude-teams --version` failed with an existing shim")
             print(f"exit={proc.returncode}")
             print(f"stdout={proc.stdout.strip()}")
             print(f"stderr={proc.stderr.strip()}")
@@ -82,7 +82,7 @@ printf 'shim=%s\\n' "$(command -v tmux)"
             print(f"FAIL: expected existing shim path {expected!r}, got {actual!r}")
             return 1
 
-    print("PASS: cmux claude-teams reuses an existing tmux shim")
+    print("PASS: zerocmux claude-teams reuses an existing tmux shim")
     return 0
 
 

@@ -34,14 +34,14 @@ extension CLINotifyProcessIntegrationRegressionTests {
         )
 
         while let item = enumerator?.nextObject() as? URL {
-            guard item.lastPathComponent == "cmux",
-                  item.path.contains(".app/Contents/Resources/bin/cmux") else {
+            guard item.lastPathComponent == "zerocmux",
+                  item.path.contains(".app/Contents/Resources/bin/zerocmux") else {
                 continue
             }
             return item.path
         }
 
-        throw XCTSkip("Bundled cmux CLI not found in \(appBundleURL.path)")
+        throw XCTSkip("Bundled zerocmux CLI not found in \(appBundleURL.path)")
     }
 
     func makeSocketPath(_ name: String) -> String {

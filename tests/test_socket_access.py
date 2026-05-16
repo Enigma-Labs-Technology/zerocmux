@@ -25,7 +25,7 @@ import glob
 import plistlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class TestResult:
@@ -104,7 +104,7 @@ def _derived_app_candidates_for_current_worktree():
         if os.path.realpath(workspace_path) != project_path:
             continue
         derived_root = os.path.dirname(info_path)
-        app_path = os.path.join(derived_root, "Build/Products/Debug/cmux DEV.app")
+        app_path = os.path.join(derived_root, "Build/Products/Debug/zerocmux DEV.app")
         if os.path.exists(app_path):
             matches.append(app_path)
     return matches
@@ -118,8 +118,8 @@ def _find_app():
     preferred_slug = _preferred_worktree_slug()
     if preferred_slug:
         preferred_tmp = []
-        preferred_tmp.extend(glob.glob(f"/tmp/cmux-{preferred_slug}/Build/Products/Debug/cmux DEV*.app"))
-        preferred_tmp.extend(glob.glob(f"/private/tmp/cmux-{preferred_slug}/Build/Products/Debug/cmux DEV*.app"))
+        preferred_tmp.extend(glob.glob(f"/tmp/zerocmux-{preferred_slug}/Build/Products/Debug/zerocmux DEV*.app"))
+        preferred_tmp.extend(glob.glob(f"/private/tmp/zerocmux-{preferred_slug}/Build/Products/Debug/zerocmux DEV*.app"))
         preferred_tmp = [p for p in preferred_tmp if os.path.exists(p)]
         if preferred_tmp:
             preferred_tmp.sort(key=os.path.getmtime, reverse=True)
@@ -132,11 +132,11 @@ def _find_app():
 
     home = os.path.expanduser("~")
     derived_candidates = glob.glob(os.path.join(
-        home, "Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux DEV.app"
+        home, "Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux DEV.app"
     ))
     tmp_candidates = []
-    tmp_candidates.extend(glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux DEV*.app"))
-    tmp_candidates.extend(glob.glob("/private/tmp/cmux-*/Build/Products/Debug/cmux DEV*.app"))
+    tmp_candidates.extend(glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux DEV*.app"))
+    tmp_candidates.extend(glob.glob("/private/tmp/zerocmux-*/Build/Products/Debug/zerocmux DEV*.app"))
 
     derived_candidates = [p for p in derived_candidates if os.path.exists(p)]
     tmp_candidates = [p for p in tmp_candidates if os.path.exists(p)]
@@ -174,10 +174,10 @@ def _find_cli(preferred_app_path: str = ""):
     candidates = []
     home = os.path.expanduser("~")
     candidates.extend(glob.glob(os.path.join(
-        home, "Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux"
+        home, "Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux"
     )))
-    candidates.extend(glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux"))
-    candidates.extend(glob.glob("/private/tmp/cmux-*/Build/Products/Debug/cmux"))
+    candidates.extend(glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux"))
+    candidates.extend(glob.glob("/private/tmp/zerocmux-*/Build/Products/Debug/zerocmux"))
     candidates = [p for p in candidates if os.path.exists(p) and os.access(p, os.X_OK)]
     if not candidates:
         return ""
@@ -208,10 +208,10 @@ def _wait_for_socket(socket_path: str, timeout: float = 10.0) -> bool:
 
 def _kill_cmux(app_path: str = None):
     if app_path:
-        exe = os.path.join(app_path, "Contents/MacOS/cmux DEV")
+        exe = os.path.join(app_path, "Contents/MacOS/zerocmux DEV")
         subprocess.run(["pkill", "-f", exe], capture_output=True)
     else:
-        subprocess.run(["pkill", "-x", "cmux DEV"], capture_output=True)
+        subprocess.run(["pkill", "-x", "zerocmux DEV"], capture_output=True)
     time.sleep(1.5)
 
 
@@ -350,7 +350,7 @@ else:
 def test_internal_process_allowed(socket_path: str, app_path: str) -> TestResult:
     """
     Verify a cmux-spawned terminal process CAN connect in cmuxOnly mode.
-    Inject a test via the shell rc file, then launch cmux in cmuxOnly mode.
+    Inject a test via the shell rc file, then launch zerocmux in cmuxOnly mode.
     The shell (a descendant of cmux) runs the test on startup.
     """
     result = TestResult("Internal process can connect (cmuxOnly)")
@@ -584,7 +584,7 @@ def test_password_mode_cli_exit_code(socket_path: str, app_path: str) -> TestRes
     try:
         cli_path = _find_cli(preferred_app_path=app_path)
         if not cli_path:
-            result.failure("Could not find cmux CLI binary")
+            result.failure("Could not find zerocmux CLI binary")
             return result
 
         _kill_cmux(app_path)
@@ -637,17 +637,17 @@ def test_password_mode_cli_exit_code(socket_path: str, app_path: str) -> TestRes
 
 def run_tests():
     print("=" * 60)
-    print("cmux Socket Access Control Tests")
+    print("zerocmux Socket Access Control Tests")
     print("=" * 60)
     print()
 
     app_path = _find_app()
     if not app_path:
-        print("Error: Could not find cmux DEV.app in DerivedData")
+        print("Error: Could not find zerocmux DEV.app in DerivedData")
         return 1
     print(f"App: {app_path}")
 
-    socket_path = f"/tmp/cmux-test-socket-access-{os.getpid()}.sock"
+    socket_path = f"/tmp/zerocmux-test-socket-access-{os.getpid()}.sock"
     try:
         os.unlink(socket_path)
     except OSError:
@@ -669,9 +669,9 @@ def run_tests():
     print("Phase 1: cmuxOnly mode — external rejection")
     print("-" * 50)
 
-    # Ensure cmux is running in cmuxOnly mode
+    # Ensure zerocmux is running in cmuxOnly mode
     _kill_cmux(app_path)
-    print("  Launching cmux in cmuxOnly mode...")
+    print("  Launching zerocmux in cmuxOnly mode...")
     _launch_cmux(app_path, socket_path, mode="cmuxOnly")
 
     run_test(test_external_rejected, socket_path)
@@ -704,7 +704,7 @@ def run_tests():
     run_test(test_password_mode_cli_exit_code, socket_path, app_path)
     print()
 
-    # ── Cleanup: leave cmux in cmuxOnly mode ──
+    # ── Cleanup: leave zerocmux in cmuxOnly mode ──
     _kill_cmux(app_path)
     _launch_cmux(app_path, socket_path, mode="cmuxOnly")
 

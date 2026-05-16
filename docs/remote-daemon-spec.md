@@ -16,7 +16,7 @@ This is a **living implementation spec** (also called an **execution spec**): a 
 
 ## 2. Objective
 
-`cmux ssh` should provide:
+`zerocmux ssh` should provide:
 1. durable remote terminals with reconnect/reuse
 2. browser traffic that egresses from the remote host via proxying
 3. tmux-style PTY resize semantics (`smallest screen wins`)
@@ -24,8 +24,8 @@ This is a **living implementation spec** (also called an **execution spec**): a 
 ## 3. Current State (Implemented)
 
 ### 3.1 Remote Workspace + Reconnect UX
-- `DONE` `cmux ssh` creates remote-tagged workspaces and does not require `--name`.
-- `DONE` scoped shell niceties are applied only for `cmux ssh` launches.
+- `DONE` `zerocmux ssh` creates remote-tagged workspaces and does not require `--name`.
+- `DONE` scoped shell niceties are applied only for `zerocmux ssh` launches.
 - `DONE` context menu actions exist for remote workspaces (`Reconnect Workspace(s)`, `Disconnect Workspace(s)`).
 - `DONE` socket API includes `workspace.remote.reconnect`.
 
@@ -39,7 +39,7 @@ This is a **living implementation spec** (also called an **execution spec**): a 
 - `DONE` SOCKS handshake parsing now preserves pipelined post-connect payload bytes instead of dropping request-prefix bytes.
 - `DONE` `workspace.remote.configure.local_proxy_port` exists as an internal deterministic test hook for bind-conflict regression coverage.
 - `DONE` bootstrap/probe failures surface actionable details.
-- `DONE` bootstrap installs `~/.cmux/bin/cmux` wrapper (also tries `/usr/local/bin/cmux`) so `cmux` is available in PATH on the remote.
+- `DONE` bootstrap installs `~/.cmux/bin/zerocmux` wrapper (also tries `/usr/local/bin/zerocmux`) so `cmux` is available in PATH on the remote.
 
 ### 3.5 CLI Relay (Running cmux Commands From Remote)
 - `DONE` `cmuxd-remote` includes a table-driven CLI relay (`cli` subcommand) that maps CLI args to v1 text or v2 JSON-RPC messages.
@@ -48,8 +48,8 @@ This is a **living implementation spec** (also called an **execution spec**): a 
 - `DONE` relay process uses `-S none` / standalone SSH transport (avoids ControlMaster multiplexing and inherited `RemoteForward` directives) and `ExitOnForwardFailure=yes` so dead reverse binds fail fast instead of publishing bad relay metadata.
 - `DONE` relay address written to `~/.cmux/socket_addr` on the remote only after the reverse forward survives startup validation.
 - `DONE` Go CLI no longer polls for relay readiness. It dials the published relay once and only refreshes `~/.cmux/socket_addr` a single time to recover from a stale shared address rewrite.
-- `DONE` `cmux ssh` startup exports session-local `CMUX_SOCKET_PATH=127.0.0.1:<relay_port>` so parallel sessions pin to their own relay instead of racing on shared socket_addr.
-- `DONE` relay startup writes `~/.cmux/relay/<relay_port>.daemon_path`; remote `cmux` wrapper uses this to select the right daemon binary per session, including mixed local cmux versions.
+- `DONE` `zerocmux ssh` startup exports session-local `CMUX_SOCKET_PATH=127.0.0.1:<relay_port>` so parallel sessions pin to their own relay instead of racing on shared socket_addr.
+- `DONE` relay startup writes `~/.cmux/relay/<relay_port>.daemon_path`; remote `cmux` wrapper uses this to select the right daemon binary per session, including mixed local zerocmux versions.
 - `DONE` relay startup writes `~/.cmux/relay/<relay_port>.auth` with a relay ID and token; the local relay requires HMAC-SHA256 challenge-response before forwarding any command to the real local socket.
 - `DONE` ephemeral port range (49152-65535) filtered from probe results to exclude relay ports from other workspaces.
 - `DONE` multi-workspace port conflict detection uses TCP connect check (`isLoopbackPortReachable`) so ports already forwarded by another workspace are silently skipped instead of flagged as conflicts.
@@ -58,7 +58,7 @@ This is a **living implementation spec** (also called an **execution spec**): a 
 ### 3.6 Artifact Trust
 - `DONE` release and nightly workflows publish `cmuxd-remote` assets for `darwin/linux × arm64/amd64`.
 - `DONE` release and nightly apps embed a compact `CMUXRemoteDaemonManifestJSON` in `Info.plist` with exact asset URLs and SHA-256 digests.
-- `DONE` `cmux remote-daemon-status` exposes the current manifest entry, local cache verification state, release download command, and GitHub attestation verification command.
+- `DONE` `zerocmux remote-daemon-status` exposes the current manifest entry, local cache verification state, release download command, and GitHub attestation verification command.
 
 ### 3.3 Error Surfacing
 - `DONE` remote errors are surfaced in sidebar status + logs + notifications.
@@ -124,11 +124,11 @@ Recompute effective size on:
 
 | ID | Milestone | Status | Notes |
 |---|---|---|---|
-| M-001 | `cmux ssh` workspace creation + metadata + optional `--name` | DONE | Covered by `tests_v2/test_ssh_remote_cli_metadata.py` |
+| M-001 | `zerocmux ssh` workspace creation + metadata + optional `--name` | DONE | Covered by `tests_v2/test_ssh_remote_cli_metadata.py` |
 | M-002 | Remote bootstrap/upload/start + hello handshake | DONE | Includes daemon capability handshake + status surfacing |
 | M-003 | Reconnect/disconnect UX + API + improved error surfacing | DONE | Includes retry count in surfaced errors |
 | M-004 | Docker e2e for bootstrap/reconnect shell niceties | DONE | Docker suites validate proxy-path bootstrap and reconnect behavior |
-| M-004b | CLI relay: run cmux commands from within SSH sessions | DONE | Reverse TCP forward + Go CLI relay + bootstrap wrapper |
+| M-004b | CLI relay: run zerocmux commands from within SSH sessions | DONE | Reverse TCP forward + Go CLI relay + bootstrap wrapper |
 | M-005 | Remove automatic remote port mirroring path | DONE | `WorkspaceRemoteSessionController` now uses one shared daemon-backed proxy endpoint |
 | M-006 | Transport-scoped local proxy broker (SOCKS5 + CONNECT) | DONE | Identical SSH transports now reuse one local proxy endpoint |
 | M-007 | Remote proxy stream RPC in `cmuxd-remote` | DONE | `proxy.open/close/write/proxy.stream.subscribe` plus pushed stream events implemented |
@@ -152,10 +152,10 @@ Recompute effective size on:
 
 | ID | Scenario | Status |
 |---|---|---|
-| C-001 | `cmux ping` from remote session | DONE |
-| C-002 | `cmux list-workspaces --json` from remote | DONE |
-| C-003 | `cmux new-workspace` from remote | DONE |
-| C-004 | `cmux rpc system.capabilities` passthrough | DONE |
+| C-001 | `zerocmux ping` from remote session | DONE |
+| C-002 | `zerocmux list-workspaces --json` from remote | DONE |
+| C-003 | `zerocmux new-workspace` from remote | DONE |
+| C-004 | `zerocmux rpc system.capabilities` passthrough | DONE |
 | C-005 | TCP retry handles relay not yet established | DONE |
 | C-006 | multi-workspace port conflict silent skip | DONE |
 | C-007 | ephemeral port filtering excludes relay ports | DONE |

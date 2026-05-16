@@ -3383,6 +3383,12 @@ final class BrowserNavigableURLResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.path, "/tmp/cmux-local-test.html")
     }
 
+    func testResolvesDataSchemeAsNavigableURL() throws {
+        let resolved = try XCTUnwrap(resolveBrowserNavigableURL("data:text/html,%3Cp%3Ehello%3C/p%3E"))
+        XCTAssertEqual(resolved.scheme, "data")
+        XCTAssertEqual(resolved.absoluteString, "data:text/html,%3Cp%3Ehello%3C/p%3E")
+    }
+
     func testRejectsNonWebNonFileScheme() {
         XCTAssertNil(resolveBrowserNavigableURL("mailto:test@example.com"))
         XCTAssertNil(resolveBrowserNavigableURL("ftp://example.com/file.html"))

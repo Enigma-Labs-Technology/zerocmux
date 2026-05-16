@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression: opening a second `cmux ssh` workspace to the same host must not mux-refuse."""
+"""Regression: opening a second `zerocmux ssh` workspace to the same host must not mux-refuse."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 SSH_HOST = os.environ.get("CMUX_SSH_TEST_HOST", "").strip()
 
 
@@ -28,15 +28,15 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
-    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"), recursive=True)
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"), recursive=True)
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     return candidates[0]
 
@@ -122,24 +122,24 @@ def main() -> int:
         with cmux(SOCKET_PATH) as client:
             first = _run_cli_json(cli, ["ssh", SSH_HOST])
             first_workspace_id = _workspace_id_from_payload(client, first)
-            _must(bool(first_workspace_id), f"first cmux ssh output missing workspace_id: {first}")
+            _must(bool(first_workspace_id), f"first zerocmux ssh output missing workspace_id: {first}")
             workspace_ids.append(first_workspace_id)
             _wait_remote_ready(client, first_workspace_id)
             first_surface_id = _wait_surface_id(client, first_workspace_id)
-            _wait_text_contains(client, first_surface_id, "cmux in ~", timeout=12.0)
+            _wait_text_contains(client, first_surface_id, "zerocmux in ~", timeout=12.0)
 
             second = _run_cli_json(cli, ["ssh", SSH_HOST])
             second_workspace_id = _workspace_id_from_payload(client, second)
-            _must(bool(second_workspace_id), f"second cmux ssh output missing workspace_id: {second}")
+            _must(bool(second_workspace_id), f"second zerocmux ssh output missing workspace_id: {second}")
             _must(
                 second_workspace_id != first_workspace_id,
-                f"second cmux ssh should create a distinct workspace: {first_workspace_id} vs {second_workspace_id}",
+                f"second zerocmux ssh should create a distinct workspace: {first_workspace_id} vs {second_workspace_id}",
             )
             workspace_ids.append(second_workspace_id)
             _wait_remote_ready(client, second_workspace_id)
 
             second_surface_id = _wait_surface_id(client, second_workspace_id)
-            text = _wait_text_contains(client, second_surface_id, "cmux in ~", timeout=12.0)
+            text = _wait_text_contains(client, second_surface_id, "zerocmux in ~", timeout=12.0)
 
             refusal_markers = [
                 "mux_client_request_session: session request failed: Session open refused by peer",
@@ -149,7 +149,7 @@ def main() -> int:
             hits = [marker for marker in refusal_markers if marker in text]
             _must(
                 not hits,
-                "second cmux ssh session printed mux refusal text instead of starting cleanly: "
+                "second zerocmux ssh session printed mux refusal text instead of starting cleanly: "
                 f"markers={hits!r} tail={text[-1200:]!r}",
             )
 
@@ -157,7 +157,7 @@ def main() -> int:
             text = _wait_text_contains(client, second_surface_id, "__SECOND_SESSION_OK__", timeout=6.0)
             _must(
                 "command not found" not in text,
-                f"second cmux ssh session accepted corrupted input after startup: {text[-1200:]!r}",
+                f"second zerocmux ssh session accepted corrupted input after startup: {text[-1200:]!r}",
             )
     finally:
         if workspace_ids:
@@ -171,7 +171,7 @@ def main() -> int:
             except Exception:
                 pass
 
-    print("PASS: second cmux ssh session opens cleanly without mux refusal")
+    print("PASS: second zerocmux ssh session opens cleanly without mux refusal")
     return 0
 
 

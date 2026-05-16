@@ -148,7 +148,7 @@ final class CommandPaletteFuzzyMatcherTests: XCTestCase {
         XCTAssertGreaterThan(renameTabScore ?? 0, reopenTabScore ?? 0)
     }
 
-    func testRenameScoresHigherThanUnrelatedCommand() {
+    func testRenameRejectsUnrelatedCommand() {
         let renameScore = CommandPaletteFuzzyMatcher.score(
             query: "rename",
             candidates: ["Rename Tab…", "Tab • Terminal 1", "rename", "tab", "title"]
@@ -168,8 +168,7 @@ final class CommandPaletteFuzzyMatcherTests: XCTestCase {
         )
 
         XCTAssertNotNil(renameScore)
-        XCTAssertNotNil(unrelatedScore)
-        XCTAssertGreaterThan(renameScore ?? 0, unrelatedScore ?? 0)
+        XCTAssertNil(unrelatedScore)
     }
 
     func testTokenMatchingRequiresAllTokens() {

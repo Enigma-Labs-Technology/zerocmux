@@ -49,16 +49,16 @@ SUSPICIOUS_PATTERNS = [
 
 
 def get_cmux_pid() -> Optional[int]:
-    """Get the PID of the running cmux process."""
+    """Get the PID of the running zerocmux process."""
     result = subprocess.run(
-        ["pgrep", "-f", r"cmux\.app/Contents/MacOS/cmux$"],
+        ["pgrep", "-f", r"zerocmux\.app/Contents/MacOS/zerocmux$"],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         # Try DEV build
         result = subprocess.run(
-            ["pgrep", "-f", r"cmux DEV\.app/Contents/MacOS/cmux"],
+            ["pgrep", "-f", r"zerocmux DEV\.app/Contents/MacOS/zerocmux"],
             capture_output=True,
             text=True,
         )
@@ -131,17 +131,17 @@ def wait_for_idle_precheck(pid: int) -> bool:
 
 def main():
     print("=" * 60)
-    print("cmux CPU Usage Test")
+    print("zerocmux CPU Usage Test")
     print("=" * 60)
 
-    # Find cmux process
+    # Find zerocmux process
     pid = get_cmux_pid()
     if pid is None:
-        print("\n❌ SKIP: cmux is not running")
-        print("Start cmux and run this test again.")
+        print("\n❌ SKIP: zerocmux is not running")
+        print("Start zerocmux and run this test again.")
         return 0  # Not a failure, just skip
 
-    print(f"\nFound cmux process: PID {pid}")
+    print(f"\nFound zerocmux process: PID {pid}")
 
     # Wait for app to settle
     print(f"Waiting {SETTLE_TIME}s for app to settle...")

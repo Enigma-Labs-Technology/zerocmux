@@ -1,28 +1,16 @@
-<h1 align="center">cmux</h1>
-<p align="center">A Ghostty-based macOS terminal with vertical tabs and notifications for AI coding agents</p>
+<h1 align="center">zerocmux</h1>
+<p align="center">A fast, zero-telemetry terminal workspace for local development and AI agent workflows.</p>
 
 <p align="center">
-  <a href="https://github.com/manaflow-ai/cmux/releases/latest/download/cmux-macos.dmg">
-    <img src="./docs/assets/macos-badge.png" alt="Download cmux for macOS" width="180" />
-  </a>
+  A privacy-focused fork of <a href="https://github.com/manaflow-ai/cmux">cmux</a>, built on Ghostty and native macOS technologies.
 </p>
 
 <p align="center">
-  English | <a href="README.ja.md">日本語</a> | <a href="README.vi.md">Tiếng Việt</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.ko.md">한국어</a> | <a href="README.de.md">Deutsch</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.it.md">Italiano</a> | <a href="README.da.md">Dansk</a> | <a href="README.pl.md">Polski</a> | <a href="README.ru.md">Русский</a> | <a href="README.bs.md">Bosanski</a> | <a href="README.ar.md">العربية</a> | <a href="README.no.md">Norsk</a> | <a href="README.pt-BR.md">Português (Brasil)</a> | <a href="README.th.md">ไทย</a> | <a href="README.tr.md">Türkçe</a> | <a href="README.km.md">ភាសាខ្មែរ</a> | <a href="README.uk.md">Українська</a>
+  <img src="./docs/assets/main-first-image.png" alt="zerocmux screenshot" width="900" />
 </p>
 
 <p align="center">
-  <a href="https://x.com/manaflowai"><img src="https://img.shields.io/badge/@manaflow-555?logo=x" alt="X / Twitter" /></a>
-  <a href="https://discord.gg/xsgFEVrWCZ"><img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord" /></a>
-  <a href="https://github.com/manaflow-ai/cmux"><img src="https://img.shields.io/github/stars/manaflow-ai/cmux?style=flat&logo=github&label=stars&color=4c71f2" alt="GitHub stars" /></a>
-</p>
-
-<p align="center">
-  <img src="./docs/assets/main-first-image.png" alt="cmux screenshot" width="900" />
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=i-WxO5YUTOs">▶ Demo video</a> · <a href="https://cmux.com/blog/zen-of-cmux">The Zen of cmux</a>
+  <a href="https://www.youtube.com/watch?v=i-WxO5YUTOs">Upstream demo video</a> · <a href="https://github.com/manaflow-ai/cmux">Upstream project</a>
 </p>
 
 ## Features
@@ -67,16 +55,16 @@ Sidebar shows git branch, linked PR status/number, working directory, listening 
 <tr>
 <td width="40%" valign="middle">
 <h3>SSH</h3>
-<code>cmux ssh user@remote</code> creates a workspace for a remote machine. Browser panes route through the remote network so localhost just works. Drag an image into a remote session to upload via scp.
+<code>zerocmux ssh user@remote</code> creates a workspace for a remote machine. Browser panes route through the remote network so localhost just works. Drag an image into a remote session to upload via scp.
 </td>
 <td width="60%">
-<img src="./docs/assets/ssh.png" alt="cmux SSH" width="100%" />
+<img src="./docs/assets/ssh.png" alt="zerocmux SSH" width="100%" />
 </td>
 </tr>
 <tr>
 <td width="40%" valign="middle">
 <h3>Claude Code Teams</h3>
-<code>cmux claude-teams</code> runs Claude Code's teammate mode with one command. Teammates spawn as native splits with sidebar metadata and notifications. No tmux required.
+<code>zerocmux claude-teams</code> runs Claude Code's teammate mode with one command. Teammates spawn as native splits with sidebar metadata and notifications. No tmux required.
 </td>
 <td width="60%">
 <img src="./docs/assets/claude-code-teams.png" alt="Claude Code Teams" width="100%" />
@@ -85,54 +73,83 @@ Sidebar shows git branch, linked PR status/number, working directory, listening 
 </table>
 
 - **Browser import** — Import cookies, history, and sessions from Chrome, Firefox, Arc, and 20+ browsers so browser panes start authenticated
-- **Custom commands** — Define project-specific actions in [`cmux.json`](https://cmux.com/docs/custom-commands) that launch from the command palette
+- **Custom commands** — Define project-specific actions in `cmux.json` that launch from the command palette
 - **Scriptable** — CLI and socket API to create workspaces, split panes, send keystrokes, and automate the browser
 - **Native macOS app** — Built with Swift and AppKit, not Electron. Fast startup, low memory.
 - **Ghostty compatible** — Reads your existing `~/.config/ghostty/config` for themes, fonts, and colors
 - **GPU-accelerated** — Powered by libghostty for smooth rendering
 
+## Telemetry and network access
+
+zerocmux does not collect analytics, usage events, crash reports, session data,
+terminal contents, command history, or workspace metadata.
+
+Some inherited source code, agent hooks, and feed UI use the word "telemetry"
+for local status events. In zerocmux, those events are local app/socket/feed
+events, not external analytics.
+
+Network access is limited to features that require it, such as:
+
+- update checks, if enabled
+- configured agent providers
+- package or framework downloads during development builds
+- browser panes and user-requested web navigation
+- browser imports requested by the user
+- SSH/remote sessions and remote file transfer
+
+Release builds should use a zerocmux-owned update feed or ship with automatic
+update checks disabled. They should not use the upstream cmux appcast URL.
+
 ## Install
 
-### DMG (recommended)
-
-<a href="https://github.com/manaflow-ai/cmux/releases/latest/download/cmux-macos.dmg">
-  <img src="./docs/assets/macos-badge.png" alt="Download cmux for macOS" width="180" />
-</a>
-
-Open the `.dmg` and drag cmux to your Applications folder. cmux auto-updates via Sparkle, so you only need to download once.
-
-### Homebrew
+Prebuilt zerocmux releases are not published from this fork yet. Build from source with:
 
 ```bash
-brew tap manaflow-ai/cmux
-brew install --cask cmux
+./scripts/setup.sh
+./scripts/reload.sh --tag zerocmux
 ```
 
-To update later:
+The built app is written to Xcode DerivedData under a tag-specific directory.
 
-```bash
-brew upgrade --cask cmux
-```
+## Why zerocmux?
 
-On first launch, macOS may ask you to confirm opening an app from an identified developer. Click **Open** to proceed.
+zerocmux is a fork of cmux with a strict zero-telemetry stance. It keeps the
+core idea: a native macOS terminal workspace for running local development and
+AI agent sessions side by side, with Ghostty terminal rendering, browser panes,
+workspace tabs, notifications, and scriptable automation.
 
-## Why cmux?
+## Upstream background
 
-I run a lot of Claude Code and Codex sessions in parallel. I was using Ghostty with a bunch of split panes, and relying on native macOS notifications to know when an agent needed me. But Claude Code's notification body is always just "Claude is waiting for your input" with no context, and with enough tabs open I couldn't even read the titles anymore.
+cmux was created for developers running many Claude Code and Codex sessions in
+parallel. Plain terminal splits and native macOS notifications do not provide
+much context when an agent needs attention, and large tab sets become difficult
+to scan.
 
-I tried a few coding orchestrators but most of them were Electron/Tauri apps and the performance bugged me. I also just prefer the terminal since GUI orchestrators lock you into their workflow. So I built cmux as a native macOS app in Swift/AppKit. It uses libghostty for terminal rendering and reads your existing Ghostty config for themes, fonts, and colors.
+The upstream project is a native macOS app built with Swift/AppKit and
+libghostty, rather than Electron or Tauri. It reads existing Ghostty config for
+themes, fonts, and colors.
 
-The main additions are the sidebar and notification system. The sidebar has vertical tabs that show git branch, linked PR status/number, working directory, listening ports, and the latest notification text for each workspace. The notification system picks up terminal sequences (OSC 9/99/777) and has a CLI (`cmux notify`) you can wire into agent hooks for Claude Code, OpenCode, etc. When an agent is waiting, its pane gets a blue ring and the tab lights up in the sidebar, so I can tell which one needs me across splits and tabs. Cmd+Shift+U jumps to the most recent unread.
+The main additions are the sidebar and notification system. The sidebar has
+vertical tabs that show git branch, linked PR status/number, working directory,
+listening ports, and the latest notification text for each workspace. The
+notification system picks up terminal sequences (OSC 9/99/777) and has a CLI
+(`zerocmux notify`) you can wire into agent hooks for Claude Code, OpenCode, etc.
+When an agent is waiting, its pane gets a blue ring and the tab lights up in
+the sidebar. Cmd+Shift+U jumps to the most recent unread.
 
 The in-app browser has a scriptable API ported from [agent-browser](https://github.com/vercel-labs/agent-browser). Agents can snapshot the accessibility tree, get element refs, click, fill forms, and evaluate JS. You can split a browser pane next to your terminal and have Claude Code interact with your dev server directly.
 
 Everything is scriptable through the CLI and socket API — create workspaces/tabs, split panes, send keystrokes, open URLs in the browser.
 
-## The Zen of cmux
+## Upstream philosophy
 
-cmux is not prescriptive about how developers hold their tools. It's a terminal and browser with a CLI, and the rest is up to you.
+zerocmux keeps the same non-prescriptive model: it is a terminal and browser
+with a CLI, and the rest is up to you.
 
-cmux is a primitive, not a solution. It gives you a terminal, a browser, notifications, workspaces, splits, tabs, and a CLI to control all of it. cmux doesn't force you into an opinionated way to use coding agents. What you build with the primitives is yours.
+zerocmux is a primitive, not a solution. It gives you a terminal, a browser,
+notifications, workspaces, splits, tabs, and a CLI to control all of it. It does
+not force you into an opinionated way to use coding agents. What you build with
+the primitives is yours.
 
 The best developers have always built their own tools. Nobody has figured out the best way to work with agents yet, and the teams building closed products definitely haven't either. The developers closest to their own codebases will figure it out first.
 
@@ -140,7 +157,11 @@ Give a million developers composable primitives and they'll collectively find th
 
 ## Documentation
 
-For more info on how to configure cmux, [head over to our docs](https://cmux.com/docs/getting-started?utm_source=readme).
+Most upstream cmux concepts still apply while zerocmux preserves the old `cmux`
+config paths, socket environment variables, and CLI alias as compatibility
+shims. New docs and examples should use the `zerocmux` app and CLI names. Local
+reference material lives in [`docs/`](docs/) and machine-readable settings
+schemas live in [`docs/data/`](docs/data/).
 
 ## Keyboard Shortcuts
 
@@ -235,71 +256,34 @@ Command palette navigation shortcuts, including ⌃ P, are also customizable and
 
 ## Nightly Builds
 
-[Download cmux NIGHTLY](https://github.com/manaflow-ai/cmux/releases/download/nightly/cmux-nightly-macos.dmg)
-
-cmux NIGHTLY is a separate app with its own bundle ID, so it runs alongside the stable version. Built automatically from the latest `main` commit and auto-updates via its own Sparkle feed.
-
-Report nightly bugs on [GitHub Issues](https://github.com/manaflow-ai/cmux/issues) or in [#nightly-bugs on Discord](https://discord.gg/xsgFEVrWCZ).
+Nightly builds are not published from this fork yet.
 
 ## Session restore
 
-Quitting cmux saves the current session. On relaunch, cmux restores:
+Quitting zerocmux saves the current session. On relaunch, zerocmux restores:
 - Window/workspace/pane layout
 - Working directories
 - Terminal scrollback (best effort)
 - Browser URL and navigation history
-- Saved Claude Code and Codex sessions, when cmux has a resume token for the panel
+- Saved Claude Code and Codex sessions, when zerocmux has a resume token for the panel
 
 If you need to reapply the last saved snapshot manually, use:
 - `File > Reopen Previous Session`
 - `⌘ ⇧ O`
-- `cmux restore-session`
+- `zerocmux restore-session`
 
-cmux does **not** restore arbitrary live terminal process state. tmux, vim, shells, and other tools without a cmux resume flow still reopen as normal terminals rather than resuming in-process state.
-
-## Star History
-
-<a href="https://star-history.com/#manaflow-ai/cmux&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=manaflow-ai/cmux&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=manaflow-ai/cmux&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=manaflow-ai/cmux&type=Date" width="600" />
- </picture>
-</a>
+zerocmux does **not** restore arbitrary live terminal process state. tmux, vim, shells, and other tools without a zerocmux resume flow still reopen as normal terminals rather than resuming in-process state.
 
 ## Contributing
 
-Ways to get involved:
-
-- Follow us on X for updates [@manaflowai](https://x.com/manaflowai), [@lawrencecchen](https://x.com/lawrencecchen), and [@austinywang](https://x.com/austinywang)
-- Join the conversation on [Discord](https://discord.gg/xsgFEVrWCZ)
-- Create and participate in [GitHub issues](https://github.com/manaflow-ai/cmux/issues) and [discussions](https://github.com/manaflow-ai/cmux/discussions)
-- Let us know what you're building with cmux
+Open issues and pull requests in this fork. Keep changes scoped and preserve the
+zero-telemetry guarantee.
 
 ## Community
 
-- [Discord](https://discord.gg/xsgFEVrWCZ)
-- [GitHub](https://github.com/manaflow-ai/cmux)
-- [X / Twitter](https://twitter.com/manaflowai)
-- [YouTube](https://www.youtube.com/channel/UCAa89_j-TWkrXfk9A3CbASw)
-- [LinkedIn](https://www.linkedin.com/company/manaflow-ai/)
-- [Reddit](https://www.reddit.com/r/cmux/)
-
-## Founder's Edition
-
-cmux is free, open source, and always will be. If you'd like to support development and get early access to what's coming next:
-
-**[Get Founder's Edition](https://buy.stripe.com/3cI00j2Ld0it5OU33r5EY0q)**
-
-- **Prioritized feature requests/bug fixes**
-- **Early access: cmux AI that gives you context on every workspace, tab and panel**
-- **Early access: iOS app with terminals synced between desktop and phone**
-- **Early access: Cloud VMs**
-- **Early access: Voice mode**
-- **My personal iMessage/WhatsApp**
+zerocmux is independent from the upstream cmux community channels. Upstream cmux
+links are left in this README only where they document inherited behavior.
 
 ## License
 
-cmux is open source under [GPL-3.0-or-later](LICENSE).
-
-If your organization cannot comply with GPL, a commercial license is available. Contact [founders@manaflow.com](mailto:founders@manaflow.com) for details.
+zerocmux is open source under [GPL-3.0-or-later](LICENSE).

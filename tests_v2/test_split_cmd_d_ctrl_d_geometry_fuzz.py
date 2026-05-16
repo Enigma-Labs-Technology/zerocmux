@@ -14,10 +14,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 FUZZ_SEED = int(os.environ.get("CMUX_SPLIT_FUZZ_SEED", "424242"))
 FUZZ_STEPS = int(os.environ.get("CMUX_SPLIT_FUZZ_STEPS", "1400"))
 SAMPLES_PER_STEP = int(os.environ.get("CMUX_SPLIT_FUZZ_SAMPLES", "4"))

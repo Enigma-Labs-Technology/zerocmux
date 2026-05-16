@@ -67,7 +67,7 @@ class FakeCmuxState:
                 "surface_id": SURFACE_ID,
                 "surface_ref": "surface:1",
             }
-        raise RuntimeError(f"Unsupported fake cmux method: {method}")
+        raise RuntimeError(f"Unsupported fake zerocmux method: {method}")
 
 
 class FakeCmuxHandler(socketserver.StreamRequestHandler):

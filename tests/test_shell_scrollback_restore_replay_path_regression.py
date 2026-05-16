@@ -2,7 +2,7 @@
 """
 Regression: scrollback replay must not depend on PATH containing coreutils.
 
-cmux can launch shells with PATH initially pointing at app resources. If replay
+zerocmux can launch shells with PATH initially pointing at app resources. If replay
 relies on bare `cat`/`rm`, startup replay silently fails before user rc files
 restore PATH.
 """

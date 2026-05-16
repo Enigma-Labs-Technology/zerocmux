@@ -6,7 +6,7 @@ preprompt line when Enter is pressed on an empty prompt.
 Usage:
   python3 scripts/probe-pure-prompt-duplication.py
 
-Run this from a spare cmux pane. The script creates a temporary workspace,
+Run this from a spare zerocmux pane. The script creates a temporary workspace,
 probes the prompt there, and restores your original workspace afterwards.
 """
 
@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "tests_v2")))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def _is_prompt_line(line: str) -> bool:

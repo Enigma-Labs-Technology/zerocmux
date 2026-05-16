@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test script that sends keystrokes to cmux via AppleScript
+# Test script that sends keystrokes to zerocmux via AppleScript
 # This tests the actual keyboard input path through the app
 
 set -e
@@ -7,14 +7,14 @@ set -e
 echo "=== cmux Keystroke Test ==="
 echo ""
 
-# Check if cmux is running
+# Check if zerocmux is running
 if ! pgrep -x "cmux" > /dev/null; then
-    echo "Error: cmux is not running"
-    echo "Please start cmux first"
+    echo "Error: zerocmux is not running"
+    echo "Please start zerocmux first"
     exit 1
 fi
 
-echo "cmux is running"
+echo "zerocmux is running"
 echo ""
 
 # Activate cmux
@@ -56,7 +56,7 @@ echo "  If cat exited, Ctrl+D is working!"
 echo ""
 
 echo "=== Manual Verification Required ==="
-echo "Please check the cmux window to verify:"
+echo "Please check the zerocmux window to verify:"
 echo "  1. The 'sleep 30' command was interrupted by Ctrl+C"
 echo "  2. The 'cat' command exited after Ctrl+D"
 echo ""

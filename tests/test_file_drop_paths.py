@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux
+from zerocmux import cmux
 
 
 SHELL_ESCAPE_CHARS = "\\ ()[]{}<>\"'`!#$&;|*?\t"
@@ -36,8 +36,8 @@ def wait_for_text(client: cmux, surface_id: str, needle: str, timeout: float = 3
 
 def main() -> int:
     tmp = Path(tempfile.gettempdir())
-    p1 = (tmp / "cmux drop [image] #1 (a).png").resolve()
-    p2 = (tmp / "cmux drop second & file!.jpg").resolve()
+    p1 = (tmp / "zerocmux drop [image] #1 (a).png").resolve()
+    p2 = (tmp / "zerocmux drop second & file!.jpg").resolve()
     p1.write_text("x", encoding="utf-8")
     p2.write_text("y", encoding="utf-8")
 

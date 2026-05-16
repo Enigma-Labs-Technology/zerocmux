@@ -94,7 +94,8 @@ enum CommandPaletteSwitcherSearchIndexer {
             return [trimmed]
         case .surface:
             let components = trimmed.components(separatedBy: metadataDelimiters).filter { !$0.isEmpty }
-            return uniqueNormalizedPreservingOrder([trimmed] + components)
+            let suffix = trimmed.split(separator: "/").last.map(String.init)
+            return uniqueNormalizedPreservingOrder([trimmed, suffix].compactMap { $0 } + components)
         }
     }
 
@@ -148,7 +149,7 @@ enum CommandPaletteFuzzyMatcher {
             case .candidateExtraCharacter:
                 return 0
             case .tokenExtraCharacter:
-                return 10
+                return 280
             case .transposedCharacters:
                 return 24
             case .substitutedCharacter:

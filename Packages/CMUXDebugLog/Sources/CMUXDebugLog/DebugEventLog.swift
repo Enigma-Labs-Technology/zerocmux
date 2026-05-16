@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// Ring-buffer event log used by cmux debug builds.
+/// Ring-buffer event log used by zerocmux debug builds.
 ///
 /// Every entry is appended to the resolved log file immediately so `tail -f`
 /// shows live keyboard, focus, split, tab, and browser diagnostics.
@@ -363,23 +363,23 @@ public final class DebugEventLog: @unchecked Sendable {
 
         if let tag = env["CMUX_TAG"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !tag.isEmpty {
-            return "/tmp/cmux-debug-\(sanitizePathToken(tag)).log"
+            return "/tmp/zerocmux-debug-\(sanitizePathToken(tag)).log"
         }
 
         if let socketPath = env["CMUX_SOCKET_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !socketPath.isEmpty {
             let socketBase = URL(fileURLWithPath: socketPath).deletingPathExtension().lastPathComponent
-            if socketBase.hasPrefix("cmux-debug-") {
+            if socketBase.hasPrefix("zerocmux-debug-") || socketBase.hasPrefix("cmux-debug-") {
                 return "/tmp/\(socketBase).log"
             }
         }
 
         if let bundleId = Bundle.main.bundleIdentifier,
            bundleId != "com.cmuxterm.app.debug" {
-            return "/tmp/cmux-debug-\(sanitizePathToken(bundleId)).log"
+            return "/tmp/zerocmux-debug-\(sanitizePathToken(bundleId)).log"
         }
 
-        return "/tmp/cmux-debug.log"
+        return "/tmp/zerocmux-debug.log"
     }
 }
 

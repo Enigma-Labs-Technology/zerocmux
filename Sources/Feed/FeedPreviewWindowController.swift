@@ -92,7 +92,7 @@ private struct FeedPreviewRootView: View {
             case .pending: return ("Pending", .orange)
             case .resolved: return ("Resolved", .green)
             case .expired: return ("Expired", .secondary)
-            case .telemetry: return ("Telemetry", .blue)
+            case .telemetry: return ("Activity", .blue)
             }
         }()
         Text(label.uppercased())
@@ -163,8 +163,8 @@ enum FeedPreviewFixtures {
             case .exitPlan: return "Plan mode"
             case .question: return "AskUserQuestion (multi)"
             case .todos: return "TodoWrite"
-            case .toolUse: return "Tool use (telemetry)"
-            case .userPrompt: return "User prompt (telemetry)"
+            case .toolUse: return "Tool use (activity)"
+            case .userPrompt: return "User prompt (activity)"
             }
         }
     }

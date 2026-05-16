@@ -12,7 +12,7 @@ Most v2-backed commands accept:
 ## Self Identify
 
 ```bash
-cmux identify --json
+zerocmux identify --json
 ```
 
 Returns current focused topology plus optional caller resolution.
@@ -20,8 +20,8 @@ Returns current focused topology plus optional caller resolution.
 ## Caller Override
 
 ```bash
-cmux identify --workspace workspace:2
-cmux identify --workspace workspace:2 --surface surface:8
+zerocmux identify --workspace workspace:2
+zerocmux identify --workspace workspace:2 --surface surface:8
 ```
 
 Useful for agents that need to route relative actions from a known caller anchor.
@@ -29,7 +29,7 @@ Useful for agents that need to route relative actions from a known caller anchor
 ## Output Shaping
 
 ```bash
-cmux --json identify                 # refs-first output
-cmux --json --id-format both identify
-cmux --json --id-format uuids identify
+zerocmux --json identify                 # refs-first output
+zerocmux --json --id-format both identify
+zerocmux --json --id-format uuids identify
 ```

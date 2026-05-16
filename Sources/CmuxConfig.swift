@@ -1694,7 +1694,6 @@ struct CmuxConfigIssue: Identifiable, Equatable, Sendable {
 final class CmuxConfigStore: ObservableObject {
     private static let defaultNewWorkspaceContextMenu: [CmuxConfigContextMenuItem] = [
         .action(CmuxConfigContextMenuActionItem(action: CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID)),
-        .action(CmuxConfigContextMenuActionItem(action: CmuxSurfaceTabBarBuiltInAction.cloudVM.configID)),
     ]
 
     @Published private(set) var loadedCommands: [CmuxCommandDefinition] = []
@@ -2101,7 +2100,7 @@ final class CmuxConfigStore: ObservableObject {
         commandSourcePaths: [String: String]
     ) -> [CmuxResolvedConfigAction] {
         var registry = Dictionary(
-            uniqueKeysWithValues: CmuxSurfaceTabBarBuiltInAction.allCases.map {
+            uniqueKeysWithValues: CmuxSurfaceTabBarBuiltInAction.availableBuiltIns.map {
                 ($0.configID, CmuxResolvedConfigAction.builtIn($0))
             }
         )
@@ -2295,14 +2294,14 @@ final class CmuxConfigStore: ObservableObject {
     }
 
     func paletteCustomActions() -> [CmuxResolvedConfigAction] {
-        let builtInIDs = Set(CmuxSurfaceTabBarBuiltInAction.allCases.map(\.configID))
+        let builtInIDs = Set(CmuxSurfaceTabBarBuiltInAction.availableBuiltIns.map(\.configID))
         return loadedActions.filter { action in
             action.palette && !builtInIDs.contains(action.id)
         }
     }
 
     func shortcutActions() -> [CmuxResolvedConfigAction] {
-        let builtInIDs = Set(CmuxSurfaceTabBarBuiltInAction.allCases.map(\.configID))
+        let builtInIDs = Set(CmuxSurfaceTabBarBuiltInAction.availableBuiltIns.map(\.configID))
         return loadedActions.filter { action in
             action.shortcut != nil && (builtInIDs.contains(action.id) || action.actionSourcePath != nil)
         }.sorted { lhs, rhs in

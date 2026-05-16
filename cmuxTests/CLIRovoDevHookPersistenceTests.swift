@@ -59,7 +59,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             "prompt that should not persist",
         ])
         environment["CMUX_AGENT_LAUNCH_CWD"] = workspace.path
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
 
         let result = runProcess(
             executablePath: cliPath,
@@ -164,7 +163,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
                     "run",
                     "--yolo",
                 ]),
-                "CMUX_CLI_SENTRY_DISABLED": "1",
             ],
             standardInput: #"{"cwd":"\#(workspace.path)","hook_event_name":"on_tool_permission"}"#,
             timeout: 5
@@ -257,7 +255,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
                 "--yolo",
             ]),
             "CMUX_AGENT_LAUNCH_CWD": workspace.path,
-            "CMUX_CLI_SENTRY_DISABLED": "1",
         ]
 
         let result = runProcess(
@@ -327,7 +324,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             "CMUX_SURFACE_ID": surfaceId,
             "CMUX_AGENT_HOOK_STATE_DIR": root.path,
             "CMUX_ROVODEV_SESSIONS_DIR": sessionsRoot.path,
-            "CMUX_CLI_SENTRY_DISABLED": "1",
         ]
 
         let result = runProcess(
@@ -370,7 +366,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             environment: [
                 "HOME": root.path,
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "CMUX_CLI_SENTRY_DISABLED": "1",
             ],
             timeout: 5
         )
@@ -400,7 +395,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             environment: [
                 "HOME": root.path,
                 "PATH": "\(binDir.path):/usr/bin:/bin:/usr/sbin:/sbin",
-                "CMUX_CLI_SENTRY_DISABLED": "1",
             ],
             timeout: 5
         )
@@ -414,7 +408,7 @@ extension CLINotifyProcessIntegrationRegressionTests {
             encoding: .utf8
         )
         XCTAssertTrue(config.contains("eventHooks:"), config)
-        XCTAssertTrue(config.contains("cmux hooks rovodev prompt-submit"), config)
+        XCTAssertTrue(config.contains("zerocmux hooks rovodev prompt-submit"), config)
     }
 
     func testSetupHooksRejectsConflictingAgentFilters() throws {
@@ -430,7 +424,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             environment: [
                 "HOME": root.path,
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "CMUX_CLI_SENTRY_DISABLED": "1",
             ],
             timeout: 5
         )
@@ -453,7 +446,6 @@ extension CLINotifyProcessIntegrationRegressionTests {
             environment: [
                 "HOME": root.path,
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "CMUX_CLI_SENTRY_DISABLED": "1",
             ],
             timeout: 5
         )

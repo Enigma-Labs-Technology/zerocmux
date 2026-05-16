@@ -1,38 +1,46 @@
 #!/usr/bin/env bash
-# Regression test for https://github.com/manaflow-ai/cmux/issues/385.
-# Ensures paid CI jobs use WarpBuild runners.
-# Fork PRs are gated by GitHub's built-in "Require approval for outside
-# collaborators" setting, so workflow-level fork guards are not needed.
+# Ensures expensive macOS jobs stay on GitHub Actions runners and release
+# signing stays on the dedicated self-hosted signing runner.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CI_FILE="$ROOT_DIR/.github/workflows/ci.yml"
-GHOSTTYKIT_FILE="$ROOT_DIR/.github/workflows/build-ghosttykit.yml"
-COMPAT_FILE="$ROOT_DIR/.github/workflows/ci-macos-compat.yml"
+WORKFLOW_DIR="$ROOT_DIR/.github/workflows"
+CI_FILE="$WORKFLOW_DIR/ci.yml"
+GHOSTTYKIT_FILE="$WORKFLOW_DIR/build-ghosttykit.yml"
+COMPAT_FILE="$WORKFLOW_DIR/ci-macos-compat.yml"
+RELEASE_FILE="$WORKFLOW_DIR/release.yml"
 
-check_warp_runner() {
-  local file="$1" job="$2"
-  if ! awk -v job="$job" '
+check_runner() {
+  local file="$1" job="$2" pattern="$3" description="$4"
+  local job_body
+  job_body="$(awk -v job="$job" '
     $0 ~ "^  "job":" { in_job=1; next }
     in_job && /^  [^[:space:]]/ { in_job=0 }
-    in_job && /runs-on:.*warp-macos-.*-arm64/ { saw_warp=1 }
-    in_job && /os: warp-macos-.*-arm64/ { saw_warp=1 }
-    END { exit !(saw_warp) }
-  ' "$file"; then
-    echo "FAIL: $job in $(basename "$file") must use a WarpBuild runner"
+    in_job { print }
+  ' "$file")"
+  if ! grep -Eq "$pattern" <<<"$job_body"; then
+    echo "FAIL: $job in $(basename "$file") must use $description"
     exit 1
   fi
-  echo "PASS: $job WarpBuild runner is present"
+  echo "PASS: $job uses $description"
 }
 
+if grep -R -n -E 'runs-on:.*(warp-macos|blacksmith-|depot-)|os: (warp-macos|blacksmith-|depot-)' "$WORKFLOW_DIR"; then
+  echo "FAIL: workflows must not use third-party macOS runner labels"
+  exit 1
+fi
+
 # ci.yml jobs
-check_warp_runner "$CI_FILE" "tests"
-check_warp_runner "$CI_FILE" "tests-build-and-lag"
-check_warp_runner "$CI_FILE" "release-build"
-check_warp_runner "$CI_FILE" "ui-regressions"
+check_runner "$CI_FILE" "tests" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "release-build" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "ui-regressions" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
 
 # build-ghosttykit.yml
-check_warp_runner "$GHOSTTYKIT_FILE" "build-ghosttykit"
+check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
 
-# ci-macos-compat.yml (uses matrix.os with WarpBuild runners)
-check_warp_runner "$COMPAT_FILE" "compat-tests"
+# ci-macos-compat.yml uses matrix.os.
+check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-latest' "GitHub-hosted macos-latest"
+
+# release.yml signing job
+check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: \[self-hosted, macOS, zerocmux-signing\]' "self-hosted zerocmux-signing"

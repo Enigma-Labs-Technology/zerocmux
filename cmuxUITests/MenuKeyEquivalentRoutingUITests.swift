@@ -89,7 +89,7 @@ final class MenuKeyEquivalentRoutingUITests: XCTestCase {
         )
     }
 
-    func testCmdFOpensRightSidebarFindInsteadOfWebContentFindShortcut() {
+    func testCmdFOpensBrowserFindInsteadOfWebContentFindShortcut() {
         let app = launchWithBrowserSetup(browserURL: makeBrowserHandledCmdFPageURL())
 
         XCTAssertTrue(
@@ -101,15 +101,15 @@ final class MenuKeyEquivalentRoutingUITests: XCTestCase {
 
         app.typeKey("f", modifierFlags: [.command])
 
-        let findField = app.textFields["FileExplorerSearchField"].firstMatch
-        XCTAssertTrue(findField.waitForExistence(timeout: 6.0), "Expected right sidebar file search after Cmd+F")
+        let findField = app.textFields["BrowserFindSearchTextField"].firstMatch
+        XCTAssertTrue(findField.waitForExistence(timeout: 6.0), "Expected browser find after Cmd+F")
 
         app.typeText("needle")
         XCTAssertTrue(
             waitForCondition(timeout: 4.0) {
                 ((findField.value as? String) ?? "") == "needle"
             },
-            "Expected Cmd+F to focus right sidebar file search. value=\(String(describing: findField.value))"
+            "Expected Cmd+F to focus browser find. value=\(String(describing: findField.value))"
         )
         XCTAssertNotEqual(
             loadGotoSplit()?["browserPageTitle"],

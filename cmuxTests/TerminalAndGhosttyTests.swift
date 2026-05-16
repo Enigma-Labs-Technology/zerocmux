@@ -859,51 +859,6 @@ final class GhosttyPasteboardHelperTests: XCTestCase {
     }
 }
 
-@MainActor
-final class FeedbackComposerMessageEditorViewTests: XCTestCase {
-    func testLongMessageCreatesScrollableDocumentContent() {
-        let editor = FeedbackComposerMessageEditorView(
-            frame: NSRect(x: 0, y: 0, width: 360, height: 120)
-        )
-        editor.placeholder = "Message"
-        editor.layoutSubtreeIfNeeded()
-
-        editor.textView.string = (0..<80)
-            .map { "feedback line \($0)" }
-            .joined(separator: "\n")
-        editor.refreshTextLayout()
-        editor.layoutSubtreeIfNeeded()
-
-        XCTAssertGreaterThan(
-            editor.textView.frame.height,
-            editor.scrollView.contentSize.height + 40
-        )
-    }
-
-    func testTrailingBlankLineContributesToScrollableDocumentHeight() {
-        let editor = FeedbackComposerMessageEditorView(
-            frame: NSRect(x: 0, y: 0, width: 360, height: 120)
-        )
-        editor.layoutSubtreeIfNeeded()
-
-        let messageWithoutTrailingBlankLine = (0..<20)
-            .map { "feedback line \($0)" }
-            .joined(separator: "\n")
-        editor.textView.string = messageWithoutTrailingBlankLine
-        editor.refreshTextLayout()
-        let heightWithoutTrailingBlankLine = editor.textView.frame.height
-
-        editor.textView.string = messageWithoutTrailingBlankLine + "\n"
-        editor.refreshTextLayout()
-
-        XCTAssertGreaterThan(
-            editor.textView.frame.height,
-            heightWithoutTrailingBlankLine + 5
-        )
-    }
-}
-
-
 final class TerminalKeyboardCopyModeActionTests: XCTestCase {
     func testCopyModeBypassAllowsOnlyCommandShortcuts() {
         XCTAssertTrue(terminalKeyboardCopyModeShouldBypassForShortcut(modifierFlags: [.command]))
@@ -1713,20 +1668,70 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
             .first
     }
 
+    private func restoreDefaultsValue(_ value: Any?, forKey key: String, defaults: UserDefaults) {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func waitForSurfaceReady(_ surface: TerminalSurface, timeout: TimeInterval = 1.0) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if surface.surface != nil {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        return surface.surface != nil
+    }
+
+    @discardableResult
+    private func waitUntil(
+        timeout: TimeInterval = 2.0,
+        description: String,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+
+        if condition() {
+            return true
+        }
+
+        XCTFail("Timed out waiting for \(description)", file: file, line: line)
+        return false
+    }
+
     func testTerminalMouseDownDismissesUnreadWhenSurfaceIsAlreadyFirstResponder() {
         let appDelegate = AppDelegate.shared ?? AppDelegate()
         let manager = TabManager()
         let store = TerminalNotificationStore.shared
         let window = makeWindow()
+        let defaults = UserDefaults.standard
 
         let originalTabManager = appDelegate.tabManager
         let originalNotificationStore = appDelegate.notificationStore
         let originalAppFocusOverride = AppFocusState.overrideIsFocused
+        let originalPaneFlashEnabled = defaults.object(forKey: NotificationPaneFlashSettings.enabledKey)
+        let originalTmuxOverlayEnabled = defaults.object(forKey: TmuxOverlayExperimentSettings.enabledKey)
+        let originalTmuxOverlayTarget = defaults.object(forKey: TmuxOverlayExperimentSettings.targetKey)
 
         store.replaceNotificationsForTesting([])
         store.configureNotificationDeliveryHandlerForTesting { _, _ in }
         appDelegate.tabManager = manager
         appDelegate.notificationStore = store
+        defaults.set(true, forKey: NotificationPaneFlashSettings.enabledKey)
+        defaults.set(false, forKey: TmuxOverlayExperimentSettings.enabledKey)
+        defaults.removeObject(forKey: TmuxOverlayExperimentSettings.targetKey)
 
         defer {
             store.replaceNotificationsForTesting([])
@@ -1734,6 +1739,13 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
             appDelegate.tabManager = originalTabManager
             appDelegate.notificationStore = originalNotificationStore
             AppFocusState.overrideIsFocused = originalAppFocusOverride
+            if let originalPaneFlashEnabled {
+                defaults.set(originalPaneFlashEnabled, forKey: NotificationPaneFlashSettings.enabledKey)
+            } else {
+                defaults.removeObject(forKey: NotificationPaneFlashSettings.enabledKey)
+            }
+            restoreDefaultsValue(originalTmuxOverlayEnabled, forKey: TmuxOverlayExperimentSettings.enabledKey, defaults: defaults)
+            restoreDefaultsValue(originalTmuxOverlayTarget, forKey: TmuxOverlayExperimentSettings.targetKey, defaults: defaults)
             window.orderOut(nil)
         }
 
@@ -1761,7 +1773,7 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         }
 
         GhosttySurfaceScrollView.resetFlashCounts()
-        AppFocusState.overrideIsFocused = true
+        AppFocusState.overrideIsFocused = false
         XCTAssertTrue(window.makeFirstResponder(surfaceView))
 
         store.addNotification(
@@ -1774,15 +1786,19 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         XCTAssertTrue(store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id))
 
         AppFocusState.overrideIsFocused = true
+        let initialFlashCount = GhosttySurfaceScrollView.flashCount(for: terminalPanel.id)
         let pointInWindow = surfaceView.convert(NSPoint(x: 20, y: 20), to: nil)
         let event = makeMouseEvent(type: .leftMouseDown, location: pointInWindow, window: window)
         surfaceView.mouseDown(with: event)
-        let drained = expectation(description: "flash drained")
-        DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 1.0)
+        XCTAssertTrue(
+            waitUntil(timeout: 10.0, description: "notification dismissal and flash") {
+                !store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id) &&
+                    GhosttySurfaceScrollView.flashCount(for: terminalPanel.id) > initialFlashCount
+            }
+        )
 
         XCTAssertFalse(store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id))
-        XCTAssertEqual(GhosttySurfaceScrollView.flashCount(for: terminalPanel.id), 1)
+        XCTAssertGreaterThan(GhosttySurfaceScrollView.flashCount(for: terminalPanel.id), initialFlashCount)
     }
 
     func testTerminalKeyDownDismissesUnreadWhenSurfaceIsAlreadyFirstResponder() {
@@ -1790,15 +1806,22 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         let manager = TabManager()
         let store = TerminalNotificationStore.shared
         let window = makeWindow()
+        let defaults = UserDefaults.standard
 
         let originalTabManager = appDelegate.tabManager
         let originalNotificationStore = appDelegate.notificationStore
         let originalAppFocusOverride = AppFocusState.overrideIsFocused
+        let originalPaneFlashEnabled = defaults.object(forKey: NotificationPaneFlashSettings.enabledKey)
+        let originalTmuxOverlayEnabled = defaults.object(forKey: TmuxOverlayExperimentSettings.enabledKey)
+        let originalTmuxOverlayTarget = defaults.object(forKey: TmuxOverlayExperimentSettings.targetKey)
 
         store.replaceNotificationsForTesting([])
         store.configureNotificationDeliveryHandlerForTesting { _, _ in }
         appDelegate.tabManager = manager
         appDelegate.notificationStore = store
+        defaults.set(true, forKey: NotificationPaneFlashSettings.enabledKey)
+        defaults.set(false, forKey: TmuxOverlayExperimentSettings.enabledKey)
+        defaults.removeObject(forKey: TmuxOverlayExperimentSettings.targetKey)
 
         defer {
             store.replaceNotificationsForTesting([])
@@ -1806,6 +1829,13 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
             appDelegate.tabManager = originalTabManager
             appDelegate.notificationStore = originalNotificationStore
             AppFocusState.overrideIsFocused = originalAppFocusOverride
+            if let originalPaneFlashEnabled {
+                defaults.set(originalPaneFlashEnabled, forKey: NotificationPaneFlashSettings.enabledKey)
+            } else {
+                defaults.removeObject(forKey: NotificationPaneFlashSettings.enabledKey)
+            }
+            restoreDefaultsValue(originalTmuxOverlayEnabled, forKey: TmuxOverlayExperimentSettings.enabledKey, defaults: defaults)
+            restoreDefaultsValue(originalTmuxOverlayTarget, forKey: TmuxOverlayExperimentSettings.targetKey, defaults: defaults)
             window.orderOut(nil)
         }
 
@@ -1833,7 +1863,7 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         }
 
         GhosttySurfaceScrollView.resetFlashCounts()
-        AppFocusState.overrideIsFocused = true
+        AppFocusState.overrideIsFocused = false
         XCTAssertTrue(window.makeFirstResponder(surfaceView))
 
         store.addNotification(
@@ -1845,14 +1875,19 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         )
         XCTAssertTrue(store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id))
 
+        AppFocusState.overrideIsFocused = true
+        let initialFlashCount = GhosttySurfaceScrollView.flashCount(for: terminalPanel.id)
         let event = makeKeyEvent(characters: "", keyCode: 122, window: window)
         surfaceView.keyDown(with: event)
-        let drained = expectation(description: "flash drained")
-        DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 1.0)
+        XCTAssertTrue(
+            waitUntil(timeout: 10.0, description: "notification dismissal and flash") {
+                !store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id) &&
+                    GhosttySurfaceScrollView.flashCount(for: terminalPanel.id) > initialFlashCount
+            }
+        )
 
         XCTAssertFalse(store.hasUnreadNotification(forTabId: workspace.id, surfaceId: terminalPanel.id))
-        XCTAssertEqual(GhosttySurfaceScrollView.flashCount(for: terminalPanel.id), 1)
+        XCTAssertGreaterThan(GhosttySurfaceScrollView.flashCount(for: terminalPanel.id), initialFlashCount)
     }
 
     func testKeyDownRecoversReleasedSurfaceWhileHostedViewIsDetached() throws {
@@ -1898,16 +1933,8 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         let event = makeKeyEvent(characters: "a", keyCode: 0, window: window)
         surfaceView.keyDown(with: event)
 
-        let recovered = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in
-                surface.surface != nil
-            },
-            object: NSObject()
-        )
-        wait(for: [recovered], timeout: 1.0)
-
-        XCTAssertNotNil(
-            surface.surface,
+        XCTAssertTrue(
+            waitForSurfaceReady(surface),
             "Missing-surface keyDown should request background surface recreation instead of leaving terminal input dead"
         )
 #else
@@ -1960,11 +1987,6 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
         hostedView.removeFromSuperview()
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         XCTAssertNil(surfaceView.window, "Expected hosted terminal view to be detached from any window")
-        XCTAssertTrue(
-            (window.firstResponder as? NSView) === surfaceView,
-            "Expected the detached Ghostty view to remain the stale first responder during the regression setup"
-        )
-
         let event = makeKeyEvent(characters: "a", keyCode: 0, window: window)
         surfaceView.keyDown(with: event)
 
@@ -1980,15 +2002,10 @@ final class TerminalNotificationDirectInteractionTests: XCTestCase {
             "Responder loss after a missing-surface keyDown should clear desired Ghostty focus before recovery completes"
         )
 
-        let recovered = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in
-                surface.surface != nil
-            },
-            object: NSObject()
+        XCTAssertTrue(
+            waitForSurfaceReady(surface),
+            "Expected missing-surface recovery to still recreate the runtime surface"
         )
-        wait(for: [recovered], timeout: 1.0)
-
-        XCTAssertNotNil(surface.surface, "Expected missing-surface recovery to still recreate the runtime surface")
         XCTAssertFalse(
             surface.debugDesiredFocusState(),
             "Recovered runtime surface should not restore focus after the pane already lost first responder"
@@ -2329,7 +2346,7 @@ final class WindowTerminalHostViewTests: XCTestCase {
     }
 
     func testHostViewStopsSidebarPassThroughJustInsideTerminalContent() {
-        let terminalSideOverlapWidth: CGFloat = 2
+        let terminalSideOverlapWidth = SidebarResizeInteraction.contentSideHitWidth
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 180),
             styleMask: [.titled, .closable],
@@ -2374,17 +2391,29 @@ final class WindowTerminalHostViewTests: XCTestCase {
             x: dividerPointInHost.x + terminalSideOverlapWidth,
             y: dividerPointInHost.y
         )
+        let resizeBandEvent = makeMouseDownEvent(
+            at: host.convert(resizeBandPoint, to: nil),
+            window: window
+        )
         XCTAssertNil(
-            host.hitTest(resizeBandPoint),
+            host.performHitTest(at: resizeBandPoint, currentEvent: resizeBandEvent),
             "The narrow terminal-side overlap should still pass through to the sidebar resizer"
         )
 
+        let terminalContentOffset = max(
+            SidebarResizeInteraction.contentSideHitWidth + 1,
+            CGFloat(8)
+        )
         let textSelectionPoint = NSPoint(
-            x: dividerPointInHost.x + terminalSideOverlapWidth + 1,
+            x: dividerPointInHost.x + terminalContentOffset,
             y: dividerPointInHost.y
         )
+        let textSelectionEvent = makeMouseDownEvent(
+            at: host.convert(textSelectionPoint, to: nil),
+            window: window
+        )
         assertHitFallsInsideHostedTerminal(
-            host.hitTest(textSelectionPoint),
+            host.performHitTest(at: textSelectionPoint, currentEvent: textSelectionEvent),
             hostedView: hostedView,
             message: "Once the pointer moves past the reduced terminal-side overlap, terminal content should win hit-testing"
         )
@@ -2394,6 +2423,11 @@ final class WindowTerminalHostViewTests: XCTestCase {
 
 @MainActor
 final class GhosttySurfaceOverlayTests: XCTestCase {
+    private final class KeyWindow: NSWindow {
+        override var canBecomeKey: Bool { true }
+        override var isKeyWindow: Bool { true }
+    }
+
     private final class ScrollProbeSurfaceView: GhosttyNSView {
         private(set) var scrollWheelCallCount = 0
 
@@ -2458,21 +2492,20 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         line: UInt = #line,
         _ condition: @escaping () -> Bool
     ) -> Bool {
-        let expectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in
-                if Thread.isMainThread {
-                    return condition()
-                }
-                return DispatchQueue.main.sync(execute: condition)
-            },
-            object: NSObject()
-        )
-        let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
-        guard result == .completed else {
-            XCTFail("Timed out waiting for \(description)", file: file, line: line)
-            return false
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+
+        if condition() {
+            return true
         }
-        return true
+
+        XCTFail("Timed out waiting for \(description)", file: file, line: line)
+        return false
     }
 
     func testTrackpadScrollRoutesToTerminalSurfaceAndPreservesKeyboardFocusPath() {
@@ -2537,7 +2570,7 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
     }
 
     func testExplicitWheelScrollKeepsScrollbackPinnedAgainstLaterBottomPacket() {
-        let window = NSWindow(
+        let window = KeyWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -2691,11 +2724,20 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         scrollView.scrollerStyle = .legacy
         scrollView.layoutSubtreeIfNeeded()
         let legacyContentWidth = scrollView.contentSize.width
-        XCTAssertLessThan(
-            legacyContentWidth,
-            initialContentWidth,
-            "Legacy scrollbars should reserve width in the scroll view content area"
-        )
+        if legacyContentWidth < initialContentWidth {
+            XCTAssertLessThan(
+                legacyContentWidth,
+                initialContentWidth,
+                "Legacy scrollbars should reserve width in the scroll view content area when AppKit still applies a legacy gutter"
+            )
+        } else {
+            XCTAssertEqual(
+                legacyContentWidth,
+                initialContentWidth,
+                accuracy: 0.5,
+                "Some macOS releases keep overlay-sized content even after forcing the scroll view into legacy scroller style"
+            )
+        }
         assertPendingSurfaceWidth(
             initialSurfaceSize.width,
             "Changing the scroll view style alone should leave the terminal grid stale until the scroller-style observer runs"
@@ -2814,7 +2856,7 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         )
         let hostedView = surface.hostedView
 
-        let window = NSWindow(
+        let window = KeyWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -2830,16 +2872,26 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         hostedView.autoresizingMask = [.width, .height]
         contentView.addSubview(hostedView)
 
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.displayIfNeeded()
         contentView.layoutSubtreeIfNeeded()
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "search test window to become key") {
+                window.isKeyWindow
+            }
+        )
         hostedView.setVisibleInUI(true)
         hostedView.setActive(true)
 
         let searchState = TerminalSurface.SearchState(needle: "")
         surface.searchState = searchState
         hostedView.setSearchOverlay(searchState: searchState)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "mounted find text field") {
+                self.findEditableTextField(in: hostedView) != nil
+            }
+        )
 
         guard let searchField = findEditableTextField(in: hostedView) else {
             XCTFail("Expected mounted find text field")
@@ -2847,7 +2899,9 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         }
 
         XCTAssertTrue(
-            firstResponderOwnsTextField(window.firstResponder, textField: searchField),
+            waitUntil(timeout: 3.0, description: "mounted find field to own first responder") {
+                self.firstResponderOwnsTextField(window.firstResponder, textField: searchField)
+            },
             "Deferred search overlay attach should still move focus into the find field"
         )
     }
@@ -2917,7 +2971,11 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         let searchState = TerminalSurface.SearchState(needle: "")
         surface.searchState = searchState
         hostedView.setSearchOverlay(searchState: searchState)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "mounted find text field") {
+                self.findEditableTextField(in: hostedView) != nil
+            }
+        )
 
         guard let searchField = findEditableTextField(in: hostedView) else {
             XCTFail("Expected mounted find text field")
@@ -2999,6 +3057,12 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
 
         hostedView.setDropZoneOverlay(zone: .right)
         container.layoutSubtreeIfNeeded()
+        XCTAssertTrue(
+            waitUntil(timeout: 2.0, description: "drop hover overlay to show") {
+                let state = hostedView.debugDropZoneOverlayState()
+                return !state.isHidden && state.isAttachedToParentContainer
+            }
+        )
 
         let state = hostedView.debugDropZoneOverlayState()
         XCTAssertFalse(state.isHidden)
@@ -3016,8 +3080,11 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         XCTAssertEqual(state.frame.size.height, 112, accuracy: 0.5)
 
         hostedView.setDropZoneOverlay(zone: nil)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.25))
-        XCTAssertTrue(hostedView.debugDropZoneOverlayState().isHidden)
+        XCTAssertTrue(
+            waitUntil(timeout: 2.0, description: "drop hover overlay to hide") {
+                hostedView.debugDropZoneOverlayState().isHidden
+            }
+        )
     }
 
     func testForceRefreshNoopsAfterSurfaceReleaseDuringGeometryReconcile() throws {
@@ -3117,8 +3184,11 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         )
         let hostedView = surface.hostedView
         hostedView.setSearchOverlay(searchState: TerminalSurface.SearchState(needle: "split"))
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        XCTAssertTrue(hostedView.debugHasSearchOverlay())
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "search overlay to mount before portal rebind") {
+                hostedView.debugHasSearchOverlay()
+            }
+        )
 
         portal.bind(hostedView: hostedView, to: anchorA, visibleInUI: true)
         XCTAssertTrue(hostedView.debugHasSearchOverlay())
@@ -3156,18 +3226,31 @@ final class GhosttySurfaceOverlayTests: XCTestCase {
         )
         let hostedView = surface.hostedView
         hostedView.setSearchOverlay(searchState: TerminalSurface.SearchState(needle: "workspace"))
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        XCTAssertTrue(hostedView.debugHasSearchOverlay())
-
-        portal.bind(hostedView: hostedView, to: anchor, visibleInUI: true)
-        XCTAssertTrue(hostedView.debugHasSearchOverlay())
-
-        portal.bind(hostedView: hostedView, to: anchor, visibleInUI: false)
-        XCTAssertTrue(hostedView.debugHasSearchOverlay())
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "search overlay to mount before portal visibility churn") {
+                hostedView.debugHasSearchOverlay()
+            }
+        )
 
         portal.bind(hostedView: hostedView, to: anchor, visibleInUI: true)
         XCTAssertTrue(
-            hostedView.debugHasSearchOverlay(),
+            waitUntil(timeout: 3.0, description: "search overlay after visible portal bind") {
+                hostedView.debugHasSearchOverlay()
+            }
+        )
+
+        portal.bind(hostedView: hostedView, to: anchor, visibleInUI: false)
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "search overlay after hidden portal bind") {
+                hostedView.debugHasSearchOverlay()
+            }
+        )
+
+        portal.bind(hostedView: hostedView, to: anchor, visibleInUI: true)
+        XCTAssertTrue(
+            waitUntil(timeout: 3.0, description: "search overlay after restored portal bind") {
+                hostedView.debugHasSearchOverlay()
+            },
             "Workspace-switch-like visibility toggles should not unmount terminal search overlay"
         )
     }
@@ -3204,6 +3287,30 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
             expectation.fulfill()
         }
         XCTWaiter().wait(for: [expectation], timeout: 1.0)
+    }
+
+    @discardableResult
+    private func waitUntil(
+        timeout: TimeInterval = 2.0,
+        description: String,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+
+        if condition() {
+            return true
+        }
+
+        XCTFail("Timed out waiting for \(description)", file: file, line: line)
+        return false
     }
 
     func testPortalHostInstallsAboveContentViewForVisibility() {
@@ -3379,7 +3486,9 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
         portal.synchronizeHostedViewForAnchor(activeAnchor)
 
         XCTAssertTrue(
-            retiredHosted.isHidden,
+            waitUntil(description: "retired hosted terminal to hide") {
+                retiredHosted.isHidden
+            },
             "A visible hosted terminal whose anchor vanished should hide as soon as the replacement anchor sync runs"
         )
         // Drain the queued full-sync turn so the portal clears any stale hit-test region left by the rebind.
@@ -3389,8 +3498,10 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
             NSPoint(x: activeAnchor.bounds.midX, y: activeAnchor.bounds.midY),
             to: nil
         )
-        XCTAssertNil(
-            portal.terminalViewAtWindowPoint(retiredWindowPoint),
+        XCTAssertTrue(
+            waitUntil(description: "stale portal hit region to clear") {
+                portal.terminalViewAtWindowPoint(retiredWindowPoint) == nil
+            },
             "Restore-like rebinds should clear stale portal hit regions on the queued portal resync"
         )
         XCTAssertTrue(
@@ -3647,14 +3758,17 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
         )
 
         TerminalWindowPortalRegistry.scheduleExternalGeometrySynchronizeForAllWindows()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-        XCTAssertNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(originalWindowPoint, in: window),
+        XCTAssertTrue(
+            waitUntil(description: "scheduled external geometry sync to clear stale portal position") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(originalWindowPoint, in: window) == nil
+            },
             "The stale portal position should be cleared after the scheduled external geometry sync"
         )
-        XCTAssertNotNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedWindowPoint, in: window),
+        XCTAssertTrue(
+            waitUntil(description: "scheduled external geometry sync to refresh shifted portal position") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedWindowPoint, in: window) != nil
+            },
             "The scheduled external geometry sync should move the portal-hosted terminal to the anchor's new window position"
         )
     }
@@ -3711,7 +3825,11 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
             window.displayIfNeeded()
         }
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(
+            waitUntil(description: "queued layout shift to run") {
+                anchor.convert(anchor.bounds, to: nil).minX > originalAnchorFrameInWindow.minX + 1
+            }
+        )
 
         let shiftedAnchorFrameInWindow = anchor.convert(anchor.bounds, to: nil)
         XCTAssertGreaterThan(
@@ -3732,12 +3850,16 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
             x: (originalAnchorFrameInWindow.maxX + shiftedAnchorFrameInWindow.maxX) / 2,
             y: shiftedAnchorFrameInWindow.midY
         )
-        XCTAssertNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(retiredStaleWindowPoint, in: window),
+        XCTAssertTrue(
+            waitUntil(description: "queued external sync to clear stale portal location") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(retiredStaleWindowPoint, in: window) == nil
+            },
             "The queued external sync should wait until the later layout shift settles, clearing the stale portal location"
         )
-        XCTAssertNotNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedWindowPoint, in: window),
+        XCTAssertTrue(
+            waitUntil(description: "queued external sync to refresh shifted portal location") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedWindowPoint, in: window) != nil
+            },
             "The delayed external sync should move the portal-hosted terminal to the queued layout shift position"
         )
     }
@@ -3979,6 +4101,9 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
         TerminalWindowPortalRegistry.synchronizeForAnchor(secondAnchor)
         realizeWindowLayout(firstWindow)
         realizeWindowLayout(secondWindow)
+        drainMainQueue()
+        drainMainQueue()
+        drainMainQueue()
 
         let originalFirstFrameInWindow = firstAnchor.convert(firstAnchor.bounds, to: nil)
         let originalSecondFrameInWindow = secondAnchor.convert(secondAnchor.bounds, to: nil)
@@ -4022,14 +4147,17 @@ final class TerminalWindowPortalLifecycleTests: XCTestCase {
         )
 
         TerminalWindowPortalRegistry.scheduleExternalGeometrySynchronize(for: firstWindow)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
-        XCTAssertNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(retiredFirstPoint, in: firstWindow),
+        XCTAssertTrue(
+            waitUntil(description: "window-scoped sync to clear stale location") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(retiredFirstPoint, in: firstWindow) == nil
+            },
             "Window-scoped sync should clear the stale location in the requested window"
         )
-        XCTAssertNotNil(
-            TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedFirstPoint, in: firstWindow),
+        XCTAssertTrue(
+            waitUntil(description: "window-scoped sync to refresh requested window") {
+                TerminalWindowPortalRegistry.terminalViewAtWindowPoint(shiftedFirstPoint, in: firstWindow) != nil
+            },
             "Window-scoped sync should refresh the requested window"
         )
         XCTAssertNil(

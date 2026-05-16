@@ -10,7 +10,7 @@ Tests that CPU usage stays reasonable when:
 Usage:
     python3 tests/test_cpu_notifications.py
 
-Requires cmux to be running with socket control enabled.
+Requires zerocmux to be running with socket control enabled.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 # Maximum acceptable CPU usage during idle (after notifications)
@@ -40,16 +40,16 @@ MONITOR_DURATION = 3.0
 
 
 def get_cmux_pid() -> Optional[int]:
-    """Get the PID of the running cmux process."""
+    """Get the PID of the running zerocmux process."""
     result = subprocess.run(
-        ["pgrep", "-f", r"cmux\.app/Contents/MacOS/cmux$"],
+        ["pgrep", "-f", r"zerocmux\.app/Contents/MacOS/zerocmux$"],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         # Try DEV build
         result = subprocess.run(
-            ["pgrep", "-f", r"cmux DEV\.app/Contents/MacOS/cmux"],
+            ["pgrep", "-f", r"zerocmux DEV\.app/Contents/MacOS/zerocmux"],
             capture_output=True,
             text=True,
         )
@@ -216,21 +216,23 @@ def test_cpu_idle_with_notifications(client: cmux, pid: int) -> tuple[bool, str]
 
 def main():
     print("=" * 60)
-    print("cmux Notification CPU Tests")
+    print("zerocmux Notification CPU Tests")
     print("=" * 60)
 
     pid = get_cmux_pid()
     if pid is None:
-        print("\n❌ SKIP: cmux is not running")
+        print("\n❌ SKIP: zerocmux is not running")
         return 0
 
-    print(f"\nFound cmux process: PID {pid}")
+    print(f"\nFound zerocmux process: PID {pid}")
 
     # Try to connect to the socket
     socket_paths = [
+        os.path.expanduser("~/Library/Application Support/zerocmux/zerocmux.sock"),
+        "/tmp/zerocmux.sock",
+        "/tmp/zerocmux-debug.sock",
         os.path.expanduser("~/Library/Application Support/cmux/cmux.sock"),
         "/tmp/cmux.sock",
-        "/tmp/cmux-debug.sock",
     ]
     client = None
     for socket_path in socket_paths:
@@ -244,7 +246,7 @@ def main():
                 continue
 
     if client is None:
-        print(f"\n❌ SKIP: Could not connect to cmux socket")
+        print(f"\n❌ SKIP: Could not connect to zerocmux socket")
         return 0
 
     results = []

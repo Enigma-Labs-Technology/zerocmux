@@ -3,7 +3,7 @@
 Automated test for ctrl+enter keybind using real keystrokes.
 
 Requires:
-  - cmux running
+  - zerocmux running
   - Accessibility permissions for System Events (osascript)
   - keybind = ctrl+enter=text:\\r (or \\n/\\x0d) configured in Ghostty config
 """
@@ -18,7 +18,7 @@ from typing import Optional
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class SkipTest(Exception):
@@ -29,24 +29,35 @@ def infer_app_name_for_osascript(socket_path: str) -> str:
     Infer the app display name from the socket path.
 
     Examples:
-      - /tmp/cmux-debug.sock          -> "cmux DEV"
-      - /tmp/cmux-debug-foo.sock      -> "cmux DEV foo"
+      - /tmp/zerocmux-debug.sock          -> "zerocmux DEV"
+      - /tmp/zerocmux-debug-foo.sock      -> "zerocmux DEV foo"
+      - ~/Library/Application Support/zerocmux/zerocmux.sock -> "zerocmux"
       - ~/Library/Application Support/cmux/cmux.sock -> "cmux"
-      - /tmp/cmux-foo.sock            -> "cmux foo"
+      - /tmp/zerocmux-foo.sock            -> "zerocmux foo"
     """
     base = Path(socket_path).name
+    if base.startswith("zerocmux-debug") and base.endswith(".sock"):
+        suffix = base[len("zerocmux-debug") : -len(".sock")]
+        if suffix.startswith("-") and suffix[1:]:
+            return f"zerocmux DEV {suffix[1:]}"
+        return "zerocmux DEV"
     if base.startswith("cmux-debug") and base.endswith(".sock"):
         suffix = base[len("cmux-debug") : -len(".sock")]
         if suffix.startswith("-") and suffix[1:]:
             return f"cmux DEV {suffix[1:]}"
         return "cmux DEV"
+    if base.startswith("zerocmux") and base.endswith(".sock"):
+        suffix = base[len("zerocmux") : -len(".sock")]
+        if suffix.startswith("-") and suffix[1:]:
+            return f"zerocmux {suffix[1:]}"
+        return "zerocmux"
     if base.startswith("cmux") and base.endswith(".sock"):
         suffix = base[len("cmux") : -len(".sock")]
         if suffix.startswith("-") and suffix[1:]:
             return f"cmux {suffix[1:]}"
         return "cmux"
     # Fallback: tests usually run against Debug builds.
-    return "cmux DEV"
+    return "zerocmux DEV"
 
 
 def run_osascript(script: str) -> None:
@@ -143,14 +154,14 @@ def test_ctrl_enter_keybind(client: cmux) -> tuple[bool, str]:
 
 def run_tests() -> int:
     print("=" * 60)
-    print("cmux Ctrl+Enter Keybind Test")
+    print("zerocmux Ctrl+Enter Keybind Test")
     print("=" * 60)
     print()
 
     socket_path = cmux.DEFAULT_SOCKET_PATH
     if not os.path.exists(socket_path):
         print(f"Error: Socket not found at {socket_path}")
-        print("Please make sure cmux is running.")
+        print("Please make sure zerocmux is running.")
         return 1
 
     config_path = find_config_with_keybind()

@@ -65,7 +65,7 @@ extension CMUXCLI {
         let newAllowlist = try HermesAgentHookAllowlist.installing(events: events, in: oldAllowlist)
         if oldAllowlist != newAllowlist {
             try newAllowlist.write(to: URL(fileURLWithPath: allowlistPath), options: .atomic)
-            print("Approved \(def.displayName) cmux shell hooks in \(allowlistPath)")
+            print("Approved \(def.displayName) zerocmux shell hooks in \(allowlistPath)")
         }
     }
 
@@ -81,9 +81,9 @@ extension CMUXCLI {
             let newString = HermesAgentHookConfig.uninstalling(from: oldString)
             if oldString != newString {
                 try newString.write(toFile: filePath, atomically: true, encoding: .utf8)
-                print("Removed Hermes Agent cmux hooks from \(filePath)")
+                print("Removed Hermes Agent zerocmux hooks from \(filePath)")
             } else {
-                print("Removed 0 cmux hook(s) from \(filePath)")
+                print("Removed 0 zerocmux hook(s) from \(filePath)")
             }
         } else {
             print("No \(def.configFile) found at \(filePath)")
@@ -94,7 +94,7 @@ extension CMUXCLI {
         let newAllowlist = try HermesAgentHookAllowlist.uninstalling(events: events, from: oldAllowlist)
         if oldAllowlist != newAllowlist {
             try newAllowlist.write(to: URL(fileURLWithPath: allowlistPath), options: .atomic)
-            print("Removed Hermes Agent cmux shell hook approvals from \(allowlistPath)")
+            print("Removed Hermes Agent zerocmux shell hook approvals from \(allowlistPath)")
         }
     }
 }

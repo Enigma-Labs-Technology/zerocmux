@@ -4,7 +4,7 @@ Regression test: Cmd+Option+Arrow (goto_split) must work when a browser panel
 is focused and actively displaying a web page.
 
 Requires:
-  - cmux running
+  - zerocmux running
   - Debug socket commands enabled (`simulate_shortcut`)
 """
 
@@ -15,7 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 def focused_pane_id(client: cmux) -> Optional[str]:
@@ -176,7 +176,7 @@ def test_goto_split_roundtrip_loaded_browser(client: cmux) -> tuple[bool, str]:
 
 def run_tests() -> int:
     print("=" * 60)
-    print("cmux Browser goto_split Regression Test")
+    print("zerocmux Browser goto_split Regression Test")
     print("=" * 60)
     print()
 
@@ -184,7 +184,7 @@ def run_tests() -> int:
     socket_path = probe.socket_path
     if not os.path.exists(socket_path):
         print(f"Error: Socket not found at {socket_path}")
-        print("Please make sure cmux is running.")
+        print("Please make sure zerocmux is running.")
         return 1
 
     tests = [

@@ -18,8 +18,8 @@ def resolve_cmux_cli() -> str:
         return explicit
 
     candidates: list[str] = []
-    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/cmux")))
-    candidates.extend(glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux"))
+    candidates.extend(glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/zerocmux")))
+    candidates.extend(glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux"))
     candidates = [p for p in candidates if os.path.exists(p) and os.access(p, os.X_OK)]
     if candidates:
         candidates.sort(key=os.path.getmtime, reverse=True)
@@ -29,7 +29,7 @@ def resolve_cmux_cli() -> str:
     if in_path:
         return in_path
 
-    raise RuntimeError("Unable to find cmux CLI binary. Set CMUX_CLI_BIN.")
+    raise RuntimeError("Unable to find zerocmux CLI binary. Set CMUX_CLI_BIN.")
 
 
 def run(cli_path: str, *args: str, timeout: float = 5.0) -> tuple[int, str, str]:
@@ -71,19 +71,19 @@ def main() -> int:
 
     code2, out2, err2 = run(cli_path, "version")
     if code2 != 0:
-        print("FAIL: `cmux version` exited non-zero")
+        print("FAIL: `zerocmux version` exited non-zero")
         print(f"exit={code2}")
         print(f"stdout={out2}")
         print(f"stderr={err2}")
         return 1
 
     if out2 != out:
-        print("FAIL: `cmux --version` and `cmux version` differ")
+        print("FAIL: `cmux --version` and `zerocmux version` differ")
         print(f"--version: {out!r}")
         print(f"version:   {out2!r}")
         return 1
 
-    print(f"PASS: cmux version command works ({out})")
+    print(f"PASS: zerocmux version command works ({out})")
     return 0
 
 

@@ -6,16 +6,17 @@ extension KeyboardShortcutSettings {
         shortcutLookupObserver?(action)
         #endif
 
+        if let data = UserDefaults.standard.data(forKey: action.defaultsKey),
+           let shortcut = try? JSONDecoder().decode(StoredShortcut.self, from: data) {
+            return shortcut.isUnbound ? nil : shortcut
+        }
+
         if let managedShortcut = settingsFileStore.override(for: action) {
             return managedShortcut.isUnbound ? nil : managedShortcut
         }
 
-        guard let data = UserDefaults.standard.data(forKey: action.defaultsKey),
-              let shortcut = try? JSONDecoder().decode(StoredShortcut.self, from: data) else {
-            let defaultShortcut = action.defaultShortcut
-            return defaultShortcut.isUnbound ? nil : defaultShortcut
-        }
-        return shortcut.isUnbound ? nil : shortcut
+        let defaultShortcut = action.defaultShortcut
+        return defaultShortcut.isUnbound ? nil : defaultShortcut
     }
 
     static func shortcut(for action: Action) -> StoredShortcut {
@@ -39,7 +40,7 @@ extension KeyboardShortcutSettings {
 
     static func settingsFileManagedSubtitle(for action: Action) -> String? {
         guard isManagedBySettingsFile(action) else { return nil }
-        return String(localized: "settings.shortcuts.managedByFile", defaultValue: "Managed in cmux.json")
+        return String(localized: "settings.shortcuts.managedByFile", defaultValue: "Managed in zerocmux.json")
     }
 
 }

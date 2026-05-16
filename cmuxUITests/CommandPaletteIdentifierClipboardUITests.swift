@@ -87,7 +87,7 @@ final class CommandPaletteIdentifierClipboardUITests: XCTestCase {
 
         openCommandPaletteCommands(app: app)
         let searchField = app.textFields["CommandPaletteSearchField"]
-        searchField.typeText("open cmux json")
+        searchField.typeText("open zerocmux json")
 
         let predicate = NSPredicate(
             format: "identifier BEGINSWITH %@ AND value == %@",

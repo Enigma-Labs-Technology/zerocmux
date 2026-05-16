@@ -3,14 +3,14 @@ set -euo pipefail
 
 APP_PATH="${1:-${CMUX_APP_PATH:-}}"
 TAG="${CMUX_TAG:-ca-main-thread}"
-SOCKET_PATH="${CMUX_SOCKET_PATH:-/tmp/cmux-debug-${TAG}.sock}"
-LOG_PATH="${CMUX_CA_ASSERT_LOG:-/tmp/cmux-ca-main-thread-${TAG}.log}"
+SOCKET_PATH="${CMUX_SOCKET_PATH:-/tmp/zerocmux-debug-${TAG}.sock}"
+LOG_PATH="${CMUX_CA_ASSERT_LOG:-/tmp/zerocmux-ca-main-thread-${TAG}.log}"
 HOLD_SECONDS="${CMUX_CA_ASSERT_HOLD_SECONDS:-8}"
-APP_PID_FILE="${CMUX_CA_ASSERT_PID_FILE:-/tmp/cmux-ca-main-thread-${TAG}.pid}"
+APP_PID_FILE="${CMUX_CA_ASSERT_PID_FILE:-/tmp/zerocmux-ca-main-thread-${TAG}.pid}"
 
 if [ -z "$APP_PATH" ]; then
-  echo "usage: CMUX_APP_PATH=/path/to/cmux.app $0" >&2
-  echo "   or: $0 /path/to/cmux.app" >&2
+  echo "usage: CMUX_APP_PATH=/path/to/zerocmux.app $0" >&2
+  echo "   or: $0 /path/to/zerocmux.app" >&2
   exit 2
 fi
 
@@ -20,18 +20,18 @@ if [ ! -d "$APP_PATH" ]; then
 fi
 
 APP_BASENAME="$(basename "$APP_PATH")"
-if [ "$APP_BASENAME" = "cmux DEV.app" ] && [ "${CMUX_ALLOW_UNTAGGED_CA_REGRESSION:-0}" != "1" ]; then
-  echo "ERROR: refusing to launch untagged cmux DEV.app without CMUX_ALLOW_UNTAGGED_CA_REGRESSION=1" >&2
+if [ "$APP_BASENAME" = "zerocmux DEV.app" ] && [ "${CMUX_ALLOW_UNTAGGED_CA_REGRESSION:-0}" != "1" ]; then
+  echo "ERROR: refusing to launch untagged zerocmux DEV.app without CMUX_ALLOW_UNTAGGED_CA_REGRESSION=1" >&2
   exit 2
 fi
 
-BINARY="$APP_PATH/Contents/MacOS/cmux DEV"
+BINARY="$APP_PATH/Contents/MacOS/zerocmux DEV"
 if [ ! -x "$BINARY" ]; then
-  BINARY="$APP_PATH/Contents/MacOS/cmux"
+  BINARY="$APP_PATH/Contents/MacOS/zerocmux"
 fi
 
 if [ ! -x "$BINARY" ]; then
-  echo "ERROR: cmux executable not found in $APP_PATH" >&2
+  echo "ERROR: zerocmux executable not found in $APP_PATH" >&2
   exit 2
 fi
 
@@ -89,7 +89,7 @@ socket_ready=0
 while [ "$SECONDS" -lt "$deadline" ]; do
   if ! kill -0 "$APP_PID" >/dev/null 2>&1; then
     wait "$APP_PID" >/dev/null 2>&1 || true
-    echo "FAIL: cmux exited while CA_ASSERT_MAIN_THREAD_TRANSACTIONS=1 was active" >&2
+    echo "FAIL: zerocmux exited while CA_ASSERT_MAIN_THREAD_TRANSACTIONS=1 was active" >&2
     echo "--- app log tail ($LOG_PATH) ---" >&2
     tail -80 "$LOG_PATH" >&2 2>/dev/null || true
     exit 1
@@ -102,7 +102,7 @@ while [ "$SECONDS" -lt "$deadline" ]; do
 done
 
 if [ "$socket_ready" -ne 1 ]; then
-  echo "FAIL: cmux stayed alive but did not create its socket at $SOCKET_PATH" >&2
+  echo "FAIL: zerocmux stayed alive but did not create its socket at $SOCKET_PATH" >&2
   echo "--- app log tail ($LOG_PATH) ---" >&2
   tail -80 "$LOG_PATH" >&2 2>/dev/null || true
   exit 1
@@ -115,4 +115,4 @@ if grep -E "uncommitted CATransaction|implicit transaction wasn't created|CoreAn
   exit 1
 fi
 
-echo "PASS: cmux startup survived CoreAnimation main-thread transaction assertions"
+echo "PASS: zerocmux startup survived CoreAnimation main-thread transaction assertions"

@@ -6,7 +6,7 @@ Usage:
     python3 test_notifications.py
 
 Requirements:
-    - cmux must be running with the socket controller enabled
+    - zerocmux must be running with the socket controller enabled
 """
 
 import os
@@ -16,7 +16,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class TestResult:

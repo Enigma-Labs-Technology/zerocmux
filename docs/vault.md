@@ -1,7 +1,7 @@
 # Vault agent registration
 
 Vault restores built-in agent sessions and can also read custom agent registrations from
-`cmux.json`. Registrations define how cmux detects a running terminal process, where the
+`cmux.json`. Registrations define how zerocmux detects a running terminal process, where the
 agent's native session id comes from, and which command resumes that session.
 
 Pi Coding Agent is registered by default:

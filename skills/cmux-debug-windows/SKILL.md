@@ -1,9 +1,9 @@
 ---
 name: cmux-debug-windows
-description: Manage cmux debug windows and related debug menu wiring for Sidebar Debug, Background Debug, and Menu Bar Extra Debug. Use this when the user asks to open/tune these debug controls, add or adjust Debug menu entries, or capture/copy a combined debug config snapshot.
+description: Manage zerocmux debug windows and related debug menu wiring for Sidebar Debug, Background Debug, and Menu Bar Extra Debug. Use this when the user asks to open/tune these debug controls, add or adjust Debug menu entries, or capture/copy a combined debug config snapshot.
 ---
 
-# cmux Debug Windows
+# zerocmux Debug Windows
 
 Keep this workflow focused on existing debug windows and menu entries. Do not add a new utility/debug control window unless the user asks explicitly.
 
@@ -25,7 +25,7 @@ skills/cmux-debug-windows/scripts/debug_windows_snapshot.sh --copy
 ```
 5. After code edits, run build + tagged reload:
 ```bash
-xcodebuild -project GhosttyTabs.xcodeproj -scheme cmux -configuration Debug -destination 'platform=macOS' build
+xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug -destination 'platform=macOS' build
 ./scripts/reload.sh --tag <tag>
 ```
 

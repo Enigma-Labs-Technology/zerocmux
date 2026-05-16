@@ -1,17 +1,17 @@
 # Agent hook integrations
 
-cmux uses agent hooks to show running state, Feed approvals, notifications, and to restore agent sessions after a normal app relaunch.
+zerocmux uses agent hooks to show running state, Feed approvals, notifications, and to restore agent sessions after a normal app relaunch.
 
-Claude Code is handled by the cmux Claude wrapper when Claude Code integration is enabled in Settings. Other agents are installed with:
+Claude Code is handled by the zerocmux Claude wrapper when Claude Code integration is enabled in Settings. Other agents are installed with:
 
 ```bash
-cmux hooks setup
-cmux hooks setup <agent>
-cmux hooks setup --agent <agent>
-cmux hooks uninstall <agent>
+zerocmux hooks setup
+zerocmux hooks setup <agent>
+zerocmux hooks setup --agent <agent>
+zerocmux hooks uninstall <agent>
 ```
 
-Supported agent names are `codex`, `opencode`, `pi`, `cursor`, `gemini`, `rovodev` (or `rovo`), `copilot`, `codebuddy`, `factory`, and `qoder`. `cmux hooks setup` skips agents whose binary is not on `PATH` and prints a summary.
+Supported agent names are `codex`, `opencode`, `pi`, `cursor`, `gemini`, `rovodev` (or `rovo`), `copilot`, `codebuddy`, `factory`, and `qoder`. `zerocmux hooks setup` skips agents whose binary is not on `PATH` and prints a summary.
 
 ## Integrations
 
@@ -19,8 +19,8 @@ Supported agent names are `codex`, `opencode`, `pi`, `cursor`, `gemini`, `rovode
 | --- | --- | --- | --- | --- |
 | Claude Code | `claude` through wrapper | wrapper-injected settings | `claude --resume <id>` | PermissionRequest |
 | Codex | `codex` | `~/.codex/hooks.json`, `~/.codex/config.toml` | `codex resume <id>` | PreToolUse, PermissionRequest |
-| OpenCode | `opencode` | `~/.config/opencode/plugins/cmux-session.js`, `~/.config/opencode/plugins/cmux-feed.js` | `opencode --session <id>` | plugin event bus |
-| Pi | `pi` | `~/.pi/agent/extensions/cmux-session.ts` | `pi --session <id>` | none |
+| OpenCode | `opencode` | `~/.config/opencode/plugins/zerocmux-session.js`, `~/.config/opencode/plugins/zerocmux-feed.js` | `opencode --session <id>` | plugin event bus |
+| Pi | `pi` | `~/.pi/agent/extensions/zerocmux-session.ts` | `pi --session <id>` | none |
 | Cursor CLI | `cursor-agent` | `~/.cursor/hooks.json` | `cursor-agent --resume <id>` | beforeShellExecution |
 | Gemini | `gemini` | `~/.gemini/settings.json` | `gemini --resume <id>` | PreToolUse |
 | Rovo Dev | `acli` | `~/.rovodev/config.yml` | `acli rovodev run --restore <id>` | none |
@@ -32,20 +32,20 @@ Supported agent names are `codex`, `opencode`, `pi`, `cursor`, `gemini`, `rovode
 OpenCode also supports project-local Feed installation:
 
 ```bash
-cmux hooks opencode install --project
+zerocmux hooks opencode install --project
 ```
 
-That writes `.opencode/plugins/cmux-feed.js` in the current directory.
+That writes `.opencode/plugins/zerocmux-feed.js` in the current directory.
 
 ## What the hooks record
 
-Session hooks write `~/.cmuxterm/<agent>-hook-sessions.json`. Each entry stores the agent session ID, cmux workspace ID, surface ID, cwd, process ID when available, and a sanitized launch command. On app relaunch, cmux rebuilds each workspace and runs the agent's native resume command with the saved session ID.
+Session hooks write `~/.cmuxterm/<agent>-hook-sessions.json`. Each entry stores the agent session ID, zerocmux workspace ID, surface ID, cwd, process ID when available, and a sanitized launch command. On app relaunch, zerocmux rebuilds each workspace and runs the agent's native resume command with the saved session ID.
 
 The sanitizer preserves model, sandbox, config, and cwd-related flags. It drops prompts, credentials, old session selectors, and noninteractive commands so relaunch resumes the session instead of starting a new task or leaking secrets.
 
 ## Environment overrides
 
-| Agent | Config directory override | Disable cmux hooks for one process |
+| Agent | Config directory override | Disable zerocmux hooks for one process |
 | --- | --- | --- |
 | Codex | `CODEX_HOME` | `CMUX_CODEX_HOOKS_DISABLED=1` |
 | OpenCode | `OPENCODE_CONFIG_DIR` | `CMUX_OPENCODE_HOOKS_DISABLED=1` |
@@ -62,8 +62,8 @@ Pi uses Pi's extension system, not the legacy Pi hooks API. The installed extens
 
 ## Troubleshooting
 
-Run `cmux hooks <agent> install --yes` to reinstall one integration. Run `cmux hooks <agent> uninstall --yes` before editing generated files by hand.
+Run `zerocmux hooks <agent> install --yes` to reinstall one integration. Run `zerocmux hooks <agent> uninstall --yes` before editing generated files by hand.
 
-If Feed shows nothing, confirm the terminal has `CMUX_SURFACE_ID` and the hook file contains a `cmux hooks feed --source <agent>` command or OpenCode feed plugin. Pi and Rovo Dev currently provide lifecycle and restore hooks only, so they do not create Feed approval cards.
+If Feed shows nothing, confirm the terminal has `CMUX_SURFACE_ID` and the hook file contains a `zerocmux hooks feed --source <agent>` command or OpenCode feed plugin. Pi and Rovo Dev currently provide lifecycle and restore hooks only, so they do not create Feed approval cards.
 
 If relaunch does not resume an agent, check `~/.cmuxterm/<agent>-hook-sessions.json` for the saved session and verify the agent's resume command still works outside cmux.

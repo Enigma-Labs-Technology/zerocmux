@@ -170,7 +170,12 @@ final class SidebarSelectedWorkspaceColorTests: XCTestCase {
         )
 
         XCTAssertNotNil(railColor)
-        XCTAssertEqual(railColor?.hexString(), "#C0392B")
+        let expectedColor = WorkspaceTabColorSettings.displayNSColor(
+            hex: "#C0392B",
+            colorScheme: .light,
+            forceBright: true
+        )
+        XCTAssertEqual(railColor?.hexString(), expectedColor?.hexString())
     }
 
     @MainActor
@@ -920,7 +925,7 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
         try writeSettingsFile(
             """
             {
-              "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux-settings.schema.json",
+              "$schema": "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux-settings.schema.json",
               "shortcuts": {
                 "showNotifications": "cmd+i"
               }
@@ -1168,7 +1173,7 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
         XCTAssertNil(store.override(for: .newTab))
 
         let contents = try String(contentsOf: settingsFileURL, encoding: .utf8)
-        XCTAssertTrue(contents.contains(#""$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json""#))
+        XCTAssertTrue(contents.contains(#""$schema": "\#(CmuxSettingsFileStore.schemaURLString)""#))
         XCTAssertTrue(contents.contains(#""schemaVersion": 1,"#))
         XCTAssertTrue(contents.contains(#"//   "app" : {"#))
         XCTAssertTrue(contents.contains(#"//     "colors" : {"#))
@@ -1220,7 +1225,7 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
         try writeSettingsFile(
             """
             {
-              "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+              "$schema": "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux.schema.json",
               "schemaVersion": 1,
               // tmux-like prefix
               "shortcuts": {
@@ -2374,22 +2379,17 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
 @MainActor
 final class WorkspaceCreationConfigSanitizationTests: XCTestCase {
     private final class UnsafeConfigSnapshotTabManager: TabManager {
-        private var injectedConfig: CmuxSurfaceConfigTemplate?
+        private var injectedFontPoints: Float?
         var capturedConfigTemplate: CmuxSurfaceConfigTemplate?
 
         func installInjectedConfig(fontSize: Float) {
-            var config = CmuxSurfaceConfigTemplate()
-            config.fontSize = fontSize
-            config.workingDirectory = "/tmp/cmux-workspace-snapshot"
-            config.command = "echo snapshot"
-            config.environmentVariables = ["CMUX_INHERITED_ENV": "1"]
-            injectedConfig = config
+            injectedFontPoints = fontSize
         }
 
-        override func inheritedTerminalConfigForNewWorkspace(
+        override func inheritedTerminalFontPointsForNewWorkspace(
             workspace: Workspace?
-        ) -> CmuxSurfaceConfigTemplate? {
-            injectedConfig ?? super.inheritedTerminalConfigForNewWorkspace(workspace: workspace)
+        ) -> Float? {
+            injectedFontPoints ?? super.inheritedTerminalFontPointsForNewWorkspace(workspace: workspace)
         }
 
         override func makeWorkspaceForCreation(
@@ -3116,6 +3116,21 @@ final class WorkspaceSplitWorkingDirectoryTests: XCTestCase {
 
 @MainActor
 final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
+    private func waitForCondition(
+        timeout: TimeInterval = 1.0,
+        pollInterval: TimeInterval = 0.01,
+        _ condition: () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(pollInterval))
+        }
+        return condition()
+    }
+
     private func makeWindow() -> NSWindow {
         NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 220),
@@ -3292,7 +3307,6 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         window.displayIfNeeded()
         contentView.layoutSubtreeIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
 
         guard let leftSurfaceView = surfaceView(in: leftPanel.hostedView) else {
             XCTFail("Expected left terminal surface view")
@@ -3304,7 +3318,10 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
         leftPanel.hostedView.suppressReparentFocus()
 
         XCTAssertTrue(window.makeFirstResponder(leftSurfaceView))
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(
+            leftPanel.hostedView.isSurfaceViewFirstResponder(),
+            "Expected the left terminal to be the current first responder before clearing reparent focus suppression"
+        )
 
         XCTAssertFalse(
             leftPanel.surface.debugDesiredFocusState(),
@@ -3312,13 +3329,12 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
         )
 
         leftPanel.hostedView.clearSuppressReparentFocus()
-        let focusRecovered = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in
+        XCTAssertTrue(
+            waitForCondition {
                 leftPanel.surface.debugDesiredFocusState()
             },
-            object: NSObject()
+            "Clearing suppressed reparent focus should reassert Ghostty focus for the current first responder"
         )
-        wait(for: [focusRecovered], timeout: 1.0)
 #else
         throw XCTSkip("Debug-only regression test")
 #endif
@@ -4153,7 +4169,7 @@ final class WorkspacePanelGitBranchTests: XCTestCase {
     }
 
     @MainActor
-    func testSidebarPullRequestsTrackFocusedPanelOnly() {
+    func testSidebarPullRequestsIncludeBackgroundPanelsInDisplayOrder() {
         let workspace = Workspace()
         guard let firstPanelId = workspace.focusedPanelId,
               let paneId = workspace.paneId(forPanelId: firstPanelId),
@@ -4173,9 +4189,10 @@ final class WorkspacePanelGitBranchTests: XCTestCase {
         )
 
         XCTAssertNil(workspace.pullRequest)
-        XCTAssertTrue(
-            workspace.sidebarPullRequestsInDisplayOrder().isEmpty,
-            "Expected background panel PRs to stay hidden while the focused panel has no PR"
+        XCTAssertEqual(
+            workspace.sidebarPullRequestsInDisplayOrder().map(\.number),
+            [1629],
+            "Sidebar PR summaries should include valid background panel PRs in panel display order"
         )
 
         workspace.focusPanel(secondPanel.id)

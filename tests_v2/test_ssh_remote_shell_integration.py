@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Docker integration: prove cmux ssh applies Ghostty ssh-env/ssh-terminfo niceties."""
+"""Docker integration: prove zerocmux ssh applies Ghostty ssh-env/ssh-terminfo niceties."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 DOCKER_SSH_HOST = os.environ.get("CMUX_SSH_TEST_DOCKER_HOST", "127.0.0.1")
 DOCKER_PUBLISH_ADDR = os.environ.get("CMUX_SSH_TEST_DOCKER_BIND_ADDR", "127.0.0.1")
 FIXTURE_REMOTE_HTTP_PORT = int(os.environ.get("CMUX_SSH_TEST_FIXTURE_HTTP_PORT", "43173"))
@@ -40,15 +40,15 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
-    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"), recursive=True)
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"), recursive=True)
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
     return candidates[0]
 
@@ -274,7 +274,7 @@ def _wait_surface_tty(client: cmux, workspace_id: str, surface_id: str, timeout:
 
 
 def _launch_startup_command_pty(startup_command: str, workspace_id: str, surface_id: str) -> tuple[subprocess.Popen[bytes], int]:
-    _must(bool(startup_command.strip()), "cmux ssh output missing ssh_terminal_startup_command for PTY fallback")
+    _must(bool(startup_command.strip()), "zerocmux ssh output missing ssh_terminal_startup_command for PTY fallback")
     env = dict(os.environ)
     env.pop("CMUX_SOCKET_PATH", None)
     env["CMUX_WORKSPACE_ID"] = workspace_id
@@ -562,7 +562,7 @@ def main() -> int:
                     if str(row.get("ref") or "") == workspace_ref:
                         workspace_id = str(row.get("id") or "")
                         break
-            _must(bool(workspace_id), f"cmux ssh output missing workspace_id: {payload}")
+            _must(bool(workspace_id), f"zerocmux ssh output missing workspace_id: {payload}")
 
             _wait_remote_connected(client, workspace_id, timeout=45.0)
 
@@ -645,7 +645,7 @@ def main() -> int:
             port_token = f"CMUX_REMOTE_HTTP_{secrets.token_hex(6)}"
             client.send_surface(
                 surface_id,
-                f"python3 -m http.server {REMOTE_HTTP_PORT} >/tmp/cmux-http-{port_token}.log 2>&1 & echo {port_token}\n",
+                f"python3 -m http.server {REMOTE_HTTP_PORT} >/tmp/zerocmux-http-{port_token}.log 2>&1 & echo {port_token}\n",
             )
             _wait_surface_contains(client, workspace_id, surface_id, port_token)
             port_status, port_workspace_row = _wait_for_remote_port(
@@ -770,7 +770,7 @@ def main() -> int:
                 pass
 
         print(
-            "PASS: cmux ssh enables Ghostty shell integration niceties and preserves pre-resize terminal content "
+            "PASS: zerocmux ssh enables Ghostty shell integration niceties and preserves pre-resize terminal content "
             f"(TERM={term_value}, COLORTERM={colorterm_value}, TERM_PROGRAM={term_program})"
         )
         return 0

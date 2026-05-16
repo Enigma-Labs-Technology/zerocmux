@@ -17,11 +17,11 @@ final class RovoDevHookConfigTests: XCTestCase {
 
         let installed = RovoDevHookConfig.installing(events: Self.events, in: existing)
 
-        XCTAssertTrue(installed.contains("# cmux hooks rovodev begin"))
+        XCTAssertTrue(installed.contains("# zerocmux hooks rovodev begin"))
         XCTAssertTrue(installed.contains("eventHooks:"))
         XCTAssertTrue(installed.contains("  events:"))
         XCTAssertTrue(installed.contains("    - name: on_complete"))
-        XCTAssertTrue(installed.contains("    - command: \"cmux hooks rovodev stop\""))
+        XCTAssertTrue(installed.contains("    - command: \"zerocmux hooks rovodev stop\""))
         XCTAssertEqual(RovoDevHookConfig.uninstalling(from: installed), existing)
     }
 
@@ -39,7 +39,7 @@ final class RovoDevHookConfigTests: XCTestCase {
         let reinstalled = RovoDevHookConfig.installing(events: Self.events, in: installed)
 
         XCTAssertEqual(reinstalled, installed)
-        XCTAssertTrue(installed.contains("    # cmux hooks rovodev begin"))
+        XCTAssertTrue(installed.contains("    # zerocmux hooks rovodev begin"))
         XCTAssertTrue(installed.contains("    - name: user_hook"))
         XCTAssertTrue(installed.contains("        - command: \"echo user\""))
         XCTAssertTrue(installed.contains("    - name: on_tool_permission"))
@@ -55,7 +55,7 @@ final class RovoDevHookConfigTests: XCTestCase {
 
         let installed = RovoDevHookConfig.installing(events: Self.events, in: existing)
 
-        XCTAssertTrue(installed.contains("eventHooks:\n  # cmux hooks rovodev begin\n  events:"))
+        XCTAssertTrue(installed.contains("eventHooks:\n  # zerocmux hooks rovodev begin\n  events:"))
         XCTAssertTrue(installed.contains("  enabled: true"))
         XCTAssertEqual(RovoDevHookConfig.uninstalling(from: installed), existing)
     }
@@ -73,7 +73,7 @@ final class RovoDevHookConfigTests: XCTestCase {
 
         let installed = RovoDevHookConfig.installing(events: Self.events, in: existing)
 
-        XCTAssertTrue(installed.contains("eventHooks:\n  # cmux hooks rovodev begin\n  events:"))
+        XCTAssertTrue(installed.contains("eventHooks:\n  # zerocmux hooks rovodev begin\n  events:"))
         XCTAssertTrue(installed.contains("    events:\n      - name: user_hook"))
         XCTAssertEqual(RovoDevHookConfig.uninstalling(from: installed), existing)
     }
@@ -82,13 +82,13 @@ final class RovoDevHookConfigTests: XCTestCase {
         let events = [
             RovoDevHookConfig.Event(
                 name: "on_complete",
-                command: "cmux hooks rovodev stop --message \"done\" \\ next\nline"
+                command: "zerocmux hooks rovodev stop --message \"done\" \\ next\nline"
             )
         ]
 
         let installed = RovoDevHookConfig.installing(events: events, in: "")
 
-        XCTAssertTrue(installed.contains("command: \"cmux hooks rovodev stop --message \\\"done\\\" \\\\ next\\nline\""))
+        XCTAssertTrue(installed.contains("command: \"zerocmux hooks rovodev stop --message \\\"done\\\" \\\\ next\\nline\""))
     }
 
     func testUninstallLeavesDanglingMarkedBlockUntouched() {
@@ -108,8 +108,8 @@ final class RovoDevHookConfigTests: XCTestCase {
     }
 
     private static let events = [
-        RovoDevHookConfig.Event(name: "on_complete", command: "cmux hooks rovodev stop"),
-        RovoDevHookConfig.Event(name: "on_error", command: "cmux hooks rovodev stop"),
-        RovoDevHookConfig.Event(name: "on_tool_permission", command: "cmux hooks rovodev prompt-submit"),
+        RovoDevHookConfig.Event(name: "on_complete", command: "zerocmux hooks rovodev stop"),
+        RovoDevHookConfig.Event(name: "on_error", command: "zerocmux hooks rovodev stop"),
+        RovoDevHookConfig.Event(name: "on_tool_permission", command: "zerocmux hooks rovodev prompt-submit"),
     ]
 }

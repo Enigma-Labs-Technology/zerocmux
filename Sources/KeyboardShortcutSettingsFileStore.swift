@@ -20,9 +20,12 @@ final class CmuxSettingsFileStore {
     static let shared = CmuxSettingsFileStore()
 
     static let currentSchemaVersion = 1
-    static let schemaURLString = "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json"
-    private static let legacySchemaURLString = "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux-settings.schema.json"
-    private static let releaseBundleIdentifier = "com.cmuxterm.app"
+    static let schemaURLString = "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux.schema.json"
+    private static let legacySchemaURLStrings = [
+        "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/data/cmux-settings.schema.json",
+    ]
+    private static let releaseBundleIdentifier = "com.kernelalex.zerocmux"
+    private static let legacyReleaseBundleIdentifiers = ["com.cmuxterm.app"]
     private static let backupsDefaultsKey = "cmux.settingsFile.backups.v1"
     fileprivate static let socketPasswordBackupIdentifier = "automation.socketPassword"
 
@@ -37,16 +40,22 @@ final class CmuxSettingsFileStore {
     }
 
     static var defaultApplicationSupportFallbackPath: String? {
+        defaultApplicationSupportFallbackPaths.first
+    }
+
+    static var defaultApplicationSupportFallbackPaths: [String] {
         guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first else {
-            return nil
+            return []
         }
-        return appSupport
-            .appendingPathComponent(releaseBundleIdentifier, isDirectory: true)
-            .appendingPathComponent("settings.json", isDirectory: false)
-            .path
+        return ([releaseBundleIdentifier] + legacyReleaseBundleIdentifiers).map { bundleIdentifier in
+            appSupport
+                .appendingPathComponent(bundleIdentifier, isDirectory: true)
+                .appendingPathComponent("settings.json", isDirectory: false)
+                .path
+        }
     }
 
     private let primaryPath: String
@@ -69,7 +78,7 @@ final class CmuxSettingsFileStore {
     init(
         primaryPath: String = CmuxSettingsFileStore.defaultPrimaryPath,
         fallbackPath: String? = CmuxSettingsFileStore.defaultFallbackPath,
-        additionalFallbackPaths: [String] = [CmuxSettingsFileStore.defaultApplicationSupportFallbackPath].compactMap { $0 },
+        additionalFallbackPaths: [String] = CmuxSettingsFileStore.defaultApplicationSupportFallbackPaths,
         fileManager: FileManager = .default,
         notificationCenter: NotificationCenter = .default,
         startWatching: Bool = true
@@ -177,7 +186,9 @@ final class CmuxSettingsFileStore {
             guard let source = String(data: data, encoding: .utf8) else {
                 return data
             }
-            let updated = source.replacingOccurrences(of: Self.legacySchemaURLString, with: Self.schemaURLString)
+            let updated = Self.legacySchemaURLStrings.reduce(source) { contents, legacySchemaURLString in
+                contents.replacingOccurrences(of: legacySchemaURLString, with: Self.schemaURLString)
+            }
             return Data(updated.utf8)
         }
         return nil
@@ -360,9 +371,6 @@ final class CmuxSettingsFileStore {
         }
         if let value = jsonBool(section["iMessageMode"]) {
             snapshot.managedUserDefaults[IMessageModeSettings.key] = .bool(value)
-        }
-        if let value = jsonBool(section["sendAnonymousTelemetry"]) {
-            snapshot.managedUserDefaults[TelemetrySettings.sendAnonymousTelemetryKey] = .bool(value)
         }
         if let value = jsonBool(section["warnBeforeQuit"]) {
             snapshot.managedUserDefaults[QuitWarningSettings.warnBeforeQuitKey] = .bool(value)
@@ -1216,7 +1224,6 @@ final class CmuxSettingsFileStore {
                     "openMarkdownInCmuxViewer": CmdClickMarkdownRouteSettings.defaultValue,
                     "reorderOnNotification": WorkspaceAutoReorderSettings.defaultValue,
                     "iMessageMode": IMessageModeSettings.defaultValue,
-                    "sendAnonymousTelemetry": TelemetrySettings.defaultSendAnonymousTelemetry,
                     "warnBeforeQuit": QuitWarningSettings.defaultWarnBeforeQuit,
                     "renameSelectsExistingName": CommandPaletteRenameSelectionSettings.defaultSelectAllOnFocus,
                     "commandPaletteSearchesAllSurfaces": CommandPaletteSwitcherSearchSettings.defaultSearchAllSurfaces,

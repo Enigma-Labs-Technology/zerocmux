@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Inside-out codesign a cmux .app bundle for Developer ID + notarization.
+# Inside-out codesign a zerocmux .app bundle for Developer ID + notarization.
 #
 # Usage:
 #   scripts/sign-cmux-bundle.sh <app-path> <app-entitlements> <signing-identity>
 #
 # Example:
 #   scripts/sign-cmux-bundle.sh \
-#     "build-universal/Build/Products/Release/cmux NIGHTLY.app" \
+#     "build-universal/Build/Products/Release/zerocmux NIGHTLY.app" \
 #     cmux.nightly.entitlements \
-#     "Developer ID Application: Manaflow, Inc. (7WLXT3NR37)"
+#     "Developer ID Application: Example Developer (TEAMID)"
 #
 # Optional env:
 #   CMUX_HELPER_ENTITLEMENTS  (default: cmux-helper.entitlements)

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Interactive terminal cadence probe for cmux notification lag.
+Interactive terminal cadence probe for zerocmux notification lag.
 
 This is a terminal-side proxy, not a compositor frame counter. It measures how
 regularly this process can wake up and repaint a small TUI while other work,
-such as `cmux notify`, runs. Gaps over two 120 Hz intervals are the useful
+such as `zerocmux notify`, runs. Gaps over two 120 Hz intervals are the useful
 "likely missed frame interval" signal.
 """
 
@@ -138,7 +138,7 @@ def notify_command(cmux_bin: str, index: int) -> list[str]:
         cmux_bin,
         "notify",
         "--title",
-        "cmux frame probe",
+        "zerocmux frame probe",
         "--body",
         f"notify burst {index}",
     ]
@@ -249,7 +249,7 @@ def draw(stdscr: curses.window, stats: FrameStats, notify: NotifyState, args: ar
     summary = stats.summary()
     budget = stats.budget_ms
     rows = [
-        "cmux frame probe TUI",
+        "zerocmux frame probe TUI",
         "terminal cadence proxy, not a Core Animation compositor counter",
         f"target={stats.hz:.1f}Hz budget={budget:.2f}ms hiccup>={stats.hiccup_ms:.2f}ms cmux={args.cmux_bin}",
         f"socket={args.socket_path or os.environ.get('CMUX_SOCKET_PATH') or '(auto)'}",
@@ -408,7 +408,7 @@ def run_headless(args: argparse.Namespace) -> int:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Show a live terminal cadence meter and optionally trigger cmux notify bursts."
+            "Show a live terminal cadence meter and optionally trigger zerocmux notify bursts."
         )
     )
     parser.add_argument("--hz", type=float, default=DEFAULT_HZ, help="target repaint rate")
@@ -422,7 +422,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--notify-count",
         type=int,
         default=250,
-        help="number of cmux notify commands to run per burst",
+        help="number of zerocmux notify commands to run per burst",
     )
     parser.add_argument(
         "--notify-interval-ms",
@@ -433,7 +433,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--cmux-bin",
         default=None,
-        help="cmux binary path, defaults to CMUX_FRAME_PROBE_CMUX, /tmp/cmux-cli, cmux-dev, then cmux",
+        help="zerocmux binary path, defaults to CMUX_FRAME_PROBE_CMUX, /tmp/cmux-cli, cmux-dev, then cmux",
     )
     parser.add_argument(
         "--socket-path",

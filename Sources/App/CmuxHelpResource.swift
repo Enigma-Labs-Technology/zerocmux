@@ -18,7 +18,6 @@ enum CmuxHelpResource {
     case ohMyClaudeCode
     case changelog
     case githubIssues
-    case discord
 
     var title: String {
         switch self {
@@ -56,49 +55,45 @@ enum CmuxHelpResource {
             return String(localized: "menu.help.changelog", defaultValue: "Changelog")
         case .githubIssues:
             return String(localized: "sidebar.help.githubIssues", defaultValue: "GitHub Issues")
-        case .discord:
-            return String(localized: "sidebar.help.discord", defaultValue: "Discord")
         }
     }
 
     var url: URL {
         switch self {
         case .gettingStarted:
-            return URL(string: "https://cmux.com/docs/getting-started")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#install")!
         case .concepts:
-            return URL(string: "https://cmux.com/docs/concepts")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#why-zerocmux")!
         case .configuration:
-            return URL(string: "https://cmux.com/docs/configuration")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/data/cmux.schema.json")!
         case .customCommands:
-            return URL(string: "https://cmux.com/docs/custom-commands")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/data/cmux.schema.json")!
         case .dock:
-            return URL(string: "https://cmux.com/docs/dock")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/dock.md")!
         case .keyboardShortcuts:
-            return URL(string: "https://cmux.com/docs/keyboard-shortcuts")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#keyboard-shortcuts")!
         case .apiReference:
-            return URL(string: "https://cmux.com/docs/api")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/cli-contract.md")!
         case .browserAutomation:
-            return URL(string: "https://cmux.com/docs/browser-automation")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-browser-port-spec.md")!
         case .notifications:
-            return URL(string: "https://cmux.com/docs/notifications")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/notifications.md")!
         case .ssh:
-            return URL(string: "https://cmux.com/docs/ssh")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/README.md#features")!
         case .skills:
-            return URL(string: "https://cmux.com/docs/skills")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/tree/main/skills")!
         case .claudeCodeTeams:
-            return URL(string: "https://cmux.com/docs/agent-integrations/claude-code-teams")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-hooks.md")!
         case .ohMyOpenCode:
-            return URL(string: "https://cmux.com/docs/agent-integrations/oh-my-opencode")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-hooks.md")!
         case .ohMyCodex:
-            return URL(string: "https://cmux.com/docs/agent-integrations/oh-my-codex")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-hooks.md")!
         case .ohMyClaudeCode:
-            return URL(string: "https://cmux.com/docs/agent-integrations/oh-my-claudecode")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/docs/agent-hooks.md")!
         case .changelog:
-            return URL(string: "https://cmux.com/docs/changelog")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/blob/main/CHANGELOG.md")!
         case .githubIssues:
-            return URL(string: "https://github.com/manaflow-ai/cmux/issues")!
-        case .discord:
-            return URL(string: "https://discord.gg/xsgFEVrWCZ")!
+            return URL(string: "https://github.com/kernelalex/zerocmux/issues")!
         }
     }
 }

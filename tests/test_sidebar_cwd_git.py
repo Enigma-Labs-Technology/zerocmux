@@ -21,7 +21,7 @@ from pathlib import Path
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError  # noqa: E402
+from zerocmux import cmux, cmuxError  # noqa: E402
 
 
 def _parse_sidebar_state(text: str) -> dict[str, str]:

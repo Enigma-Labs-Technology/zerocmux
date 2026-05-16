@@ -668,7 +668,7 @@ class TerminalController {
         extra: [String: Any] = [:]
     ) {
         let data = socketListenerEventData(stage: stage, errnoCode: errnoCode, extra: extra)
-        sentryBreadcrumb(message, category: "socket", data: data)
+        diagnosticsBreadcrumb(message, category: "socket", data: data)
         guard Self.shouldCaptureSocketListenerFailure(
             message: message,
             stage: stage,
@@ -677,7 +677,7 @@ class TerminalController {
         ) else {
             return
         }
-        sentryCaptureError(message, category: "socket", data: data, contextKey: "socket_listener")
+        diagnosticsCaptureError(message, category: "socket", data: data, contextKey: "socket_listener")
     }
 
     private nonisolated static func shouldCaptureSocketListenerFailure(
@@ -1043,7 +1043,7 @@ class TerminalController {
                errnoCode: failedErrnoCode
            ),
            fallbackPath != failedPath {
-            sentryBreadcrumb(
+            diagnosticsBreadcrumb(
                 "socket.listener.path.fallback",
                 category: "socket",
                 data: [
@@ -1135,7 +1135,7 @@ class TerminalController {
         listenerActivated = true
         let listenerSocket = newServerSocket
         print("TerminalController: Listening on \(activeSocketPath)")
-        sentryBreadcrumb(
+        diagnosticsBreadcrumb(
             "socket.listener.listening",
             category: "socket",
             data: [
@@ -1337,7 +1337,7 @@ class TerminalController {
             print(
                 "TerminalController: Failed to set socket permissions to \(String(permissions, radix: 8)) for \(currentSocketPath)"
             )
-            sentryBreadcrumb(
+            diagnosticsBreadcrumb(
                 "socket.listener.permissions.failed",
                 category: "socket",
                 data: socketListenerEventData(
@@ -1478,7 +1478,6 @@ class TerminalController {
         "auth.status",
         "auth.begin_sign_in",
         "auth.sign_out",
-        "feedback.submit",
         "feed.push",
         "feed.permission.reply",
         "feed.question.reply",
@@ -1527,35 +1526,15 @@ class TerminalController {
     private nonisolated func socketWorkerV2Response(_ request: V2SocketRequest) -> String {
         switch request.method {
         case "auth.status":
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @MainActor in
-                await AuthManager.shared.awaitBootstrapped()
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return v2Ok(id: request.id, result: v2AuthStatusPayload(timedOut: false))
+            return v2Ok(id: request.id, result: [
+                "signed_in": false,
+                "available": false,
+                "reason": AuthManagerUnavailable.message,
+            ])
         case "auth.begin_sign_in":
-            let timeoutSeconds = (request.params["timeout_seconds"] as? Double) ?? 300
-            let semaphore = DispatchSemaphore(value: 0)
-            nonisolated(unsafe) var signedIn = false
-            Task { @MainActor in
-                signedIn = await AuthManager.shared.beginSignInAndAwait(
-                    timeout: timeoutSeconds
-                )
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return v2Ok(id: request.id, result: v2AuthStatusPayload(timedOut: !signedIn))
+            return v2Error(id: request.id, code: "unavailable", message: AuthManagerUnavailable.message)
         case "auth.sign_out":
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @MainActor in
-                _ = await AuthManager.shared.signOutAndAwait(timeout: 5)
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return v2Ok(id: request.id, result: v2AuthStatusPayload(timedOut: false))
-        case "feedback.submit":
-            return v2Result(id: request.id, v2FeedbackSubmit(params: request.params))
+            return v2Error(id: request.id, code: "unavailable", message: AuthManagerUnavailable.message)
         case "feed.push":
             return v2Result(id: request.id, v2FeedPush(params: request.params))
         case "feed.permission.reply":
@@ -1599,7 +1578,7 @@ class TerminalController {
             return
         }
 
-        sentryBreadcrumb(
+        diagnosticsBreadcrumb(
             "socket.listener.accept_source.started",
             category: "socket",
             data: socketListenerEventData(
@@ -1648,7 +1627,7 @@ class TerminalController {
 
             if let failure = Self.configureAcceptedClientSocket(clientSocket) {
                 if Self.shouldReportAcceptedClientConfigFailure(stage: failure.stage, errnoCode: failure.errnoCode) {
-                    sentryBreadcrumb(
+                    diagnosticsBreadcrumb(
                         "socket.listener.client_config.failed",
                         category: "socket",
                         data: socketListenerEventData(
@@ -1686,7 +1665,7 @@ class TerminalController {
             consecutiveFailures: consecutiveFailures
         )
 
-        sentryBreadcrumb(
+        diagnosticsBreadcrumb(
             "socket.listener.accept.failed",
             category: "socket",
             data: socketListenerEventData(
@@ -1781,7 +1760,7 @@ class TerminalController {
             return
         }
 
-        sentryBreadcrumb(
+        diagnosticsBreadcrumb(
             "socket.listener.accept.resume_scheduled",
             category: "socket",
             data: socketListenerEventData(
@@ -1831,7 +1810,7 @@ class TerminalController {
 
             let restartMode = self.accessMode
 
-            sentryBreadcrumb(
+            diagnosticsBreadcrumb(
                 "socket.listener.rearm.requested",
                 category: "socket",
                 data: self.socketListenerEventData(
@@ -1867,7 +1846,7 @@ class TerminalController {
             if let pid {
                 guard isDescendant(pid) else {
                     _ = writeSocketResponse(
-                        "ERROR: Access denied — only processes started inside cmux can connect",
+                        "ERROR: Access denied — only processes started inside zerocmux can connect",
                         to: socket
                     )
                     return
@@ -2466,10 +2445,6 @@ class TerminalController {
         case "settings.open":
             return v2Result(id: id, self.v2SettingsOpen(params: params))
 
-        // Feedback
-        case "feedback.open":
-            return v2Result(id: id, self.v2FeedbackOpen(params: params))
-
         // Feed (workstream)
         case "feed.jump":
             return v2Result(id: id, self.v2FeedJump(params: params))
@@ -2826,15 +2801,6 @@ class TerminalController {
             "system.top",
             "events.stream",
             "auth.login",
-            "auth.status",
-            "auth.begin_sign_in",
-            "auth.sign_out",
-            "vm.list",
-            "vm.create",
-            "vm.destroy",
-            "vm.exec",
-            "vm.attach_info",
-            "vm.ssh_info",
             "window.list",
             "window.current",
             "window.focus",
@@ -2862,8 +2828,6 @@ class TerminalController {
             "workspace.remote.terminal_session_end",
             "session.restore_previous",
             "settings.open",
-            "feedback.open",
-            "feedback.submit",
             "feed.push",
             "feed.permission.reply",
             "feed.question.reply",
@@ -3725,42 +3689,6 @@ class TerminalController {
     // MARK: - V2 Helpers (encoding + result plumbing)
     // MARK: - V2 Helpers (encoding + result plumbing)
 
-    private nonisolated func v2AuthStatusPayload(timedOut: Bool) -> [String: Any] {
-        var result: [String: Any] = [:]
-        v2MainSync {
-            MainActor.assumeIsolated {
-                let manager = AuthManager.shared
-                var status: [String: Any] = [
-                    "signed_in": manager.isAuthenticated,
-                    "is_restoring_session": manager.isRestoringSession,
-                    "is_loading": manager.isLoading,
-                    "timed_out": timedOut
-                ]
-                if let user = manager.currentUser {
-                    var userDict: [String: Any] = ["id": user.id]
-                    if let email = user.primaryEmail { userDict["email"] = email }
-                    if let name = user.displayName { userDict["display_name"] = name }
-                    status["user"] = userDict
-                }
-                if let teamID = manager.resolvedTeamID {
-                    status["selected_team_id"] = teamID
-                }
-                if !manager.availableTeams.isEmpty {
-                    status["teams"] = manager.availableTeams.map { team -> [String: Any] in
-                        var dict: [String: Any] = [
-                            "id": team.id,
-                            "display_name": team.displayName
-                        ]
-                        if let slug = team.slug { dict["slug"] = slug }
-                        return dict
-                    }
-                }
-                result = status
-            }
-        }
-        return result
-    }
-
     nonisolated func v2OrNull(_ value: Any?) -> Any {
         // Avoid relying on `?? NSNull()` inference (Swift toolchains can disagree).
         if let value { return value }
@@ -3958,7 +3886,7 @@ class TerminalController {
             )
         }
         guard let url else {
-            return .err(code: "browser_disabled", message: "cmux browser is disabled", data: nil)
+            return .err(code: "browser_disabled", message: "zerocmux browser is disabled", data: nil)
         }
 
         var result: V2CallResult = .err(
@@ -7917,33 +7845,6 @@ class TerminalController {
         return .ok([:])
     }
 
-    private func v2FeedbackOpen(params: [String: Any]) -> V2CallResult {
-        let workspaceId = v2UUID(params, "workspace_id")
-        let windowId = v2UUID(params, "window_id")
-        let shouldActivate = v2FocusAllowed(requested: v2Bool(params, "activate") ?? false)
-        DispatchQueue.main.async {
-            let targetWindow: NSWindow?
-            if let windowId, let app = AppDelegate.shared {
-                targetWindow = app.mainWindow(for: windowId)
-            } else if let workspaceId, let app = AppDelegate.shared {
-                targetWindow = app.mainWindowContainingWorkspace(workspaceId)
-            } else {
-                targetWindow = nil
-            }
-
-            if shouldActivate {
-                if let targetWindow {
-                    _ = AppDelegate.shared?.focusWindowForAppActivation(targetWindow, reason: .feedback)
-                } else {
-                    NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-                }
-            }
-
-            FeedbackComposerBridge.openComposer(in: targetWindow)
-        }
-        return .ok(["opened": true])
-    }
-
     private func v2SessionRestorePrevious() -> V2CallResult {
         var restored = false
         v2MainSync {
@@ -7987,54 +7888,6 @@ class TerminalController {
             "opened": true,
             "target": navigationTarget?.rawValue ?? "general",
         ])
-    }
-
-    private nonisolated func v2FeedbackSubmit(params: [String: Any]) -> V2CallResult {
-        guard let email = params["email"] as? String else {
-            return .err(code: "invalid_params", message: "Missing email", data: ["field": "email"])
-        }
-        guard let body = params["body"] as? String else {
-            return .err(code: "invalid_params", message: "Missing body", data: ["field": "body"])
-        }
-        let imagePaths = params["image_paths"] as? [String] ?? []
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var result: V2CallResult = .err(code: "internal_error", message: "Feedback submission failed", data: nil)
-
-        Task {
-            let resolved: V2CallResult
-            do {
-                let attachmentCount = try await FeedbackComposerBridge.submit(
-                    email: email,
-                    message: body,
-                    imagePaths: imagePaths
-                )
-                resolved = .ok([
-                    "submitted": true,
-                    "attachment_count": attachmentCount,
-                ])
-            } catch let error as FeedbackComposerBridgeError {
-                let code: String
-                switch error {
-                case .invalidEmail, .emptyMessage, .messageTooLong, .tooManyImages, .invalidImagePath:
-                    code = "invalid_params"
-                case .submissionFailed:
-                    code = "request_failed"
-                }
-                resolved = .err(code: code, message: error.localizedDescription, data: nil)
-            } catch {
-                resolved = .err(code: "internal_error", message: error.localizedDescription, data: nil)
-            }
-
-            result = resolved
-            semaphore.signal()
-        }
-
-        if semaphore.wait(timeout: .now() + 35) == .timedOut {
-            return .err(code: "timeout", message: "Feedback submission timed out", data: nil)
-        }
-
-        return result
     }
 
     // MARK: - V2 Feed (workstream) handlers
@@ -12683,7 +12536,7 @@ class TerminalController {
           focus_pane <pane-id|index>      - Focus a pane
           focus_surface_by_panel <panel_id> - Focus surface by panel ID
           close_surface [id|idx]          - Close surface (collapse split)
-          reload_config                   - Reload Ghostty config, cmux settings, and refresh terminals
+          reload_config                   - Reload Ghostty config, zerocmux settings, and refresh terminals
           refresh_surfaces                - Force refresh all terminals
           surface_health [workspace]      - Check view health of all surfaces
 
@@ -13249,7 +13102,7 @@ class TerminalController {
         case "tabtransfer", "tab-transfer", "com.splittabbar.tabtransfer":
             return DragOverlayRoutingPolicy.bonsplitTabTransferType
         case "sidebarreorder", "sidebar-reorder", "sidebar_tab_reorder",
-            "com.cmux.sidebar-tab-reorder":
+            "com.zerocmux.sidebar-tab-reorder":
             return DragOverlayRoutingPolicy.sidebarTabReorderType
         default:
             // Allow explicit UTI strings for ad-hoc debug probes.
@@ -15186,7 +15039,7 @@ class TerminalController {
         if let rawURL, url == nil {
             return "ERROR: Invalid URL \(rawURL)"
         }
-        guard let url else { return "ERROR: cmux browser is disabled" }
+        guard let url else { return "ERROR: zerocmux browser is disabled" }
 
         let opened: Bool
         if Thread.isMainThread {

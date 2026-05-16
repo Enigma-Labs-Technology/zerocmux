@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="cmux DEV"
-BUNDLE_ID="com.cmuxterm.app.debug"
-BASE_APP_NAME="cmux DEV"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+APP_NAME="zerocmux DEV"
+BUNDLE_ID="com.kernelalex.zerocmux.debug"
+BASE_APP_NAME="zerocmux DEV"
 DERIVED_DATA=""
 NAME_SET=0
 BUNDLE_SET=0
@@ -14,10 +18,11 @@ CMUX_DEBUG_LOG=""
 CMUX_DEV_PORT=""
 CMUX_DEV_PORT_END=""
 CMUX_DEV_PORT_RANGE=""
-CMUX_DEV_ORIGIN=""
 CLI_PATH=""
-LAST_SOCKET_PATH_DIR="$HOME/Library/Application Support/cmux"
+LAST_SOCKET_PATH_DIR="$HOME/Library/Application Support/zerocmux"
 LAST_SOCKET_PATH_FILE="${LAST_SOCKET_PATH_DIR}/last-socket-path"
+LEGACY_LAST_SOCKET_PATH_DIR="$HOME/Library/Application Support/cmux"
+LEGACY_LAST_SOCKET_PATH_FILE="${LEGACY_LAST_SOCKET_PATH_DIR}/last-socket-path"
 AUTO_SKIP_ZIG_BUILD_REASON=""
 
 should_skip_ghostty_cli_helper_zig_build() {
@@ -36,31 +41,40 @@ write_dev_cli_shim() {
   mkdir -p "$(dirname "$target")"
   cat > "$target" <<EOF
 #!/usr/bin/env bash
-# cmux dev shim (managed by scripts/reload.sh)
+# zerocmux dev shim (managed by scripts/reload.sh)
 set -euo pipefail
 
-CLI_PATH_FILE="/tmp/cmux-last-cli-path"
-CLI_PATH_OWNER="\$(stat -f '%u' "\$CLI_PATH_FILE" 2>/dev/null || stat -c '%u' "\$CLI_PATH_FILE" 2>/dev/null || echo -1)"
-if [[ -r "\$CLI_PATH_FILE" ]] && [[ ! -L "\$CLI_PATH_FILE" ]] && [[ "\$CLI_PATH_OWNER" == "\$(id -u)" ]]; then
-  CLI_PATH="\$(cat "\$CLI_PATH_FILE")"
+read_owned_cli_path_file() {
+  local path_file="\$1"
+  local owner
+  owner="\$(stat -f '%u' "\$path_file" 2>/dev/null || stat -c '%u' "\$path_file" 2>/dev/null || echo -1)"
+  if [[ -r "\$path_file" ]] && [[ ! -L "\$path_file" ]] && [[ "\$owner" == "\$(id -u)" ]]; then
+    cat "\$path_file"
+  fi
+}
+
+for CLI_PATH_FILE in /tmp/zerocmux-last-cli-path /tmp/cmux-last-cli-path; do
+  CLI_PATH="\$(read_owned_cli_path_file "\$CLI_PATH_FILE" || true)"
   if [[ -x "\$CLI_PATH" ]]; then
     exec "\$CLI_PATH" "\$@"
   fi
-fi
+done
 
 if [[ -x "$fallback_bin" ]]; then
   exec "$fallback_bin" "\$@"
 fi
 
-echo "error: no reload-selected dev cmux CLI found. Run ./scripts/reload.sh --tag <name> first." >&2
+echo "error: no reload-selected dev zerocmux CLI found. Run ./scripts/reload.sh --tag <name> first." >&2
 exit 1
 EOF
   chmod +x "$target"
 }
 
-select_cmux_shim_target() {
-  local app_cli_dir="/Applications/cmux.app/Contents/Resources/bin"
-  local marker="cmux dev shim (managed by scripts/reload.sh)"
+select_cli_shim_target() {
+  local command_name="$1"
+  local app_cli_dir="/Applications/zerocmux.app/Contents/Resources/bin"
+  local marker="zerocmux dev shim (managed by scripts/reload.sh)"
+  local legacy_marker="zerocmux dev shim (managed by scripts/reload.sh)"
   local target=""
   local path_entry=""
   local candidate=""
@@ -75,12 +89,12 @@ select_cmux_shim_target() {
       break
     fi
     [[ -d "$path_entry" && -w "$path_entry" ]] || continue
-    candidate="$path_entry/cmux"
+    candidate="$path_entry/$command_name"
     if [[ ! -e "$candidate" ]]; then
       target="$candidate"
       break
     fi
-    if [[ -f "$candidate" ]] && grep -q "$marker" "$candidate" 2>/dev/null; then
+    if [[ -f "$candidate" ]] && grep -q -e "$marker" -e "$legacy_marker" "$candidate" 2>/dev/null; then
       target="$candidate"
       break
     fi
@@ -94,12 +108,12 @@ select_cmux_shim_target() {
   # Fallback for PATH layouts where app CLI isn't listed or no earlier entries were writable.
   for path_entry in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" "$HOME/bin"; do
     [[ -d "$path_entry" && -w "$path_entry" ]] || continue
-    candidate="$path_entry/cmux"
+    candidate="$path_entry/$command_name"
     if [[ ! -e "$candidate" ]]; then
       echo "$candidate"
       return 0
     fi
-    if [[ -f "$candidate" ]] && grep -q "$marker" "$candidate" 2>/dev/null; then
+    if [[ -f "$candidate" ]] && grep -q -e "$marker" -e "$legacy_marker" "$candidate" 2>/dev/null; then
       echo "$candidate"
       return 0
     fi
@@ -112,6 +126,9 @@ write_last_socket_path() {
   local socket_path="$1"
   mkdir -p "$LAST_SOCKET_PATH_DIR"
   echo "$socket_path" > "$LAST_SOCKET_PATH_FILE" || true
+  mkdir -p "$LEGACY_LAST_SOCKET_PATH_DIR"
+  echo "$socket_path" > "$LEGACY_LAST_SOCKET_PATH_FILE" || true
+  echo "$socket_path" > /tmp/zerocmux-last-socket-path || true
   echo "$socket_path" > /tmp/cmux-last-socket-path || true
 }
 
@@ -213,7 +230,7 @@ set_plist_env() {
 
 tagged_derived_data_path() {
   local slug="$1"
-  echo "$HOME/Library/Developer/Xcode/DerivedData/cmux-${slug}"
+  echo "$HOME/Library/Developer/Xcode/DerivedData/zerocmux-${slug}"
 }
 
 print_tag_cleanup_reminder() {
@@ -224,8 +241,12 @@ print_tag_cleanup_reminder() {
   local -a stale_tags=()
 
   while IFS= read -r -d '' path; do
-    if [[ "$path" == /tmp/cmux-* ]]; then
+    if [[ "$path" == /tmp/zerocmux-* ]]; then
+      tag="${path#/tmp/zerocmux-}"
+    elif [[ "$path" == /tmp/cmux-* ]]; then
       tag="${path#/tmp/cmux-}"
+    elif [[ "$path" == "$HOME/Library/Developer/Xcode/DerivedData/zerocmux-"* ]]; then
+      tag="${path#$HOME/Library/Developer/Xcode/DerivedData/zerocmux-}"
     elif [[ "$path" == "$HOME/Library/Developer/Xcode/DerivedData/cmux-"* ]]; then
       tag="${path#$HOME/Library/Developer/Xcode/DerivedData/cmux-}"
     else
@@ -244,8 +265,8 @@ print_tag_cleanup_reminder() {
     seen="${seen}${tag} "
     stale_tags+=("$tag")
   done < <(
-    find /tmp -maxdepth 1 -name 'cmux-*' -print0 2>/dev/null
-    find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 1 -type d -name 'cmux-*' -print0 2>/dev/null
+    find /tmp -maxdepth 1 \( -name 'zerocmux-*' -o -name 'cmux-*' \) -print0 2>/dev/null
+    find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 1 -type d \( -name 'zerocmux-*' -o -name 'cmux-*' \) -print0 2>/dev/null
   )
 
   echo
@@ -261,17 +282,21 @@ print_tag_cleanup_reminder() {
     done
     echo "Cleanup stale tags only:"
     for tag in "${stale_tags[@]}"; do
-      echo "  pkill -f \"cmux DEV ${tag}.app/Contents/MacOS/cmux DEV\""
-      echo "  rm -rf \"$(tagged_derived_data_path "$tag")\" \"/tmp/cmux-${tag}\" \"/tmp/cmux-debug-${tag}.sock\""
-      echo "  rm -f \"/tmp/cmux-debug-${tag}.log\""
-      echo "  rm -f \"$HOME/Library/Application Support/cmux/cmuxd-dev-${tag}.sock\""
+      echo "  pkill -f \"zerocmux DEV ${tag}.app/Contents/MacOS/zerocmux DEV\""
+      echo "  rm -rf \"$(tagged_derived_data_path "$tag")\" \"/tmp/zerocmux-${tag}\" \"/tmp/zerocmux-debug-${tag}.sock\""
+      echo "  rm -f \"/tmp/zerocmux-debug-${tag}.log\""
+      echo "  rm -f \"$HOME/Library/Application Support/zerocmux/cmuxd-dev-${tag}.sock\""
+      echo "  rm -rf \"/tmp/cmux-${tag}\" \"/tmp/cmux-debug-${tag}.sock\""
+      echo "  rm -f \"/tmp/cmux-debug-${tag}.log\" \"$HOME/Library/Application Support/zerocmux/cmuxd-dev-${tag}.sock\""
     done
   fi
   echo "After you verify current tag, cleanup command:"
-  echo "  pkill -f \"cmux DEV ${current_slug}.app/Contents/MacOS/cmux DEV\""
-  echo "  rm -rf \"$(tagged_derived_data_path "$current_slug")\" \"/tmp/cmux-${current_slug}\" \"/tmp/cmux-debug-${current_slug}.sock\""
-  echo "  rm -f \"/tmp/cmux-debug-${current_slug}.log\""
-  echo "  rm -f \"$HOME/Library/Application Support/cmux/cmuxd-dev-${current_slug}.sock\""
+  echo "  pkill -f \"zerocmux DEV ${current_slug}.app/Contents/MacOS/zerocmux DEV\""
+  echo "  rm -rf \"$(tagged_derived_data_path "$current_slug")\" \"/tmp/zerocmux-${current_slug}\" \"/tmp/zerocmux-debug-${current_slug}.sock\""
+  echo "  rm -f \"/tmp/zerocmux-debug-${current_slug}.log\""
+  echo "  rm -f \"$HOME/Library/Application Support/zerocmux/cmuxd-dev-${current_slug}.sock\""
+  echo "  rm -rf \"/tmp/cmux-${current_slug}\" \"/tmp/cmux-debug-${current_slug}.sock\""
+  echo "  rm -f \"/tmp/cmux-debug-${current_slug}.log\" \"$HOME/Library/Application Support/zerocmux/cmuxd-dev-${current_slug}.sock\""
 }
 
 while [[ $# -gt 0 ]]; do
@@ -337,10 +362,10 @@ if [[ -n "$TAG" ]]; then
   TAG_ID="$(sanitize_bundle "$TAG")"
   TAG_SLUG="$(sanitize_path "$TAG")"
   if [[ "$NAME_SET" -eq 0 ]]; then
-    APP_NAME="cmux DEV ${TAG_SLUG}"
+    APP_NAME="zerocmux DEV ${TAG_SLUG}"
   fi
   if [[ "$BUNDLE_SET" -eq 0 ]]; then
-    BUNDLE_ID="com.cmuxterm.app.debug.${TAG_ID}"
+    BUNDLE_ID="com.kernelalex.zerocmux.debug.${TAG_ID}"
   fi
   if [[ "$DERIVED_SET" -eq 0 ]]; then
     DERIVED_DATA="$(tagged_derived_data_path "$TAG_SLUG")"
@@ -350,12 +375,11 @@ fi
 CMUX_DEV_PORT="$(choose_cmux_dev_port)"
 CMUX_DEV_PORT_RANGE="$(choose_cmux_dev_port_range)"
 CMUX_DEV_PORT_END="$(choose_cmux_dev_port_end "$CMUX_DEV_PORT" "$CMUX_DEV_PORT_RANGE")"
-CMUX_DEV_ORIGIN="http://localhost:${CMUX_DEV_PORT}"
 
 # Quiet logging: capture all noisy build output (xcodebuild, zig, codesign,
 # plistbuddy, etc.) to a single log file. On success we print only a one-line
 # summary plus the App/CLI paths. On failure we dump the log.
-RELOAD_LOG="/tmp/cmux-reload-${TAG_SLUG}.log"
+RELOAD_LOG="/tmp/zerocmux-reload-${TAG_SLUG}.log"
 RELOAD_START_TIME="$(date +%s)"
 : > "$RELOAD_LOG"
 
@@ -385,22 +409,22 @@ reload_finalize() {
     echo "App path:"
     echo "  $APP_PATH"
   fi
-  if [[ -n "${CMUX_DEV_ORIGIN:-}" ]]; then
-    echo
-    echo "Dev web origin:"
-    echo "  $CMUX_DEV_ORIGIN"
-  fi
   if [[ -x "${CLI_PATH:-}" ]]; then
     echo
     echo "CLI path:"
     echo "  $CLI_PATH"
     echo "CLI helpers:"
-    echo "  /tmp/cmux-cli ..."
-    echo "  $HOME/.local/bin/cmux-dev ..."
-    if [[ -n "${CMUX_SHIM_TARGET:-}" ]]; then
-      echo "  $CMUX_SHIM_TARGET ..."
+    echo "  /tmp/zerocmux-cli ..."
+    echo "  /tmp/cmux-cli (legacy alias) ..."
+    echo "  $HOME/.local/bin/zerocmux-dev ..."
+    echo "  $HOME/.local/bin/cmux-dev (legacy alias) ..."
+    if [[ -n "${ZEROCMUX_SHIM_TARGET:-}" ]]; then
+      echo "  $ZEROCMUX_SHIM_TARGET ..."
     fi
-    echo "If your shell still resolves the old cmux, run: rehash"
+    if [[ -n "${CMUX_SHIM_TARGET:-}" ]]; then
+      echo "  $CMUX_SHIM_TARGET (legacy alias) ..."
+    fi
+    echo "If your shell still resolves the old CLI path, run: rehash"
   fi
   if [[ "$LAUNCH" -eq 0 ]]; then
     echo
@@ -420,7 +444,7 @@ fi
 
 XCODEBUILD_ARGS=(
   -project GhosttyTabs.xcodeproj
-  -scheme cmux
+  -scheme zerocmux
   -configuration Debug
   -destination 'platform=macOS'
 )
@@ -440,7 +464,7 @@ if [[ "${CMUX_SKIP_ZIG_BUILD:-}" == "1" ]]; then
 fi
 XCODEBUILD_ARGS+=(build)
 
-XCODEBUILD_LOCK="${TMPDIR:-/tmp}/cmux-xcodebuild-$(id -u).lock"
+XCODEBUILD_LOCK="${TMPDIR:-/tmp}/zerocmux-xcodebuild-$(id -u).lock"
 # Xcode 26's SWBBuildService is a per-user singleton. Concurrent xcodebuild
 # invocations (even with separate -derivedDataPath) share that daemon and can
 # crash it, SIGTERMing in-flight builds. Serialize via a per-user lock so
@@ -531,11 +555,13 @@ if [[ -z "${APP_PATH}" || ! -d "${APP_PATH}" ]]; then
 fi
 
 if [[ -n "${TAG_SLUG:-}" ]]; then
-  TMP_COMPAT_DERIVED_LINK="/tmp/cmux-${TAG_SLUG}"
+  TMP_COMPAT_DERIVED_LINK="/tmp/zerocmux-${TAG_SLUG}"
   if [[ "$DERIVED_DATA" != "$TMP_COMPAT_DERIVED_LINK" ]]; then
     ABS_DERIVED_DATA="$(cd "$DERIVED_DATA" && pwd)"
     rm -rf "$TMP_COMPAT_DERIVED_LINK"
     ln -s "$ABS_DERIVED_DATA" "$TMP_COMPAT_DERIVED_LINK"
+    rm -rf "/tmp/cmux-${TAG_SLUG}"
+    ln -s "$ABS_DERIVED_DATA" "/tmp/cmux-${TAG_SLUG}"
   fi
 fi
 
@@ -552,11 +578,12 @@ if [[ -n "$TAG" && "$APP_NAME" != "$SEARCH_APP_NAME" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST" 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" "$INFO_PLIST"
     if [[ -n "${TAG_SLUG:-}" ]]; then
-      APP_SUPPORT_DIR="$HOME/Library/Application Support/cmux"
+      APP_SUPPORT_DIR="$HOME/Library/Application Support/zerocmux"
       CMUXD_SOCKET="${APP_SUPPORT_DIR}/cmuxd-dev-${TAG_SLUG}.sock"
-      CMUX_SOCKET_PATH_VALUE="/tmp/cmux-debug-${TAG_SLUG}.sock"
-      CMUX_DEBUG_LOG="/tmp/cmux-debug-${TAG_SLUG}.log"
+      CMUX_SOCKET_PATH_VALUE="/tmp/zerocmux-debug-${TAG_SLUG}.sock"
+      CMUX_DEBUG_LOG="/tmp/zerocmux-debug-${TAG_SLUG}.log"
       write_last_socket_path "$CMUX_SOCKET_PATH_VALUE"
+      echo "$CMUX_DEBUG_LOG" > /tmp/zerocmux-last-debug-log-path || true
       echo "$CMUX_DEBUG_LOG" > /tmp/cmux-last-debug-log-path || true
       /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$INFO_PLIST" 2>/dev/null || true
       set_plist_env "$INFO_PLIST" CMUXD_UNIX_PATH "$CMUXD_SOCKET"
@@ -570,9 +597,6 @@ if [[ -n "$TAG" && "$APP_NAME" != "$SEARCH_APP_NAME" ]]; then
       set_plist_env "$INFO_PLIST" CMUX_PORT_END "$CMUX_DEV_PORT_END"
       set_plist_env "$INFO_PLIST" CMUX_PORT_RANGE "$CMUX_DEV_PORT_RANGE"
       set_plist_env "$INFO_PLIST" PORT "$CMUX_DEV_PORT"
-      set_plist_env "$INFO_PLIST" CMUX_AUTH_WWW_ORIGIN "$CMUX_DEV_ORIGIN"
-      set_plist_env "$INFO_PLIST" CMUX_API_BASE_URL "$CMUX_DEV_ORIGIN"
-      set_plist_env "$INFO_PLIST" CMUX_VM_API_BASE_URL "$CMUX_DEV_ORIGIN"
       if [[ -S "$CMUXD_SOCKET" ]]; then
         for PID in $(lsof -t "$CMUXD_SOCKET" 2>/dev/null); do
           kill "$PID" 2>/dev/null || true
@@ -587,18 +611,29 @@ if [[ -n "$TAG" && "$APP_NAME" != "$SEARCH_APP_NAME" ]]; then
   APP_PATH="$TAG_APP_PATH"
 fi
 
-CLI_PATH="$(dirname "$APP_PATH")/cmux"
+CLI_PATH="$(dirname "$APP_PATH")/zerocmux"
+if [[ ! -x "$CLI_PATH" ]]; then
+  CLI_PATH="$(dirname "$APP_PATH")/cmux"
+fi
 if [[ -x "$CLI_PATH" ]]; then
+  (umask 077; printf '%s\n' "$CLI_PATH" > /tmp/zerocmux-last-cli-path) || true
   (umask 077; printf '%s\n' "$CLI_PATH" > /tmp/cmux-last-cli-path) || true
+  ln -sfn "$CLI_PATH" /tmp/zerocmux-cli || true
   ln -sfn "$CLI_PATH" /tmp/cmux-cli || true
 
   # Stable shim that always follows the last reload-selected dev CLI.
-  DEV_CLI_SHIM="$HOME/.local/bin/cmux-dev"
-  write_dev_cli_shim "$DEV_CLI_SHIM" "/Applications/cmux.app/Contents/Resources/bin/cmux"
+  DEV_CLI_SHIM="$HOME/.local/bin/zerocmux-dev"
+  write_dev_cli_shim "$DEV_CLI_SHIM" "/Applications/zerocmux.app/Contents/Resources/bin/zerocmux"
+  LEGACY_DEV_CLI_SHIM="$HOME/.local/bin/cmux-dev"
+  write_dev_cli_shim "$LEGACY_DEV_CLI_SHIM" "/Applications/zerocmux.app/Contents/Resources/bin/cmux"
 
-  CMUX_SHIM_TARGET="$(select_cmux_shim_target || true)"
+  ZEROCMUX_SHIM_TARGET="$(select_cli_shim_target zerocmux || true)"
+  if [[ -n "${ZEROCMUX_SHIM_TARGET:-}" ]]; then
+    write_dev_cli_shim "$ZEROCMUX_SHIM_TARGET" "/Applications/zerocmux.app/Contents/Resources/bin/zerocmux"
+  fi
+  CMUX_SHIM_TARGET="$(select_cli_shim_target cmux || true)"
   if [[ -n "${CMUX_SHIM_TARGET:-}" ]]; then
-    write_dev_cli_shim "$CMUX_SHIM_TARGET" "/Applications/cmux.app/Contents/Resources/bin/cmux"
+    write_dev_cli_shim "$CMUX_SHIM_TARGET" "/Applications/zerocmux.app/Contents/Resources/bin/cmux"
   fi
 fi
 
@@ -636,8 +671,9 @@ if ! /usr/bin/codesign --force --sign - --timestamp=none --generate-entitlement-
     exit 1
   fi
 fi
-CLI_PATH="$APP_PATH/Contents/Resources/bin/cmux"
+CLI_PATH="$APP_PATH/Contents/Resources/bin/zerocmux"
 if [[ -x "$CLI_PATH" ]]; then
+  echo "$CLI_PATH" > /tmp/zerocmux-last-cli-path || true
   echo "$CLI_PATH" > /tmp/cmux-last-cli-path || true
 fi
 
@@ -662,7 +698,7 @@ if [[ "$LAUNCH" -eq 1 ]]; then
   fi
 
   # Avoid inheriting cmux/ghostty environment variables from the terminal that
-  # runs this script (often inside another cmux instance), which can cause
+  # runs this script (often inside another zerocmux instance), which can cause
   # socket and resource-path conflicts.
   OPEN_CLEAN_ENV=(
     env
@@ -698,9 +734,6 @@ if [[ "$LAUNCH" -eq 1 ]]; then
     CMUX_PORT_END="$CMUX_DEV_PORT_END"
     CMUX_PORT_RANGE="$CMUX_DEV_PORT_RANGE"
     PORT="$CMUX_DEV_PORT"
-    CMUX_AUTH_WWW_ORIGIN="$CMUX_DEV_ORIGIN"
-    CMUX_API_BASE_URL="$CMUX_DEV_ORIGIN"
-    CMUX_VM_API_BASE_URL="$CMUX_DEV_ORIGIN"
   )
 
   LAUNCH_CMD=()
@@ -713,8 +746,10 @@ if [[ "$LAUNCH" -eq 1 ]]; then
     LAUNCH_CMD=("${OPEN_CLEAN_ENV[@]}" "${TAG_LAUNCH_ENV[@]}" open -g "$APP_PATH")
     LAUNCH_RETRY_CMD=("${OPEN_CLEAN_ENV[@]}" "${TAG_LAUNCH_ENV[@]}" open -n -g "$APP_PATH")
   else
-    echo "/tmp/cmux-debug.sock" > /tmp/cmux-last-socket-path || true
-    echo "/tmp/cmux-debug.log" > /tmp/cmux-last-debug-log-path || true
+    echo "/tmp/zerocmux-debug.sock" > /tmp/zerocmux-last-socket-path || true
+    echo "/tmp/zerocmux-debug.log" > /tmp/zerocmux-last-debug-log-path || true
+    echo "/tmp/zerocmux-debug.sock" > /tmp/cmux-last-socket-path || true
+    echo "/tmp/zerocmux-debug.log" > /tmp/cmux-last-debug-log-path || true
     LAUNCH_CMD=("${OPEN_CLEAN_ENV[@]}" open -g "$APP_PATH")
     LAUNCH_RETRY_CMD=("${OPEN_CLEAN_ENV[@]}" open -n -g "$APP_PATH")
   fi

@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,7 +15,8 @@ env:
 
 jobs:
   build-sign-notarize:
-    runs-on: warp-macos-26-arm64-6x
+    runs-on: [self-hosted, macOS, zerocmux-signing]
+    environment: release
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -40,7 +40,7 @@ jobs:
             core.setOutput('skip_upload', 'false');
             core.setOutput('release_state', 'clear');
             if (!tag) {
-              core.notice('workflow_dispatch is not running from a tag; release guard is in dry-run mode.');
+              core.setFailed('Release workflow must run from a protected v* tag.');
               return;
             }
             try {
@@ -87,6 +87,109 @@ jobs:
               }
               throw error;
             }
+
+      - name: Configure AWS credentials for release signing
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_RELEASE_SIGNING_ROLE_ARN }}
+          role-session-name: zerocmux-release-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_RELEASE_ACCOUNT_ID }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+          inline-session-policy: |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:ListSecrets"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
+                    "${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": "${{ vars.AWS_RELEASE_KMS_KEY_ARN }}",
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": "secretsmanager.${{ vars.AWS_REGION }}.amazonaws.com",
+                      "kms:CallerAccount": "${{ vars.AWS_RELEASE_ACCOUNT_ID }}",
+                      "kms:EncryptionContext:SecretARN": [
+                        "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
+                        "${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+
+      - name: Import release signing secrets from AWS Secrets Manager
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        uses: aws-actions/aws-secretsmanager-get-secrets@2cb1a461cbd4865ac4299648312e4704c646cd53 # v3.0.1
+        with:
+          parse-json-secrets: false
+          secret-ids: |
+            APPLE_CERTIFICATE_BASE64,${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}
+            APPLE_CERTIFICATE_PASSWORD,${{ vars.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}
+            APPLE_SIGNING_IDENTITY,${{ vars.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}
+            APPLE_ID,${{ vars.AWS_RELEASE_APPLE_ID_SECRET_ARN }}
+            APPLE_APP_SPECIFIC_PASSWORD,${{ vars.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}
+            APPLE_TEAM_ID,${{ vars.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}
+            APPLE_RELEASE_PROVISIONING_PROFILE_BASE64,${{ vars.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}
+            SPARKLE_PRIVATE_KEY,${{ vars.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}
+
+      - name: Validate release signing secrets
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          required_vars=(
+            APPLE_CERTIFICATE_BASE64
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_SIGNING_IDENTITY
+            APPLE_ID
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_TEAM_ID
+            APPLE_RELEASE_PROVISIONING_PROFILE_BASE64
+            SPARKLE_PRIVATE_KEY
+          )
+          missing=()
+          for name in "${required_vars[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing release signing secrets from AWS Secrets Manager: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
 
       - name: Select Xcode
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -136,8 +239,6 @@ jobs:
 
       - name: Derive Sparkle public key from private key
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
             echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
@@ -149,21 +250,25 @@ jobs:
 
       - name: Build universal app (Release)
         if: steps.guard_release_assets.outputs.skip_all != 'true'
+        env:
+          APPLE_RELEASE_BUNDLE_ID: ${{ vars.APPLE_RELEASE_BUNDLE_ID }}
         run: |
-          xcodebuild -scheme cmux -configuration Release -derivedDataPath build-universal \
+          APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
+          xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
             -destination 'generic/platform=macOS' \
             -clonedSourcePackagesDirPath .spm-cache \
             ARCHS="arm64 x86_64" \
             ONLY_ACTIVE_ARCH=NO \
+            PRODUCT_BUNDLE_IDENTIFIER="$APPLE_RELEASE_BUNDLE_ID" \
             CODE_SIGNING_ALLOWED=NO build
 
       - name: Verify binary architectures
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
           set -euo pipefail
-          APP_BINARY="build-universal/Build/Products/Release/cmux.app/Contents/MacOS/cmux"
-          CLI_BINARY="build-universal/Build/Products/Release/cmux.app/Contents/Resources/bin/cmux"
-          HELPER_BINARY="build-universal/Build/Products/Release/cmux.app/Contents/Resources/bin/ghostty"
+          APP_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/MacOS/zerocmux"
+          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
+          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
           APP_ARCHS="$(lipo -archs "$APP_BINARY")"
           CLI_ARCHS="$(lipo -archs "$CLI_BINARY")"
           HELPER_ARCHS="$(lipo -archs "$HELPER_BINARY")"
@@ -178,12 +283,12 @@ jobs:
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
           set -euo pipefail
-          APP_PLIST="build-universal/Build/Products/Release/cmux.app/Contents/Info.plist"
+          APP_PLIST="build-universal/Build/Products/Release/zerocmux.app/Contents/Info.plist"
           APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
           ./scripts/build_remote_daemon_release_assets.sh \
             --version "$APP_VERSION" \
             --release-tag "$GITHUB_REF_NAME" \
-            --repo "manaflow-ai/cmux" \
+            --repo "kernelalex/zerocmux" \
             --output-dir "remote-daemon-assets"
           MANIFEST_JSON="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",",":")))' remote-daemon-assets/cmuxd-remote-manifest.json)"
           plutil -remove CMUXRemoteDaemonManifestJSON "$APP_PLIST" >/dev/null 2>&1 || true
@@ -193,36 +298,33 @@ jobs:
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
           set -euo pipefail
-          CLI_BINARY="build-universal/Build/Products/Release/cmux.app/Contents/Resources/bin/cmux"
-          [ -x "$CLI_BINARY" ] || { echo "cmux CLI binary not found at $CLI_BINARY" >&2; exit 1; }
+          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
+          [ -x "$CLI_BINARY" ] || { echo "zerocmux CLI binary not found at $CLI_BINARY" >&2; exit 1; }
           CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
 
       - name: Verify bundled Ghostty theme picker helper
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
           set -euo pipefail
-          HELPER_BINARY="build-universal/Build/Products/Release/cmux.app/Contents/Resources/bin/ghostty"
+          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
           [ -x "$HELPER_BINARY" ] || { echo "Ghostty theme picker helper not found at $HELPER_BINARY" >&2; exit 1; }
 
       - name: Inject Sparkle keys into Info.plist
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          APP_PLIST="build-universal/Build/Products/Release/cmux.app/Contents/Info.plist"
+          APP_PLIST="build-universal/Build/Products/Release/zerocmux.app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Delete :SUPublicEDKey" "$APP_PLIST" >/dev/null 2>&1 || true
           /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP_PLIST" >/dev/null 2>&1 || true
           echo "Adding SUPublicEDKey to Info.plist..."
           /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string ${SPARKLE_PUBLIC_KEY}" "$APP_PLIST"
           echo "Adding SUFeedURL to Info.plist..."
-          /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/kernelalex/zerocmux/releases/latest/download/appcast.xml" "$APP_PLIST"
           echo "Verifying:"
           /usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$APP_PLIST"
           /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$APP_PLIST"
 
       - name: Import signing cert
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -z "$APPLE_CERTIFICATE_BASE64" ]; then
             echo "Missing APPLE_CERTIFICATE_BASE64 secret" >&2
@@ -245,24 +347,32 @@ jobs:
       - name: Embed release provisioning profile
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         env:
-          APPLE_RELEASE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_RELEASE_BUNDLE_ID: ${{ vars.APPLE_RELEASE_BUNDLE_ID }}
         run: |
+          APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
+          EXPECTED_APP_ID="${APPLE_TEAM_ID}.${APPLE_RELEASE_BUNDLE_ID}"
           if [ -z "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64" ]; then
             echo "Missing APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 secret" >&2
             exit 1
           fi
-          APP_PATH="build-universal/Build/Products/Release/cmux.app"
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "Missing APPLE_TEAM_ID secret" >&2
+            exit 1
+          fi
+          APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
           PROFILE_PATH="$APP_PATH/Contents/embedded.provisionprofile"
-          TMP_PROFILE="$(mktemp /tmp/cmux-release-profile.XXXXXX)"
-          TMP_PLIST="$(mktemp /tmp/cmux-release-profile.XXXXXX.plist)"
+          TMP_PROFILE="$(mktemp /tmp/zerocmux-release-profile.XXXXXX)"
+          TMP_PLIST="$(mktemp /tmp/zerocmux-release-profile.XXXXXX.plist)"
           trap 'rm -f "$TMP_PROFILE" "$TMP_PLIST"' EXIT
           echo "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$TMP_PROFILE"
           security cms -D -i "$TMP_PROFILE" > "$TMP_PLIST"
           APP_ID="$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.application-identifier" "$TMP_PLIST")"
-          if [ "$APP_ID" != "7WLXT3NR37.com.cmuxterm.app" ]; then
-            echo "Release provisioning profile targets unexpected app ID: $APP_ID" >&2
+          if [ "$APP_ID" != "$EXPECTED_APP_ID" ]; then
+            echo "Release provisioning profile targets unexpected app ID: $APP_ID (expected $EXPECTED_APP_ID)" >&2
             exit 1
           fi
+          echo "APPLE_RELEASE_APP_ID=$EXPECTED_APP_ID" >> "$GITHUB_ENV"
+          echo "APPLE_RELEASE_BUNDLE_ID=$APPLE_RELEASE_BUNDLE_ID" >> "$GITHUB_ENV"
           WEBAUTHN_ENTITLEMENT="$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.web-browser.public-key-credential" "$TMP_PLIST")"
           if [ "$WEBAUTHN_ENTITLEMENT" != "true" ]; then
             echo "Release provisioning profile missing WebAuthn browser entitlement" >&2
@@ -277,34 +387,35 @@ jobs:
 
       - name: Codesign app
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
             echo "Missing APPLE_SIGNING_IDENTITY secret" >&2
             exit 1
           fi
-          APP_PATH="build-universal/Build/Products/Release/cmux.app"
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "Missing APPLE_TEAM_ID secret" >&2
+            exit 1
+          fi
+          APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
+          RELEASE_ENTITLEMENTS="$RUNNER_TEMP/cmux-release.entitlements"
+          cp cmux.release.entitlements "$RELEASE_ENTITLEMENTS"
+          plutil -replace com.apple.application-identifier -string "$APPLE_RELEASE_APP_ID" "$RELEASE_ENTITLEMENTS"
+          plutil -replace com.apple.developer.team-identifier -string "$APPLE_TEAM_ID" "$RELEASE_ENTITLEMENTS"
           ./scripts/sign-cmux-bundle.sh \
             "$APP_PATH" \
-            cmux.release.entitlements \
+            "$RELEASE_ENTITLEMENTS" \
             "$APPLE_SIGNING_IDENTITY"
 
       - name: Notarize app
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
             echo "Missing notarization secrets (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID)" >&2
             exit 1
           fi
-          APP_PATH="build-universal/Build/Products/Release/cmux.app"
-          ZIP_SUBMIT="cmux-notary.zip"
-          DMG_RELEASE="cmux-macos.dmg"
+          APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
+          ZIP_SUBMIT="zerocmux-notary.zip"
+          DMG_RELEASE="zerocmux-macos.dmg"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_SUBMIT"
           APP_SUBMIT_JSON="$(xcrun notarytool submit "$ZIP_SUBMIT" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --output-format json)"
           APP_SUBMIT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$APP_SUBMIT_JSON")"
@@ -323,7 +434,12 @@ jobs:
             --identity="$APPLE_SIGNING_IDENTITY" \
             "$APP_PATH" \
             ./
-          mv ./cmux*.dmg "$DMG_RELEASE"
+          CREATED_DMG="$(find . -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$CREATED_DMG" ]; then
+            echo "Failed to locate created DMG" >&2
+            exit 1
+          fi
+          mv "$CREATED_DMG" "$DMG_RELEASE"
           DMG_SUBMIT_JSON="$(xcrun notarytool submit "$DMG_RELEASE" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --output-format json)"
           DMG_SUBMIT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$DMG_SUBMIT_JSON")"
           DMG_STATUS="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$DMG_SUBMIT_JSON")"
@@ -335,30 +451,14 @@ jobs:
           xcrun stapler staple "$DMG_RELEASE"
           xcrun stapler validate "$DMG_RELEASE"
 
-      - name: Upload dSYMs to Sentry
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: manaflow
-          SENTRY_PROJECT: cmuxterm-macos
-        run: |
-          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
-            echo "SENTRY_AUTH_TOKEN not set, skipping dSYM upload"
-            exit 0
-          fi
-          brew install getsentry/tools/sentry-cli || true
-          sentry-cli debug-files upload --include-sources build-universal/Build/Products/Release/
-
       - name: Generate Sparkle appcast
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
             echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
             exit 1
           fi
-          ./scripts/sparkle_generate_appcast.sh cmux-macos.dmg "$GITHUB_REF_NAME" appcast.xml
+          ./scripts/sparkle_generate_appcast.sh zerocmux-macos.dmg "$GITHUB_REF_NAME" appcast.xml
 
       - name: Attest remote daemon release assets
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -372,23 +472,12 @@ jobs:
             remote-daemon-assets/cmuxd-remote-checksums.txt
             remote-daemon-assets/cmuxd-remote-manifest.json
 
-      - name: Upload build artifacts (dry-run)
-        if: steps.guard_release_assets.outputs.skip_upload != 'true' && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cmux-release-dry-run
-          path: |
-            cmux-macos.dmg
-            appcast.xml
-            remote-daemon-assets/cmuxd-remote-*
-          if-no-files-found: error
-
       - name: Upload release asset
-        if: steps.guard_release_assets.outputs.skip_upload != 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: steps.guard_release_assets.outputs.skip_upload != 'true'
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: |
-            cmux-macos.dmg
+            zerocmux-macos.dmg
             appcast.xml
             remote-daemon-assets/cmuxd-remote-darwin-arm64
             remote-daemon-assets/cmuxd-remote-darwin-amd64
@@ -398,38 +487,6 @@ jobs:
             remote-daemon-assets/cmuxd-remote-manifest.json
           generate_release_notes: true
           overwrite_files: false
-
-      - name: Upload release appcast to R2
-        if: steps.guard_release_assets.outputs.skip_upload != 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        continue-on-error: true
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: "https://${{ secrets.CF_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
-        run: |
-          set -euo pipefail
-          command -v aws >/dev/null 2>&1 || { echo "Installing AWS CLI..."; brew install awscli; }
-
-          # Guard: only upload if this tag is the highest semver release.
-          # Prevents a backport tag (e.g. v0.62.1 after v0.63.1) from
-          # overwriting the stable appcast with an older version.
-          LATEST=$(gh release list --exclude-drafts --exclude-pre-releases \
-            --json tagName -q '.[].tagName' | sort -V | tail -1)
-          if [ -n "$LATEST" ] && [ "$LATEST" != "$GITHUB_REF_NAME" ]; then
-            echo "Skipping R2 stable upload: $GITHUB_REF_NAME is not the latest release ($LATEST)"
-            exit 0
-          fi
-
-          # Upload after GitHub Release publish so the appcast never references
-          # a DMG that doesn't exist yet. R2 PutObject is atomic, so the appcast
-          # is either the old version or the new one, never missing.
-          aws s3 cp appcast.xml \
-            "s3://cmux-binaries/stable/appcast.xml" \
-            --endpoint-url "$R2_ENDPOINT" \
-            --cache-control "no-cache, no-store, must-revalidate"
-
-          echo "R2 appcast upload complete: https://files.cmux.com/stable/appcast.xml"
 
       - name: Cleanup keychain
         if: always()

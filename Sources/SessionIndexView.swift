@@ -2342,7 +2342,7 @@ private func sessionDragItemProvider(for entry: SessionEntry) -> NSItemProvider 
 // MARK: - NSPopover host
 
 /// Hosts SectionPopoverView in a real NSPopover. SwiftUI's native `.popover()`
-/// doesn't reliably let the embedded TextField become first responder in cmux's
+/// doesn't reliably let the embedded TextField become first responder in zerocmux's
 /// focus-managed environment because the terminal keeps grabbing focus back.
 struct SectionPopoverHost: NSViewRepresentable {
     @Binding var isPresented: Bool

@@ -141,7 +141,7 @@ class FakeCmuxState:
             if params.get("surface_id") == HUD_SURFACE_ID:
                 return {"text": "[OMX#0.15.3] turns:1 | session:23s | last:12s ago\n"}
             return {"text": ""}
-        raise RuntimeError(f"Unsupported fake cmux method: {method}")
+        raise RuntimeError(f"Unsupported fake zerocmux method: {method}")
 
 
 class FakeCmuxHandler(socketserver.StreamRequestHandler):

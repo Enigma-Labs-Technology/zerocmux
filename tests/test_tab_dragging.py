@@ -7,7 +7,7 @@ Tests that terminal content remains visible and functional after:
 2. Moving tabs between panes
 3. Reordering tabs within a pane
 
-These tests use the cmux socket interface to:
+These tests use the zerocmux socket interface to:
 - Create splits and tabs
 - Send commands to terminals
 - Verify terminal responsiveness by checking for marker files
@@ -16,7 +16,7 @@ Usage:
     python3 test_tab_dragging.py
 
 Requirements:
-    - cmux must be running with the socket controller enabled
+    - zerocmux must be running with the socket controller enabled
 """
 
 import os
@@ -28,7 +28,7 @@ from pathlib import Path
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
 class TestResult:
@@ -1056,7 +1056,7 @@ def test_rapid_split_close_first_pane(client: cmux) -> TestResult:
 def run_tests():
     """Run all tests."""
     print("=" * 60)
-    print("cmux Tab Dragging E2E Tests")
+    print("zerocmux Tab Dragging E2E Tests")
     print("=" * 60)
     print()
     print("These tests verify that terminals remain responsive after")
@@ -1067,7 +1067,7 @@ def run_tests():
     socket_path = cmux.DEFAULT_SOCKET_PATH
     if not os.path.exists(socket_path):
         print(f"Error: Socket not found at {socket_path}")
-        print("Please make sure cmux is running.")
+        print("Please make sure zerocmux is running.")
         return 1
 
     results = []
