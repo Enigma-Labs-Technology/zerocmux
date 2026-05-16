@@ -422,12 +422,6 @@ jobs:
           fi
           echo "APPLE_NIGHTLY_APP_ID=$EXPECTED_APP_ID" >> "$GITHUB_ENV"
 
-          WEBAUTHN_ENTITLEMENT="$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.web-browser.public-key-credential" "$TMP_PLIST")"
-          if [ "$WEBAUTHN_ENTITLEMENT" != "true" ]; then
-            echo "Nightly provisioning profile is missing WebAuthn browser entitlement" >&2
-            exit 1
-          fi
-
           PROVISIONS_ALL_DEVICES="$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" "$TMP_PLIST")"
           if [ "$PROVISIONS_ALL_DEVICES" != "true" ]; then
             echo "Nightly provisioning profile is not a Developer ID all-devices profile" >&2

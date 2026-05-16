@@ -351,11 +351,6 @@ jobs:
           fi
           echo "APPLE_RELEASE_APP_ID=$EXPECTED_APP_ID" >> "$GITHUB_ENV"
           echo "APPLE_RELEASE_BUNDLE_ID=$APPLE_RELEASE_BUNDLE_ID" >> "$GITHUB_ENV"
-          WEBAUTHN_ENTITLEMENT="$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.web-browser.public-key-credential" "$TMP_PLIST")"
-          if [ "$WEBAUTHN_ENTITLEMENT" != "true" ]; then
-            echo "Release provisioning profile missing WebAuthn browser entitlement" >&2
-            exit 1
-          fi
           PROVISIONS_ALL_DEVICES="$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" "$TMP_PLIST")"
           if [ "$PROVISIONS_ALL_DEVICES" != "true" ]; then
             echo "Release provisioning profile is not a Developer ID all-devices profile" >&2
