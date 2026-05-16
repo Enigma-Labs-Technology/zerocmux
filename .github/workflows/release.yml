@@ -377,8 +377,8 @@ jobs:
           APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
           RELEASE_ENTITLEMENTS="$RUNNER_TEMP/cmux-release.entitlements"
           cp cmux.release.entitlements "$RELEASE_ENTITLEMENTS"
-          plutil -replace com.apple.application-identifier -string "$APPLE_RELEASE_APP_ID_VALUE" "$RELEASE_ENTITLEMENTS"
-          plutil -replace com.apple.developer.team-identifier -string "$APPLE_TEAM_ID_VALUE" "$RELEASE_ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.application-identifier $APPLE_RELEASE_APP_ID_VALUE" "$RELEASE_ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.developer.team-identifier $APPLE_TEAM_ID_VALUE" "$RELEASE_ENTITLEMENTS"
           ./scripts/sign-cmux-bundle.sh \
             "$APP_PATH" \
             "$RELEASE_ENTITLEMENTS" \

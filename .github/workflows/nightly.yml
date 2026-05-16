@@ -446,8 +446,8 @@ jobs:
           fi
           NIGHTLY_ENTITLEMENTS="$RUNNER_TEMP/cmux-nightly.entitlements"
           cp cmux.nightly.entitlements "$NIGHTLY_ENTITLEMENTS"
-          plutil -replace com.apple.application-identifier -string "$APPLE_NIGHTLY_APP_ID" "$NIGHTLY_ENTITLEMENTS"
-          plutil -replace com.apple.developer.team-identifier -string "$APPLE_TEAM_ID" "$NIGHTLY_ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.application-identifier $APPLE_NIGHTLY_APP_ID" "$NIGHTLY_ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.developer.team-identifier $APPLE_TEAM_ID" "$NIGHTLY_ENTITLEMENTS"
           for APP_PATH in \
             "build-universal/Build/Products/Release/zerocmux NIGHTLY.app"
           do
