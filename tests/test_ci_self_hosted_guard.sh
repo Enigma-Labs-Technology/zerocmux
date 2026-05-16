@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Ensures expensive macOS jobs stay on GitHub Actions runners and release
-# signing stays on the dedicated self-hosted signing runner.
+# Ensures expensive macOS jobs and release signing stay on GitHub-hosted
+# runners rather than third-party or self-hosted macOS runners.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,4 +43,4 @@ check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-latest' "GitH
 check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-latest' "GitHub-hosted macos-latest"
 
 # release.yml signing job
-check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: \[self-hosted, macOS, zerocmux-signing\]' "self-hosted zerocmux-signing"
+check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: macos-26' "GitHub-hosted macos-26"
