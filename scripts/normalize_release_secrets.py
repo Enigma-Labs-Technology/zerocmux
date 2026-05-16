@@ -3,6 +3,7 @@ import json
 import os
 import secrets
 import sys
+from pathlib import Path
 
 
 REQUIRED_SECRET_NAMES = [
@@ -15,6 +16,10 @@ REQUIRED_SECRET_NAMES = [
     "APPLE_RELEASE_PROVISIONING_PROFILE_BASE64",
     "SPARKLE_PRIVATE_KEY",
 ]
+
+FILE_BACKED_SECRET_NAMES = {
+    "SPARKLE_PRIVATE_KEY",
+}
 
 
 def _canonical_name(name: str) -> str:
@@ -75,11 +80,27 @@ def _write_github_env(env_file: str, name: str, value: str) -> None:
         handle.write(f"\n{delimiter}\n")
 
 
+def _clear_github_env(env_file: str, name: str) -> None:
+    with open(env_file, "a", encoding="utf-8") as handle:
+        handle.write(f"{name}=\n")
+
+
+def _write_secret_file(directory: str, name: str, value: str) -> str:
+    safe_name = name.lower().replace("_", "-")
+    path = Path(directory) / f"zerocmux-{safe_name}-{secrets.token_hex(8)}"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(value)
+    os.chmod(path, 0o600)
+    return str(path)
+
+
 def main() -> int:
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
         print("GITHUB_ENV is not set", file=sys.stderr)
         return 1
+    secret_file_dir = os.environ.get("RUNNER_TEMP")
 
     missing = []
     normalized_values = []
@@ -107,7 +128,15 @@ def main() -> int:
 
     for name, value in normalized_values:
         print(f"::add-mask::{_escape_workflow_command(value)}")
-        _write_github_env(env_file, name, value)
+        if name in FILE_BACKED_SECRET_NAMES:
+            if not secret_file_dir:
+                print(f"RUNNER_TEMP is required for file-backed secret {name}", file=sys.stderr)
+                return 1
+            secret_file_path = _write_secret_file(secret_file_dir, name, value)
+            _clear_github_env(env_file, name)
+            _write_github_env(env_file, f"{name}_FILE", secret_file_path)
+        else:
+            _write_github_env(env_file, name, value)
 
     return 0
 

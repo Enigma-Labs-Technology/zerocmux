@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SPARKLE_VERSION="${SPARKLE_VERSION:-2.8.1}"
+SPARKLE_REVISION="${SPARKLE_REVISION:-5581748cef2bae787496fe6d61139aebe0a451f6}"
 SPARKLE_KEYCHAIN_ACCOUNT="${SPARKLE_KEYCHAIN_ACCOUNT:-cmux}"
 SPARKLE_ENV_FILE="${SPARKLE_ENV_FILE:-.env}"
 
@@ -13,6 +14,13 @@ trap cleanup EXIT
 
 echo "Cloning Sparkle ${SPARKLE_VERSION}..."
 git clone --depth 1 --branch "$SPARKLE_VERSION" https://github.com/sparkle-project/Sparkle "$work_dir/Sparkle"
+actual_sparkle_revision="$(git -C "$work_dir/Sparkle" rev-parse HEAD)"
+if [[ "$actual_sparkle_revision" != "$SPARKLE_REVISION" ]]; then
+  echo "Sparkle revision mismatch for ${SPARKLE_VERSION}" >&2
+  echo "Expected: $SPARKLE_REVISION" >&2
+  echo "Actual:   $actual_sparkle_revision" >&2
+  exit 1
+fi
 
 echo "Building Sparkle generate_keys tool..."
 xcodebuild \

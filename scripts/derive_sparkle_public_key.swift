@@ -5,13 +5,27 @@ import Foundation
 // Derives the Ed25519 public key from a Sparkle private key (base64-encoded).
 // Supports both new format (32-byte seed) and old format (96-byte key+pub).
 
-guard CommandLine.arguments.count > 1 else {
-    fputs("Usage: derive_sparkle_public_key.swift <base64-private-key>\n", stderr)
+func usage() -> Never {
+    fputs("Usage: derive_sparkle_public_key.swift <base64-private-key>|--stdin\n", stderr)
     exit(1)
 }
 
+let rawInput: String
+if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--stdin" {
+    let inputData = FileHandle.standardInput.readDataToEndOfFile()
+    guard let input = String(data: inputData, encoding: .utf8) else {
+        fputs("Error: stdin is not valid UTF-8\n", stderr)
+        exit(1)
+    }
+    rawInput = input
+} else if CommandLine.arguments.count == 2 {
+    rawInput = CommandLine.arguments[1]
+} else {
+    usage()
+}
+
 // Pad base64 string if needed (Sparkle keys may be stored without padding)
-var b64 = CommandLine.arguments[1].trimmingCharacters(in: .whitespacesAndNewlines)
+var b64 = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
 while b64.count % 4 != 0 {
     b64 += "="
 }

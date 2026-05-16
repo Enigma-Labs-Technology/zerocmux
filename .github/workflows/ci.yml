@@ -42,6 +42,12 @@ jobs:
       - name: Validate release secret normalization
         run: ./tests/test_ci_release_secret_normalization.sh
 
+      - name: Validate release artifact secret scanner
+        run: ./tests/test_ci_release_artifact_secret_scan.sh
+
+      - name: Validate Sparkle secret handling
+        run: ./tests/test_ci_sparkle_secret_handling.sh
+
       - name: Validate release asset guard
         run: node scripts/release_asset_guard.test.js
 

@@ -88,6 +88,113 @@ jobs:
               throw error;
             }
 
+      - name: Select Xcode
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+            XCODE_DIR="/Applications/Xcode.app/Contents/Developer"
+          else
+            XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | head -n 1 || true)"
+            if [ -n "$XCODE_APP" ]; then
+              XCODE_DIR="$XCODE_APP/Contents/Developer"
+            else
+              echo "No Xcode.app found under /Applications" >&2
+              exit 1
+            fi
+          fi
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
+          export DEVELOPER_DIR="$XCODE_DIR"
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
+
+      - name: Install build deps
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          ./scripts/install-zig-ci.sh
+          npm install --global "create-dmg@${CREATE_DMG_VERSION}"
+
+      - name: Download pre-built GhosttyKit.xcframework
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          ./scripts/download-prebuilt-ghosttykit.sh
+
+      - name: Cache Swift packages
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .spm-cache
+          key: spm-${{ hashFiles('GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-
+
+      - name: Setup Go
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: daemon/remote/go.mod
+          cache-dependency-path: daemon/remote/go.sum
+
+      - name: Build universal app (Release)
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        env:
+          APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
+        run: |
+          APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
+          xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
+            -destination 'generic/platform=macOS' \
+            -clonedSourcePackagesDirPath .spm-cache \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            PRODUCT_BUNDLE_IDENTIFIER="$APPLE_RELEASE_BUNDLE_ID" \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Verify binary architectures
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          APP_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/MacOS/zerocmux"
+          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
+          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
+          APP_ARCHS="$(lipo -archs "$APP_BINARY")"
+          CLI_ARCHS="$(lipo -archs "$CLI_BINARY")"
+          HELPER_ARCHS="$(lipo -archs "$HELPER_BINARY")"
+          echo "App binary architectures: $APP_ARCHS"
+          echo "CLI binary architectures: $CLI_ARCHS"
+          echo "Ghostty helper architectures: $HELPER_ARCHS"
+          [[ "$APP_ARCHS" == *arm64* && "$APP_ARCHS" == *x86_64* ]]
+          [[ "$CLI_ARCHS" == *arm64* && "$CLI_ARCHS" == *x86_64* ]]
+          [[ "$HELPER_ARCHS" == *arm64* && "$HELPER_ARCHS" == *x86_64* ]]
+
+      - name: Build remote daemon release assets and inject manifest
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          APP_PLIST="build-universal/Build/Products/Release/zerocmux.app/Contents/Info.plist"
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
+          ./scripts/build_remote_daemon_release_assets.sh \
+            --version "$APP_VERSION" \
+            --release-tag "$GITHUB_REF_NAME" \
+            --repo "kernelalex/zerocmux" \
+            --output-dir "remote-daemon-assets"
+          MANIFEST_JSON="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",",":")))' remote-daemon-assets/cmuxd-remote-manifest.json)"
+          plutil -remove CMUXRemoteDaemonManifestJSON "$APP_PLIST" >/dev/null 2>&1 || true
+          plutil -insert CMUXRemoteDaemonManifestJSON -string "$MANIFEST_JSON" "$APP_PLIST"
+
+      - name: Run CLI version memory guard regression
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
+          [ -x "$CLI_BINARY" ] || { echo "zerocmux CLI binary not found at $CLI_BINARY" >&2; exit 1; }
+          CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
+
+      - name: Verify bundled Ghostty theme picker helper
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
+          [ -x "$HELPER_BINARY" ] || { echo "Ghostty theme picker helper not found at $HELPER_BINARY" >&2; exit 1; }
+
       - name: Configure AWS credentials for release signing
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
@@ -154,126 +261,24 @@ jobs:
           set -euo pipefail
           python3 scripts/normalize_release_secrets.py
 
-      - name: Select Xcode
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
-            XCODE_DIR="/Applications/Xcode.app/Contents/Developer"
-          else
-            XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | head -n 1 || true)"
-            if [ -n "$XCODE_APP" ]; then
-              XCODE_DIR="$XCODE_APP/Contents/Developer"
-            else
-              echo "No Xcode.app found under /Applications" >&2
-              exit 1
-            fi
-          fi
-          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
-          export DEVELOPER_DIR="$XCODE_DIR"
-          xcodebuild -version
-          xcrun --sdk macosx --show-sdk-path
-
-      - name: Install build deps
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          ./scripts/install-zig-ci.sh
-          npm install --global "create-dmg@${CREATE_DMG_VERSION}"
-
-      - name: Download pre-built GhosttyKit.xcframework
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          ./scripts/download-prebuilt-ghosttykit.sh
-
-      - name: Cache Swift packages
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .spm-cache
-          key: spm-${{ hashFiles('GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: spm-
-
-      - name: Setup Go
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version-file: daemon/remote/go.mod
-          cache-dependency-path: daemon/remote/go.sum
-
       - name: Derive Sparkle public key from private key
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
+          set -euo pipefail
+          SPARKLE_PRIVATE_KEY_FILE_PATH="${SPARKLE_PRIVATE_KEY_FILE:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 APPLE_SIGNING_IDENTITY
+          if [ -z "$SPARKLE_PRIVATE_KEY_FILE_PATH" ] || [ ! -f "$SPARKLE_PRIVATE_KEY_FILE_PATH" ]; then
+            echo "Missing SPARKLE_PRIVATE_KEY_FILE secret material" >&2
             exit 1
           fi
-          DERIVED_PUBLIC_KEY=$(swift scripts/derive_sparkle_public_key.swift "$SPARKLE_PRIVATE_KEY")
+          DERIVED_PUBLIC_KEY="$(swift scripts/derive_sparkle_public_key.swift --stdin < "$SPARKLE_PRIVATE_KEY_FILE_PATH")"
           echo "SPARKLE_PUBLIC_KEY=$DERIVED_PUBLIC_KEY" >> "$GITHUB_ENV"
-
-      - name: Build universal app (Release)
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        env:
-          APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
-        run: |
-          APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
-          xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
-            -destination 'generic/platform=macOS' \
-            -clonedSourcePackagesDirPath .spm-cache \
-            ARCHS="arm64 x86_64" \
-            ONLY_ACTIVE_ARCH=NO \
-            PRODUCT_BUNDLE_IDENTIFIER="$APPLE_RELEASE_BUNDLE_ID" \
-            CODE_SIGNING_ALLOWED=NO build
-
-      - name: Verify binary architectures
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          APP_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/MacOS/zerocmux"
-          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
-          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
-          APP_ARCHS="$(lipo -archs "$APP_BINARY")"
-          CLI_ARCHS="$(lipo -archs "$CLI_BINARY")"
-          HELPER_ARCHS="$(lipo -archs "$HELPER_BINARY")"
-          echo "App binary architectures: $APP_ARCHS"
-          echo "CLI binary architectures: $CLI_ARCHS"
-          echo "Ghostty helper architectures: $HELPER_ARCHS"
-          [[ "$APP_ARCHS" == *arm64* && "$APP_ARCHS" == *x86_64* ]]
-          [[ "$CLI_ARCHS" == *arm64* && "$CLI_ARCHS" == *x86_64* ]]
-          [[ "$HELPER_ARCHS" == *arm64* && "$HELPER_ARCHS" == *x86_64* ]]
-
-      - name: Build remote daemon release assets and inject manifest
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          APP_PLIST="build-universal/Build/Products/Release/zerocmux.app/Contents/Info.plist"
-          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
-          ./scripts/build_remote_daemon_release_assets.sh \
-            --version "$APP_VERSION" \
-            --release-tag "$GITHUB_REF_NAME" \
-            --repo "kernelalex/zerocmux" \
-            --output-dir "remote-daemon-assets"
-          MANIFEST_JSON="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",",":")))' remote-daemon-assets/cmuxd-remote-manifest.json)"
-          plutil -remove CMUXRemoteDaemonManifestJSON "$APP_PLIST" >/dev/null 2>&1 || true
-          plutil -insert CMUXRemoteDaemonManifestJSON -string "$MANIFEST_JSON" "$APP_PLIST"
-
-      - name: Run CLI version memory guard regression
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
-          [ -x "$CLI_BINARY" ] || { echo "zerocmux CLI binary not found at $CLI_BINARY" >&2; exit 1; }
-          CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
-
-      - name: Verify bundled Ghostty theme picker helper
-        if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
-          [ -x "$HELPER_BINARY" ] || { echo "Ghostty theme picker helper not found at $HELPER_BINARY" >&2; exit 1; }
 
       - name: Inject Sparkle keys into Info.plist
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
+          set -euo pipefail
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 APPLE_SIGNING_IDENTITY
           APP_PLIST="build-universal/Build/Products/Release/zerocmux.app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Delete :SUPublicEDKey" "$APP_PLIST" >/dev/null 2>&1 || true
           /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP_PLIST" >/dev/null 2>&1 || true
@@ -288,21 +293,27 @@ jobs:
       - name: Import signing cert
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          if [ -z "$APPLE_CERTIFICATE_BASE64" ]; then
+          set -euo pipefail
+          APPLE_CERTIFICATE_BASE64_VALUE="${APPLE_CERTIFICATE_BASE64:-}"
+          APPLE_CERTIFICATE_PASSWORD_VALUE="${APPLE_CERTIFICATE_PASSWORD:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_RELEASE_PROVISIONING_PROFILE_BASE64
+          if [ -z "$APPLE_CERTIFICATE_BASE64_VALUE" ]; then
             echo "Missing APPLE_CERTIFICATE_BASE64 secret" >&2
             exit 1
           fi
-          if [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
+          if [ -z "$APPLE_CERTIFICATE_PASSWORD_VALUE" ]; then
             echo "Missing APPLE_CERTIFICATE_PASSWORD secret" >&2
             exit 1
           fi
+          umask 077
           KEYCHAIN_PASSWORD="$(uuidgen)"
-          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > /tmp/cert.p12
+          CERT_PATH="$RUNNER_TEMP/zerocmux-release-cert.p12"
+          echo "$APPLE_CERTIFICATE_BASE64_VALUE" | base64 --decode > "$CERT_PATH"
           security delete-keychain build.keychain >/dev/null 2>&1 || true
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security import "$CERT_PATH" -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD_VALUE" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
           security list-keychains -d user -s build.keychain
 
@@ -311,22 +322,27 @@ jobs:
         env:
           APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
         run: |
+          set -euo pipefail
+          APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_VALUE="${APPLE_RELEASE_PROVISIONING_PROFILE_BASE64:-}"
+          APPLE_TEAM_ID_VALUE="${APPLE_TEAM_ID:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64
           APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
-          EXPECTED_APP_ID="${APPLE_TEAM_ID}.${APPLE_RELEASE_BUNDLE_ID}"
-          if [ -z "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64" ]; then
+          EXPECTED_APP_ID="${APPLE_TEAM_ID_VALUE}.${APPLE_RELEASE_BUNDLE_ID}"
+          if [ -z "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_VALUE" ]; then
             echo "Missing APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 secret" >&2
             exit 1
           fi
-          if [ -z "$APPLE_TEAM_ID" ]; then
+          if [ -z "$APPLE_TEAM_ID_VALUE" ]; then
             echo "Missing APPLE_TEAM_ID secret" >&2
             exit 1
           fi
           APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
           PROFILE_PATH="$APP_PATH/Contents/embedded.provisionprofile"
-          TMP_PROFILE="$(mktemp /tmp/zerocmux-release-profile.XXXXXX)"
-          TMP_PLIST="$(mktemp /tmp/zerocmux-release-profile.XXXXXX.plist)"
+          TMP_PROFILE="$(mktemp "$RUNNER_TEMP/zerocmux-release-profile.XXXXXX")"
+          TMP_PLIST="$(mktemp "$RUNNER_TEMP/zerocmux-release-profile.XXXXXX.plist")"
           trap 'rm -f "$TMP_PROFILE" "$TMP_PLIST"' EXIT
-          echo "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$TMP_PROFILE"
+          echo "$APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_VALUE" | base64 --decode > "$TMP_PROFILE"
+          chmod 600 "$TMP_PROFILE"
           security cms -D -i "$TMP_PROFILE" > "$TMP_PLIST"
           APP_ID="$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.application-identifier" "$TMP_PLIST")"
           if [ "$APP_ID" != "$EXPECTED_APP_ID" ]; then
@@ -350,28 +366,39 @@ jobs:
       - name: Codesign app
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+          set -euo pipefail
+          APPLE_SIGNING_IDENTITY_VALUE="${APPLE_SIGNING_IDENTITY:-}"
+          APPLE_TEAM_ID_VALUE="${APPLE_TEAM_ID:-}"
+          APPLE_RELEASE_APP_ID_VALUE="${APPLE_RELEASE_APP_ID:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 APPLE_SIGNING_IDENTITY APPLE_RELEASE_APP_ID
+          if [ -z "$APPLE_SIGNING_IDENTITY_VALUE" ]; then
             echo "Missing APPLE_SIGNING_IDENTITY secret" >&2
             exit 1
           fi
-          if [ -z "$APPLE_TEAM_ID" ]; then
+          if [ -z "$APPLE_TEAM_ID_VALUE" ]; then
             echo "Missing APPLE_TEAM_ID secret" >&2
             exit 1
           fi
           APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
           RELEASE_ENTITLEMENTS="$RUNNER_TEMP/cmux-release.entitlements"
           cp cmux.release.entitlements "$RELEASE_ENTITLEMENTS"
-          plutil -replace com.apple.application-identifier -string "$APPLE_RELEASE_APP_ID" "$RELEASE_ENTITLEMENTS"
-          plutil -replace com.apple.developer.team-identifier -string "$APPLE_TEAM_ID" "$RELEASE_ENTITLEMENTS"
+          plutil -replace com.apple.application-identifier -string "$APPLE_RELEASE_APP_ID_VALUE" "$RELEASE_ENTITLEMENTS"
+          plutil -replace com.apple.developer.team-identifier -string "$APPLE_TEAM_ID_VALUE" "$RELEASE_ENTITLEMENTS"
           ./scripts/sign-cmux-bundle.sh \
             "$APP_PATH" \
             "$RELEASE_ENTITLEMENTS" \
-            "$APPLE_SIGNING_IDENTITY"
+            "$APPLE_SIGNING_IDENTITY_VALUE"
 
       - name: Notarize app
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+          set -euo pipefail
+          APPLE_ID_VALUE="${APPLE_ID:-}"
+          APPLE_APP_SPECIFIC_PASSWORD_VALUE="${APPLE_APP_SPECIFIC_PASSWORD:-}"
+          APPLE_TEAM_ID_VALUE="${APPLE_TEAM_ID:-}"
+          APPLE_SIGNING_IDENTITY_VALUE="${APPLE_SIGNING_IDENTITY:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 APPLE_SIGNING_IDENTITY
+          if [ -z "$APPLE_ID_VALUE" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD_VALUE" ] || [ -z "$APPLE_TEAM_ID_VALUE" ]; then
             echo "Missing notarization secrets (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID)" >&2
             exit 1
           fi
@@ -379,12 +406,12 @@ jobs:
           ZIP_SUBMIT="zerocmux-notary.zip"
           DMG_RELEASE="zerocmux-macos.dmg"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_SUBMIT"
-          APP_SUBMIT_JSON="$(xcrun notarytool submit "$ZIP_SUBMIT" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --output-format json)"
+          APP_SUBMIT_JSON="$(xcrun notarytool submit "$ZIP_SUBMIT" --apple-id "$APPLE_ID_VALUE" --team-id "$APPLE_TEAM_ID_VALUE" --password "$APPLE_APP_SPECIFIC_PASSWORD_VALUE" --wait --output-format json)"
           APP_SUBMIT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$APP_SUBMIT_JSON")"
           APP_STATUS="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$APP_SUBMIT_JSON")"
           if [ "$APP_STATUS" != "Accepted" ]; then
             echo "App notarization failed with status: $APP_STATUS" >&2
-            xcrun notarytool log "$APP_SUBMIT_ID" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+            xcrun notarytool log "$APP_SUBMIT_ID" --apple-id "$APPLE_ID_VALUE" --team-id "$APPLE_TEAM_ID_VALUE" --password "$APPLE_APP_SPECIFIC_PASSWORD_VALUE" || true
             exit 1
           fi
           xcrun stapler staple "$APP_PATH"
@@ -393,7 +420,7 @@ jobs:
           rm -f "$ZIP_SUBMIT"
           # create-dmg generates a styled drag-to-install DMG
           create-dmg \
-            --identity="$APPLE_SIGNING_IDENTITY" \
+            --identity="$APPLE_SIGNING_IDENTITY_VALUE" \
             "$APP_PATH" \
             ./
           CREATED_DMG="$(find . -maxdepth 1 -name '*.dmg' -print -quit)"
@@ -402,12 +429,12 @@ jobs:
             exit 1
           fi
           mv "$CREATED_DMG" "$DMG_RELEASE"
-          DMG_SUBMIT_JSON="$(xcrun notarytool submit "$DMG_RELEASE" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --output-format json)"
+          DMG_SUBMIT_JSON="$(xcrun notarytool submit "$DMG_RELEASE" --apple-id "$APPLE_ID_VALUE" --team-id "$APPLE_TEAM_ID_VALUE" --password "$APPLE_APP_SPECIFIC_PASSWORD_VALUE" --wait --output-format json)"
           DMG_SUBMIT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$DMG_SUBMIT_JSON")"
           DMG_STATUS="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$DMG_SUBMIT_JSON")"
           if [ "$DMG_STATUS" != "Accepted" ]; then
             echo "DMG notarization failed with status: $DMG_STATUS" >&2
-            xcrun notarytool log "$DMG_SUBMIT_ID" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+            xcrun notarytool log "$DMG_SUBMIT_ID" --apple-id "$APPLE_ID_VALUE" --team-id "$APPLE_TEAM_ID_VALUE" --password "$APPLE_APP_SPECIFIC_PASSWORD_VALUE" || true
             exit 1
           fi
           xcrun stapler staple "$DMG_RELEASE"
@@ -416,11 +443,57 @@ jobs:
       - name: Generate Sparkle appcast
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
+          set -euo pipefail
+          SPARKLE_PRIVATE_KEY_FILE_PATH="${SPARKLE_PRIVATE_KEY_FILE:-}"
+          unset APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 APPLE_SIGNING_IDENTITY
+          if [ -z "$SPARKLE_PRIVATE_KEY_FILE_PATH" ] || [ ! -f "$SPARKLE_PRIVATE_KEY_FILE_PATH" ]; then
+            echo "Missing SPARKLE_PRIVATE_KEY_FILE secret material" >&2
             exit 1
           fi
-          ./scripts/sparkle_generate_appcast.sh zerocmux-macos.dmg "$GITHUB_REF_NAME" appcast.xml
+          SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_PRIVATE_KEY_FILE_PATH" ./scripts/sparkle_generate_appcast.sh zerocmux-macos.dmg "$GITHUB_REF_NAME" appcast.xml
+
+      - name: Verify release artifacts do not contain secrets
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          SPARKLE_PRIVATE_KEY_FILE_PATH="${SPARKLE_PRIVATE_KEY_FILE:-}"
+          unset SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE
+          if [ -z "$SPARKLE_PRIVATE_KEY_FILE_PATH" ] || [ ! -f "$SPARKLE_PRIVATE_KEY_FILE_PATH" ]; then
+            echo "Missing SPARKLE_PRIVATE_KEY_FILE secret material" >&2
+            exit 1
+          fi
+          SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_PRIVATE_KEY_FILE_PATH" python3 scripts/verify_release_artifacts_no_secrets.py \
+            "build-universal/Build/Products/Release/zerocmux.app" \
+            zerocmux-macos.dmg \
+            appcast.xml \
+            remote-daemon-assets
+
+      - name: Clear release signing secrets from job environment
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          SPARKLE_PRIVATE_KEY_FILE_PATH="${SPARKLE_PRIVATE_KEY_FILE:-}"
+          unset SPARKLE_PRIVATE_KEY SPARKLE_PRIVATE_KEY_FILE
+          if [ -n "$SPARKLE_PRIVATE_KEY_FILE_PATH" ]; then
+            rm -f "$SPARKLE_PRIVATE_KEY_FILE_PATH"
+          fi
+          for name in \
+            APPLE_CERTIFICATE_BASE64 \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_ID \
+            APPLE_APP_SPECIFIC_PASSWORD \
+            APPLE_TEAM_ID \
+            APPLE_RELEASE_PROVISIONING_PROFILE_BASE64 \
+            SPARKLE_PRIVATE_KEY \
+            SPARKLE_PRIVATE_KEY_FILE \
+            AWS_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY \
+            AWS_SESSION_TOKEN \
+            SECRETS_LIST_CLEAN_UP
+          do
+            echo "$name=" >> "$GITHUB_ENV"
+          done
 
       - name: Attest remote daemon release assets
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -454,4 +527,4 @@ jobs:
         if: always()
         run: |
           security delete-keychain build.keychain >/dev/null 2>&1 || true
-          rm -f /tmp/cert.p12
+          rm -f /tmp/cert.p12 "$RUNNER_TEMP/zerocmux-release-cert.p12"

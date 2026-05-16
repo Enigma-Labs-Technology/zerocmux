@@ -10,12 +10,23 @@ DMG_PATH="$1"
 TAG="$2"
 OUT_PATH="${3:-appcast.xml}"
 
-if [[ -z "${SPARKLE_PRIVATE_KEY:-}" ]]; then
-  echo "SPARKLE_PRIVATE_KEY is required (exported from Sparkle generate_keys)." >&2
+sparkle_private_key_material=""
+if [[ -n "${SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+  if [[ ! -f "$SPARKLE_PRIVATE_KEY_FILE" ]]; then
+    echo "SPARKLE_PRIVATE_KEY_FILE does not exist: $SPARKLE_PRIVATE_KEY_FILE" >&2
+    exit 1
+  fi
+  sparkle_private_key_material="$(cat "$SPARKLE_PRIVATE_KEY_FILE")"
+elif [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
+  sparkle_private_key_material="$SPARKLE_PRIVATE_KEY"
+else
+  echo "SPARKLE_PRIVATE_KEY_FILE or SPARKLE_PRIVATE_KEY is required." >&2
   exit 1
 fi
+unset SPARKLE_PRIVATE_KEY
 
 SPARKLE_VERSION="${SPARKLE_VERSION:-2.8.1}"
+SPARKLE_REVISION="${SPARKLE_REVISION:-5581748cef2bae787496fe6d61139aebe0a451f6}"
 DOWNLOAD_URL_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/kernelalex/zerocmux/releases/download/$TAG/}"
 RELEASE_NOTES_URL="${RELEASE_NOTES_URL:-https://github.com/kernelalex/zerocmux/releases/tag/$TAG}"
 
@@ -27,6 +38,13 @@ trap cleanup EXIT
 
 echo "Cloning Sparkle ${SPARKLE_VERSION}..."
 git clone --depth 1 --branch "$SPARKLE_VERSION" https://github.com/sparkle-project/Sparkle "$work_dir/Sparkle"
+actual_sparkle_revision="$(git -C "$work_dir/Sparkle" rev-parse HEAD)"
+if [[ "$actual_sparkle_revision" != "$SPARKLE_REVISION" ]]; then
+  echo "Sparkle revision mismatch for ${SPARKLE_VERSION}" >&2
+  echo "Expected: $SPARKLE_REVISION" >&2
+  echo "Actual:   $actual_sparkle_revision" >&2
+  exit 1
+fi
 
 echo "Building Sparkle generate_appcast tool..."
 xcodebuild \
@@ -64,11 +82,14 @@ cp "$DMG_PATH" "$archives_dir/$(basename "$DMG_PATH")"
 
 key_file="$work_dir/sparkle_ed_key"
 # Ensure base64 padding (keys may be stored without trailing '=')
-padded_key="$(printf "%s" "$SPARKLE_PRIVATE_KEY" | tr -d '[:space:]')"
+padded_key="$(printf "%s" "$sparkle_private_key_material" | tr -d '[:space:]')"
+unset sparkle_private_key_material
 while (( ${#padded_key} % 4 != 0 )); do
   padded_key="${padded_key}="
 done
 printf "%s" "$padded_key" > "$key_file"
+unset padded_key
+chmod 600 "$key_file"
 
 generated_appcast_path="$archives_dir/$(basename "$OUT_PATH")"
 

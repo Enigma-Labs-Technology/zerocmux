@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Build, sign, notarize, create DMG, generate appcast, and upload to GitHub release.
 # Usage: ./scripts/build-sign-upload.sh <tag> [--allow-overwrite]
-# Requires: source ~/.secrets/cmuxterm.env && export SPARKLE_PRIVATE_KEY
+# Requires: ~/.secrets/cmuxterm.env with Apple signing credentials and SPARKLE_PRIVATE_KEY.
 
 usage() {
   cat <<'EOF'
@@ -51,8 +51,6 @@ ENTITLEMENTS="cmux.entitlements"
 APP_PATH="build/Build/Products/Release/zerocmux.app"
 
 # --- Pre-flight ---
-source ~/.secrets/cmuxterm.env
-export SPARKLE_PRIVATE_KEY
 for tool in zig xcodebuild create-dmg xcrun codesign ditto gh; do
   command -v "$tool" >/dev/null || { echo "MISSING: $tool" >&2; exit 1; }
 done
@@ -81,8 +79,16 @@ if [ ! -x "$HELPER_PATH" ]; then
 fi
 
 # --- Inject Sparkle keys ---
+source ~/.secrets/cmuxterm.env
+SPARKLE_PRIVATE_KEY_VALUE="${SPARKLE_PRIVATE_KEY:-}"
+unset SPARKLE_PRIVATE_KEY
+if [ -z "$SPARKLE_PRIVATE_KEY_VALUE" ]; then
+  echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
+  exit 1
+fi
 echo "Injecting Sparkle keys..."
-SPARKLE_PUBLIC_KEY_DERIVED=$(swift scripts/derive_sparkle_public_key.swift "$SPARKLE_PRIVATE_KEY")
+SPARKLE_PUBLIC_KEY_DERIVED="$(printf '%s' "$SPARKLE_PRIVATE_KEY_VALUE" | swift scripts/derive_sparkle_public_key.swift --stdin)"
+unset SPARKLE_PRIVATE_KEY_VALUE
 APP_PLIST="$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :SUPublicEDKey" "$APP_PLIST" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$APP_PLIST" 2>/dev/null || true
@@ -126,7 +132,24 @@ echo "DMG notarized"
 
 # --- Generate Sparkle appcast ---
 echo "Generating appcast..."
-./scripts/sparkle_generate_appcast.sh zerocmux-macos.dmg "$TAG" appcast.xml
+source ~/.secrets/cmuxterm.env
+SPARKLE_PRIVATE_KEY_VALUE="${SPARKLE_PRIVATE_KEY:-}"
+unset SPARKLE_PRIVATE_KEY
+if [ -z "$SPARKLE_PRIVATE_KEY_VALUE" ]; then
+  echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
+  exit 1
+fi
+old_umask="$(umask)"
+umask 077
+SPARKLE_PRIVATE_KEY_FILE_PATH="$(mktemp "${TMPDIR:-/tmp}/zerocmux-sparkle-private-key.XXXXXX")"
+umask "$old_umask"
+trap 'rm -f "${SPARKLE_PRIVATE_KEY_FILE_PATH:-}"' EXIT
+printf '%s' "$SPARKLE_PRIVATE_KEY_VALUE" > "$SPARKLE_PRIVATE_KEY_FILE_PATH"
+unset SPARKLE_PRIVATE_KEY_VALUE
+SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_PRIVATE_KEY_FILE_PATH" ./scripts/sparkle_generate_appcast.sh zerocmux-macos.dmg "$TAG" appcast.xml
+rm -f "$SPARKLE_PRIVATE_KEY_FILE_PATH"
+trap - EXIT
+unset SPARKLE_PRIVATE_KEY APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD
 
 # --- Create GitHub release (if needed) and upload ---
 if gh release view "$TAG" >/dev/null 2>&1; then
