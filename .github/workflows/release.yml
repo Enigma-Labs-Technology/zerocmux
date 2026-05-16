@@ -98,58 +98,6 @@ jobs:
           allowed-account-ids: ${{ secrets.AWS_RELEASE_ACCOUNT_ID }}
           mask-aws-account-id: true
           unset-current-credentials: true
-          inline-session-policy: |
-            {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:ListSecrets"
-                  ],
-                  "Resource": "*"
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
-                  "Resource": [
-                    "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
-                    "${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt"
-                  ],
-                  "Resource": "${{ secrets.AWS_RELEASE_KMS_KEY_ARN }}",
-                  "Condition": {
-                    "StringEquals": {
-                      "kms:ViaService": "secretsmanager.${{ secrets.AWS_REGION }}.amazonaws.com",
-                      "kms:CallerAccount": "${{ secrets.AWS_RELEASE_ACCOUNT_ID }}",
-                      "kms:EncryptionContext:SecretARN": [
-                        "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}",
-                        "${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}"
-                      ]
-                    }
-                  }
-                }
-              ]
-            }
 
       - name: Import release signing secrets from AWS Secrets Manager
         if: steps.guard_release_assets.outputs.skip_all != 'true'
