@@ -99,6 +99,40 @@ jobs:
           mask-aws-account-id: true
           unset-current-credentials: true
 
+      - name: Validate release signing secret references
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        env:
+          AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN }}
+          AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN }}
+          AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN }}
+          AWS_RELEASE_APPLE_ID_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_ID_SECRET_ARN }}
+          AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN }}
+          AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN }}
+          AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN: ${{ secrets.AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN }}
+          AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN: ${{ secrets.AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN }}
+        run: |
+          set -euo pipefail
+          required_refs=(
+            AWS_RELEASE_APPLE_CERTIFICATE_BASE64_SECRET_ARN
+            AWS_RELEASE_APPLE_CERTIFICATE_PASSWORD_SECRET_ARN
+            AWS_RELEASE_APPLE_SIGNING_IDENTITY_SECRET_ARN
+            AWS_RELEASE_APPLE_ID_SECRET_ARN
+            AWS_RELEASE_APPLE_APP_SPECIFIC_PASSWORD_SECRET_ARN
+            AWS_RELEASE_APPLE_TEAM_ID_SECRET_ARN
+            AWS_RELEASE_APPLE_RELEASE_PROVISIONING_PROFILE_BASE64_SECRET_ARN
+            AWS_RELEASE_SPARKLE_PRIVATE_KEY_SECRET_ARN
+          )
+          missing=()
+          for name in "${required_refs[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing GitHub release environment secret references: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
       - name: Import release signing secrets from AWS Secrets Manager
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         uses: aws-actions/aws-secretsmanager-get-secrets@2cb1a461cbd4865ac4299648312e4704c646cd53 # v3.0.1
@@ -192,29 +226,7 @@ jobs:
             echo "Missing SPARKLE_PRIVATE_KEY secret" >&2
             exit 1
           fi
-          python3 - <<'PY'
-          import base64
-          import os
-          import re
-          import sys
-
-          value = os.environ["SPARKLE_PRIVATE_KEY"].strip()
-          print(f"SPARKLE_PRIVATE_KEY characters: {len(value)}")
-          if not re.fullmatch(r"[A-Za-z0-9+/=]+", value):
-              print("SPARKLE_PRIVATE_KEY is not plain base64. Store only the raw output from `generate_keys -x <file>`.", file=sys.stderr)
-              sys.exit(1)
-          try:
-              decoded = base64.b64decode(value + "=" * (-len(value) % 4), validate=True)
-          except Exception as error:
-              print(f"SPARKLE_PRIVATE_KEY base64 decode failed: {error}", file=sys.stderr)
-              sys.exit(1)
-          print(f"SPARKLE_PRIVATE_KEY decoded bytes: {len(decoded)}")
-          if len(decoded) not in (32, 96):
-              print("SPARKLE_PRIVATE_KEY must decode to 32 bytes (new Sparkle key) or 96 bytes (old Sparkle key).", file=sys.stderr)
-              sys.exit(1)
-          PY
           DERIVED_PUBLIC_KEY=$(swift scripts/derive_sparkle_public_key.swift "$SPARKLE_PRIVATE_KEY")
-          echo "Derived Sparkle public key: $DERIVED_PUBLIC_KEY"
           echo "SPARKLE_PUBLIC_KEY=$DERIVED_PUBLIC_KEY" >> "$GITHUB_ENV"
 
       - name: Build universal app (Release)
