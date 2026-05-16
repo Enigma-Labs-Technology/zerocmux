@@ -23,7 +23,11 @@ GhosttyKit.xcframework.bak-*/
 # Release artifacts
 GhosttyTabs-*.zip
 cmux-macos.dmg
+zerocmux-macos.dmg
 appcast.xml
+
+# Local Homebrew tap checkout. CI checks out the tap directly when needed.
+homebrew-cmux/
 
 # Python
 __pycache__/
