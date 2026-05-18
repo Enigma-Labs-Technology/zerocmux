@@ -10,13 +10,13 @@ extension AgentLaunchSanitizer {
             "--allowed-tools",
             "--append-system-prompt",
             "--betas",
+            "--dangerously-load-development-channels",
             "--debug-file",
             "--disallowedTools",
             "--disallowed-tools",
             "--effort",
             "--fallback-model",
             "--file",
-            "--fork-session",
             "--from-pr",
             "--input-format",
             "--json-schema",
@@ -125,8 +125,7 @@ extension AgentLaunchSanitizer {
         ],
         variadicOptions: [
             "--image",
-            "-i",
-            "--add-dir"
+            "-i"
         ],
         nonRestorableCommands: [
             "exec",
@@ -151,7 +150,13 @@ extension AgentLaunchSanitizer {
         ],
         droppedOptions: [
             "--last",
+            "--remote",
+            "--remote-auth-token-env",
             "--all"
+        ],
+        droppedOptionPrefixes: [
+            "--remote=",
+            "--remote-auth-token-env="
         ],
         resumeSubcommand: "resume"
     )
@@ -214,6 +219,54 @@ extension AgentLaunchSanitizer {
             "-h",
             "-p",
             "-v"
+        ]
+    )
+
+    static let ampPolicy = Policy(
+        valueOptions: [
+            "--effort",
+            // --label takes a value; listed here AND in droppedOptions so the
+            // sanitizer consumes the value too (otherwise it slips through as
+            // a positional).
+            "--label",
+            "--log-file",
+            "--log-level",
+            "--mcp-config",
+            "--mode",
+            "--settings-file",
+            "--visibility",
+            "-l",
+            "-m"
+        ],
+        nonRestorableCommands: [
+            "login",
+            "logout",
+            "mcp",
+            "permissions",
+            "permission",
+            "review",
+            "skill",
+            "skills",
+            "tool",
+            "tools",
+            "update",
+            "up",
+            "usage",
+            "version"
+        ],
+        droppedOptions: [
+            "--archive",
+            "--label",
+            "-l",
+            "--stream-json",
+            "--stream-json-input",
+            "--stream-json-thinking"
+        ],
+        rejectOptions: [
+            "--execute",
+            "--print",
+            "-V",
+            "-x"
         ]
     )
 
@@ -413,6 +466,7 @@ extension AgentLaunchSanitizer {
             "--prompt"
         ],
         droppedOptionPrefixes: [
+            "--fork=",
             "--session=",
             "--prompt="
         ],

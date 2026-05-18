@@ -9,29 +9,13 @@ import XCTest
 
 final class FileExplorerStateModePersistenceTests: XCTestCase {
     private let modeKey = "rightSidebar.mode"
-    private let feedEnabledKey = RightSidebarBetaFeatureSettings.feedEnabledKey
     private let dockEnabledKey = RightSidebarBetaFeatureSettings.dockEnabledKey
 
-    func testDisabledFeedStoredModeFallsBackToFiles() {
-        withSavedRightSidebarModeDefaults {
-            let defaults = UserDefaults.standard
+    func testFeedStoredModeSurvivesByDefault() {
+        withTemporaryDefaults { defaults in
             defaults.set(RightSidebarMode.feed.rawValue, forKey: modeKey)
-            defaults.set(false, forKey: feedEnabledKey)
 
-            let state = FileExplorerState()
-
-            XCTAssertEqual(state.mode, .files)
-            XCTAssertEqual(defaults.string(forKey: modeKey), RightSidebarMode.files.rawValue)
-        }
-    }
-
-    func testEnabledFeedStoredModeSurvives() {
-        withSavedRightSidebarModeDefaults {
-            let defaults = UserDefaults.standard
-            defaults.set(RightSidebarMode.feed.rawValue, forKey: modeKey)
-            defaults.set(true, forKey: feedEnabledKey)
-
-            let state = FileExplorerState()
+            let state = FileExplorerState(defaults: defaults)
 
             XCTAssertEqual(state.mode, .feed)
             XCTAssertEqual(defaults.string(forKey: modeKey), RightSidebarMode.feed.rawValue)
@@ -39,15 +23,13 @@ final class FileExplorerStateModePersistenceTests: XCTestCase {
     }
 
     func testModeSetterClampsUnavailableBetaModes() {
-        withSavedRightSidebarModeDefaults {
-            let defaults = UserDefaults.standard
-            defaults.set(false, forKey: feedEnabledKey)
+        withTemporaryDefaults { defaults in
             defaults.set(false, forKey: dockEnabledKey)
-            let state = FileExplorerState()
+            let state = FileExplorerState(defaults: defaults)
 
             state.mode = .feed
-            XCTAssertEqual(state.mode, .files)
-            XCTAssertEqual(defaults.string(forKey: modeKey), RightSidebarMode.files.rawValue)
+            XCTAssertEqual(state.mode, .feed)
+            XCTAssertEqual(defaults.string(forKey: modeKey), RightSidebarMode.feed.rawValue)
 
             defaults.set(true, forKey: dockEnabledKey)
             state.mode = .dock
@@ -61,25 +43,22 @@ final class FileExplorerStateModePersistenceTests: XCTestCase {
         }
     }
 
-    private func withSavedRightSidebarModeDefaults(_ body: () -> Void) {
-        let defaults = UserDefaults.standard
-        let previousMode = defaults.object(forKey: modeKey)
-        let previousFeedEnabled = defaults.object(forKey: feedEnabledKey)
-        let previousDockEnabled = defaults.object(forKey: dockEnabledKey)
-        defer {
-            restore(previousMode, forKey: modeKey)
-            restore(previousFeedEnabled, forKey: feedEnabledKey)
-            restore(previousDockEnabled, forKey: dockEnabledKey)
-        }
-        body()
+    func testCLIArgumentNormalizerMapsVaultAndSessionsToSessions() {
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "files"), .files)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "find"), .find)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "vault"), .sessions)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "sessions"), .sessions)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "feed"), .feed)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: "dock"), .dock)
+        XCTAssertEqual(RightSidebarMode.from(cliArgument: " Vault "), .sessions)
+        XCTAssertNil(RightSidebarMode.from(cliArgument: "unknown"))
     }
 
-    private func restore(_ value: Any?, forKey key: String) {
-        let defaults = UserDefaults.standard
-        if let value {
-            defaults.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
-        }
+    private func withTemporaryDefaults(_ body: (UserDefaults) -> Void) {
+        let suiteName = "FileExplorerStateModePersistenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        body(defaults)
     }
 }

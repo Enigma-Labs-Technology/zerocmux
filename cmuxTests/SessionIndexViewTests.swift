@@ -340,6 +340,17 @@ private extension SessionAgent {
             return .rovodev
         case .hermesAgent:
             return .hermesAgent(source: nil, model: nil, hermesHome: nil)
+        case .registered(let agent):
+            return .registered(
+                CmuxVaultAgentRegistration(
+                    id: agent.id,
+                    name: agent.displayName,
+                    iconAssetName: agent.iconAssetName,
+                    detect: CmuxVaultAgentDetectRule(),
+                    sessionIdSource: .argvOption("--session"),
+                    resumeCommand: agent.id
+                )
+            )
         }
     }
 }

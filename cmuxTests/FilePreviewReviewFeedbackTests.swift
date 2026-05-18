@@ -22,16 +22,14 @@ final class FilePreviewReviewFeedbackTests: XCTestCase {
     }
 
     func testSavingTextViewUsesChordedSaveShortcut() async throws {
-        KeyboardShortcutSettings.resetAll()
-        defer { KeyboardShortcutSettings.resetAll() }
-
-        KeyboardShortcutSettings.setShortcut(
+        KeyboardShortcutSettings.setShortcutOverrideForTesting(
             StoredShortcut(
                 first: ShortcutStroke(key: "k", command: true, shift: false, option: false, control: false, keyCode: UInt16(kVK_ANSI_K)),
                 second: ShortcutStroke(key: "s", command: true, shift: false, option: false, control: false, keyCode: UInt16(kVK_ANSI_S))
             ),
             for: .saveFilePreview
         )
+        defer { KeyboardShortcutSettings.setShortcutOverrideForTesting(nil, for: .saveFilePreview) }
 
         let url = try temporaryTextFile(contents: "original", encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }

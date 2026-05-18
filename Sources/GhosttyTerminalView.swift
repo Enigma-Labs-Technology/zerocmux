@@ -298,6 +298,12 @@ enum GhosttyPasteboardHelper {
         case rejectedImagePayload
     }
 
+    enum ImageFileListMaterializationResult {
+        case saved([URL])
+        case noDecodableImagePayload
+        case rejectedImagePayload
+    }
+
     private static let selectionPasteboard = NSPasteboard(
         name: NSPasteboard.Name("com.mitchellh.ghostty.selection")
     )
@@ -650,6 +656,61 @@ enum GhosttyPasteboardHelper {
         return fileURL
     }
 
+    static func materializeImageFileURLsIfNeeded(
+        from pasteboard: NSPasteboard = .general
+    ) -> ImageFileListMaterializationResult {
+        let pasteboardItems = pasteboard.pasteboardItems ?? []
+        if pasteboardItems.count > 1 {
+            var savedFileURLs: [URL] = []
+            for item in pasteboardItems {
+                let itemPasteboard = NSPasteboard(
+                    name: NSPasteboard.Name("com.zerocmux.clipboard-image-\(UUID().uuidString)")
+                )
+                itemPasteboard.clearContents()
+                defer { itemPasteboard.clearContents() }
+
+                guard let copiedItem = copyPasteboardItem(item),
+                      itemPasteboard.writeObjects([copiedItem]) else {
+                    continue
+                }
+                switch materializeImageFileURLIfNeeded(from: itemPasteboard) {
+                case .saved(let fileURL):
+                    savedFileURLs.append(fileURL)
+                case .noDecodableImagePayload:
+                    continue
+                case .rejectedImagePayload:
+                    cleanupTransferredTemporaryImageFiles(savedFileURLs)
+                    return .rejectedImagePayload
+                }
+            }
+
+            if !savedFileURLs.isEmpty {
+                return .saved(savedFileURLs)
+            }
+        }
+
+        switch materializeImageFileURLIfNeeded(from: pasteboard) {
+        case .saved(let fileURL):
+            return .saved([fileURL])
+        case .noDecodableImagePayload:
+            return .noDecodableImagePayload
+        case .rejectedImagePayload:
+            return .rejectedImagePayload
+        }
+    }
+
+    static func saveImageFileURLsIfNeeded(
+        from pasteboard: NSPasteboard = .general,
+        assumeNoText: Bool = false
+    ) -> [URL] {
+        if !assumeNoText && stringContents(from: pasteboard) != nil { return [] }
+
+        guard case .saved(let fileURLs) = materializeImageFileURLsIfNeeded(from: pasteboard) else {
+            return []
+        }
+        return fileURLs
+    }
+
     /// When the clipboard contains only image data (or rich text that resolves to
     /// an attachment-only image), saves it as a temporary image file and returns the
     /// shell-escaped file path. Returns nil if the clipboard contains text or no image.
@@ -670,6 +731,21 @@ enum GhosttyPasteboardHelper {
             }
             try? FileManager.default.removeItem(at: normalizedURL)
         }
+    }
+
+    private static func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem? {
+        let copiedItem = NSPasteboardItem()
+        var didCopyRepresentation = false
+        for type in item.types {
+            if let data = item.data(forType: type) {
+                copiedItem.setData(data, forType: type)
+                didCopyRepresentation = true
+            } else if let string = item.string(forType: type) {
+                copiedItem.setString(string, forType: type)
+                didCopyRepresentation = true
+            }
+        }
+        return didCopyRepresentation ? copiedItem : nil
     }
 
     private static func registerOwnedTemporaryImageFile(_ fileURL: URL) {
@@ -2043,17 +2119,21 @@ class GhosttyApp {
     }
 
     private func loadCmuxOwnedGhosttyKeybindOverrides(_ config: ghostty_config_t) {
-        // cmux owns these split shortcuts through KeyboardShortcutSettings.
+        // zerocmux owns these split and close shortcuts through KeyboardShortcutSettings.
         // Remove Ghostty's default fallbacks so remapped or cleared shortcuts
-        // can reach the focused terminal instead of creating a split.
+        // can reach the focused terminal instead of splitting or closing outside
+        // the remappable shortcut layer.
         loadInlineGhosttyConfig(
             """
             keybind = super+d=unbind
             keybind = super+shift+d=unbind
+            keybind = super+w=unbind
+            keybind = super+alt+w=unbind
+            keybind = super+shift+w=unbind
             """,
             into: config,
-            prefix: "zerocmux-owned-split-keybind-overrides",
-            logLabel: "zerocmux-owned split keybind overrides"
+            prefix: "zerocmux-owned-keybind-overrides",
+            logLabel: "zerocmux-owned keybind overrides"
         )
     }
 
@@ -4146,6 +4226,32 @@ final class TerminalSurface: Identifiable, ObservableObject {
         }
     }
 
+    enum NamedKeySendResult: Equatable {
+        case sent
+        case queued
+        case unknownKey
+        case inputQueueFull
+        case surfaceUnavailable
+        case processExited
+    }
+
+    enum InputSendResult: Equatable {
+        case sent
+        case queued
+        case inputQueueFull
+        case surfaceUnavailable
+        case processExited
+
+        var accepted: Bool {
+            switch self {
+            case .sent, .queued:
+                return true
+            case .inputQueueFull, .surfaceUnavailable, .processExited:
+                return false
+            }
+        }
+    }
+
     private(set) var surface: ghostty_surface_t?
     private weak var attachedView: GhosttyNSView?
 
@@ -4163,7 +4269,21 @@ final class TerminalSurface: Identifiable, ObservableObject {
     /// Use the hosted view rather than the inner surface view, since the surface can be
     /// temporarily unattached (surface not yet created / reparenting) even while the panel
     /// is already in the window.
-    var isViewInWindow: Bool { hostedView.window != nil }
+    var uiWindow: NSWindow? {
+        guard let window = hostedView.window else { return nil }
+        if let headlessStartupWindow, window === headlessStartupWindow {
+            return nil
+        }
+        return window
+    }
+
+    var isViewInWindow: Bool { uiWindow != nil }
+
+    func isHeadlessStartupWindow(_ window: NSWindow?) -> Bool {
+        guard let window, let headlessStartupWindow else { return false }
+        return window === headlessStartupWindow
+    }
+
     let id: UUID
     private(set) var tabId: UUID
     /// Port ordinal for CMUX_PORT range assignment
@@ -4202,6 +4322,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
     private var pendingSocketInputBytes: Int = 0
     private let maxPendingSocketInputBytes = 1_048_576
     private var backgroundSurfaceStartQueued = false
+    private var headlessStartupWindow: NSWindow?
     private var surfaceCallbackContext: Unmanaged<GhosttySurfaceCallbackContext>?
     /// The desired focus state for the Ghostty C surface. May be set before the
     /// C surface exists (e.g. during layout restoration); `createSurface`
@@ -4278,6 +4399,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
         context: ghostty_surface_context_e,
         configTemplate: CmuxSurfaceConfigTemplate?,
         workingDirectory: String? = nil,
+        portOrdinal: Int = 0,
         initialCommand: String? = nil,
         tmuxStartCommand: String? = nil,
         initialInput: String? = nil,
@@ -4294,6 +4416,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
         self.surfaceContext = context
         self.configTemplate = configTemplate
         self.workingDirectory = workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.portOrdinal = portOrdinal
         let trimmedCommand = initialCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialCommand = (trimmedCommand?.isEmpty == false) ? trimmedCommand : nil
         let trimmedTmuxStartCommand = tmuxStartCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -5311,33 +5434,48 @@ final class TerminalSurface: Identifiable, ObservableObject {
         return ghostty_surface_needs_confirm_quit(surface)
     }
 
-    func sendText(_ text: String) {
-        guard let data = text.data(using: .utf8), !data.isEmpty else { return }
+    @discardableResult
+    func sendText(_ text: String) -> Bool {
+        guard let data = text.data(using: .utf8), !data.isEmpty else { return true }
         guard let surface = surface else {
             enqueuePendingSocketInput(.text(data))
             requestBackgroundSurfaceStartIfNeeded()
-            return
+            return true
         }
         writeTextData(data, to: surface)
+        return true
     }
 
     @discardableResult
-    func sendNamedKey(_ keyName: String) -> Bool {
-        guard let event = pendingKeyEvent(for: keyName) else { return false }
+    func sendNamedKey(_ keyName: String) -> NamedKeySendResult {
+        guard let event = pendingKeyEvent(for: keyName) else { return .unknownKey }
         if let surface = surface {
             sendKeyEvent(surface: surface, keycode: event.keycode, mods: event.mods)
+            return .sent
         } else {
             enqueuePendingSocketInput(.key(event))
             requestBackgroundSurfaceStartIfNeeded()
+            return .queued
         }
-        return true
     }
 
     /// Send text with control characters (Return, Tab, etc.) delivered as key
     /// events so the shell processes them, while regular text is sent via the
     /// normal key-text path.  Mirrors `TerminalController.sendSocketText`.
-    func sendInput(_ text: String) {
-        guard let surface = surface else { return }
+    @discardableResult
+    func sendInput(_ text: String) -> Bool {
+        sendInputResult(text).accepted
+    }
+
+    @discardableResult
+    func sendInputResult(_ text: String) -> InputSendResult {
+        guard !text.isEmpty else { return .sent }
+        guard let surface = surface else {
+            guard let data = text.data(using: .utf8), !data.isEmpty else { return .sent }
+            enqueuePendingSocketInput(.text(data))
+            requestBackgroundSurfaceStartIfNeeded()
+            return .queued
+        }
         var bufferedText = ""
         var previousWasCR = false
         for scalar in text.unicodeScalars {
@@ -5366,6 +5504,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
             }
         }
         flushText(&bufferedText, surface: surface)
+        return .sent
     }
 
     private func flushText(_ buffer: inout String, surface: ghostty_surface_t) {
@@ -7544,7 +7683,11 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
 
         let accumulatedText = keyTextAccumulator ?? []
         if shouldSuppressGhosttyKeyForwardingAfterIMEHandling(
-            before: markedStateBefore, after: (markedText.string, markedSelectedRange), accumulatedText: accumulatedText
+            before: markedStateBefore,
+            after: (markedText.string, markedSelectedRange),
+            accumulatedText: accumulatedText,
+            event: translationEvent,
+            inputSourceId: KeyboardLayout.id
         ) { return }
 
         // Build the key event
@@ -9130,6 +9273,8 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         ) {
         case .insertText(let text):
             return .insertText(text)
+        case .insertTextSegments(let segments, _):
+            return .insertText(segments.joined())
         case .uploadFiles(let fileURLs, _):
             return .uploadFiles(fileURLs)
         case .reject:
@@ -9280,7 +9425,7 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
     }
 
-    fileprivate func handleDroppedFileURLs(_ urls: [URL]) -> Bool {
+    func handleDroppedFileURLs(_ urls: [URL]) -> Bool {
         executePreparedImageTransfer(
             .fileURLs(urls),
             onCancel: {}
@@ -9326,15 +9471,41 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
     }
 
 #if DEBUG
+    fileprivate enum DebugDropPayloadKind {
+        case fileURLs
+        case imageData
+    }
+
     @discardableResult
-    fileprivate func debugSimulateFileDrop(paths: [String]) -> Bool {
+    fileprivate func debugSimulateFileDrop(paths: [String], asImageData: Bool = false) -> Bool {
         guard !paths.isEmpty else { return false }
-        let urls = paths.map { URL(fileURLWithPath: $0) as NSURL }
         let pbName = NSPasteboard.Name("cmux.debug.drop.\(UUID().uuidString)")
         let pasteboard = NSPasteboard(name: pbName)
         pasteboard.clearContents()
-        pasteboard.writeObjects(urls)
+        switch asImageData ? DebugDropPayloadKind.imageData : .fileURLs {
+        case .fileURLs:
+            let urls = paths.map { URL(fileURLWithPath: $0) as NSURL }
+            pasteboard.writeObjects(urls)
+        case .imageData:
+            let items = paths.compactMap { path -> NSPasteboardItem? in
+                let url = URL(fileURLWithPath: path)
+                guard let data = try? Data(contentsOf: url),
+                      let type = debugImagePasteboardType(for: url) else { return nil }
+                let item = NSPasteboardItem()
+                item.setData(data, forType: type)
+                return item
+            }
+            guard items.count == paths.count else { return false }
+            pasteboard.writeObjects(items)
+        }
         return insertDroppedPasteboard(pasteboard)
+    }
+
+    private func debugImagePasteboardType(for url: URL) -> NSPasteboard.PasteboardType? {
+        let pathExtension = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let utType = UTType(filenameExtension: pathExtension),
+              utType.conforms(to: .image) else { return nil }
+        return NSPasteboard.PasteboardType(utType.identifier)
     }
 
     fileprivate func debugRegisteredDropTypes() -> [String] {
@@ -11245,8 +11416,8 @@ final class GhosttySurfaceScrollView: NSView {
 
 #if DEBUG
     @discardableResult
-    func debugSimulateFileDrop(paths: [String]) -> Bool {
-        surfaceView.debugSimulateFileDrop(paths: paths)
+    func debugSimulateFileDrop(paths: [String], asImageData: Bool = false) -> Bool {
+        surfaceView.debugSimulateFileDrop(paths: paths, asImageData: asImageData)
     }
 
     func debugPendingSurfaceSize() -> CGSize? {
@@ -13031,6 +13202,11 @@ extension GhosttyNSView: NSTextInputClient {
             return
         }
 
+        if shouldBufferBopomofoInsertedPreedit(chars) {
+            bufferBopomofoInsertedPreedit(chars, replacementRange: replacementRange)
+            return
+        }
+
         // Clear marked text since we're inserting
         unmarkText()
 
@@ -13080,6 +13256,39 @@ extension GhosttyNSView: NSTextInputClient {
             sanitizedChars,
             preserveLiteralEscape: !isExternalCommittedText
         )
+    }
+
+    private func bufferBopomofoInsertedPreedit(_ text: String, replacementRange: NSRange) {
+        let current = markedText.string as NSString
+        let editRange: NSRange
+        if replacementRange.location != NSNotFound {
+            editRange = clampedTextReplacementRange(replacementRange, length: current.length)
+        } else if markedText.length > 0, markedSelectedRange.location != NSNotFound {
+            editRange = clampedTextReplacementRange(markedSelectedRange, length: current.length)
+        } else {
+            editRange = NSRange(location: current.length, length: 0)
+        }
+
+        let updated = current.replacingCharacters(in: editRange, with: text)
+        markedText = NSMutableAttributedString(string: updated)
+        markedSelectedRange = normalizedMarkedSelectionRange(
+            NSRange(location: editRange.location + (text as NSString).length, length: 0),
+            markedLength: markedText.length
+        )
+
+        if keyTextAccumulator == nil {
+            syncPreedit()
+            invalidateTextInputCoordinates(selectionChanged: true)
+        }
+    }
+
+    private func clampedTextReplacementRange(_ range: NSRange, length: Int) -> NSRange {
+        guard range.location != NSNotFound else {
+            return NSRange(location: length, length: 0)
+        }
+        let location = min(max(range.location, 0), length)
+        let replacementLength = min(max(range.length, 0), length - location)
+        return NSRange(location: location, length: replacementLength)
     }
 }
 
@@ -13203,6 +13412,18 @@ struct GhosttyTerminalView: NSViewRepresentable {
         interactiveGeometryResizeActive: Bool
     ) -> Bool {
         hostInLiveResize || windowInLiveResize || interactiveGeometryResizeActive
+    }
+
+    enum HostCallbackPortalGeometrySynchronizationAction: Equatable {
+        case synchronizeWithoutLayoutFlush(window: Int)
+        case skip
+    }
+
+    static func hostCallbackPortalGeometrySynchronizationAction(
+        window: Int?
+    ) -> HostCallbackPortalGeometrySynchronizationAction {
+        guard let window else { return .skip }
+        return .synchronizeWithoutLayoutFlush(window: window)
     }
 
     private static func synchronizePortalGeometry(

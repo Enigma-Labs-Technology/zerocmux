@@ -1,6 +1,19 @@
 import AppKit
 import Foundation
 
+func browserOmnibarSelectionDeltaForControlNavigation(
+    hasFocusedAddressBar: Bool,
+    flags: NSEvent.ModifierFlags,
+    chars: String
+) -> Int? {
+    guard hasFocusedAddressBar else { return nil }
+    let normalizedFlags = browserOmnibarNormalizedModifierFlags(flags)
+    guard normalizedFlags == [.control] else { return nil }
+    if chars == "n" { return 1 }
+    if chars == "p" { return -1 }
+    return nil
+}
+
 func browserOmnibarSelectionDeltaForCommandNavigation(
     hasFocusedAddressBar: Bool,
     flags: NSEvent.ModifierFlags,
@@ -8,8 +21,7 @@ func browserOmnibarSelectionDeltaForCommandNavigation(
 ) -> Int? {
     guard hasFocusedAddressBar else { return nil }
     let normalizedFlags = browserOmnibarNormalizedModifierFlags(flags)
-    let isCommandOrControlOnly = normalizedFlags == [.command] || normalizedFlags == [.control]
-    guard isCommandOrControlOnly else { return nil }
+    guard normalizedFlags == [.command] || normalizedFlags == [.control] else { return nil }
     if chars == "n" { return 1 }
     if chars == "p" { return -1 }
     return nil
@@ -34,6 +46,10 @@ func browserOmnibarNormalizedModifierFlags(_ flags: NSEvent.ModifierFlags) -> NS
     flags
         .intersection(.deviceIndependentFlagsMask)
         .subtracting([.numericPad, .function, .capsLock])
+}
+
+func browserOmnibarShouldContinueControlNavigationRepeat(flags: NSEvent.ModifierFlags) -> Bool {
+    browserOmnibarNormalizedModifierFlags(flags) == [.control]
 }
 
 func browserOmnibarShouldSubmitOnReturn(flags: NSEvent.ModifierFlags) -> Bool {
@@ -90,6 +106,45 @@ func shouldDispatchBrowserArrowViaFirstResponderKeyDown(
         .intersection(.deviceIndependentFlagsMask)
         .subtracting([.numericPad, .function, .capsLock])
     return normalizedFlags.isEmpty
+}
+
+func shouldDispatchBrowserOmnibarArrowViaFirstResponderKeyDown(
+    keyCode: UInt16,
+    firstResponderIsBrowserOmnibar: Bool,
+    firstResponderHasMarkedText: Bool = false,
+    flags: NSEvent.ModifierFlags
+) -> Bool {
+    guard firstResponderIsBrowserOmnibar else { return false }
+    guard !firstResponderHasMarkedText else { return false }
+    guard (123...126).contains(keyCode) else { return false }
+
+    let normalizedFlags = browserOmnibarNormalizedModifierFlags(flags)
+    return normalizedFlags.isEmpty
+}
+
+struct BrowserAddressBarTrackingContext {
+    let trackedPanelMatchesWebView: Bool
+    let omnibarResponderActive: Bool
+    let preferredFocusIntentIsAddressBar: Bool
+    let suppressesWebViewFocus: Bool
+    let pointerInitiatedWebFocus: Bool
+    let liveOmnibarFieldExists: Bool
+}
+
+/// Decision order:
+/// 1. Reject WebView focus from another panel.
+/// 2. Preserve if an omnibar responder is already active.
+/// 3. Require address-bar focus intent.
+/// 4. Let pointer-initiated WebView focus clear tracking.
+/// 5. Preserve if WebView focus is suppressed or a live omnibar field exists.
+func shouldPreserveBrowserAddressBarTrackingDuringWebViewFocus(
+    _ context: BrowserAddressBarTrackingContext
+) -> Bool {
+    guard context.trackedPanelMatchesWebView else { return false }
+    if context.omnibarResponderActive { return true }
+    guard context.preferredFocusIntentIsAddressBar else { return false }
+    guard !context.pointerInitiatedWebFocus else { return false }
+    return context.suppressesWebViewFocus || context.liveOmnibarFieldExists
 }
 
 func shouldDispatchCommandPaletteHorizontalArrowViaFirstResponderKeyDown(
@@ -405,7 +460,7 @@ func shouldRouteCommandEquivalentDirectlyToMainMenu(_ event: NSEvent) -> Bool {
     return true
 }
 
-private enum BrowserFindCommandEquivalent {
+private enum BrowserFindCommandEquivalent: CaseIterable {
     case find
     case findInDirectory
     case findNext
@@ -413,12 +468,61 @@ private enum BrowserFindCommandEquivalent {
     case hideFind
     case useSelection
 
+    var action: KeyboardShortcutSettings.Action {
+        switch self {
+        case .find: return .find
+        case .findInDirectory: return .findInDirectory
+        case .findNext: return .findNext
+        case .findPrevious: return .findPrevious
+        case .hideFind: return .hideFind
+        case .useSelection: return .useSelectionForFind
+        }
+    }
+
     var keepsCmuxBrowserFindBarOwnershipWhenVisible: Bool {
         switch self {
         case .find, .findNext, .findPrevious, .hideFind:
             return true
         case .findInDirectory, .useSelection:
             return false
+        }
+    }
+}
+
+private enum BrowserDocumentEditingCommandEquivalent: CaseIterable {
+    case copy
+    case cut
+    case selectAll
+
+    var shortcut: StoredShortcut {
+        switch self {
+        case .copy:
+            return StoredShortcut(
+                key: "c",
+                command: true,
+                shift: false,
+                option: false,
+                control: false,
+                keyCode: 8
+            )
+        case .cut:
+            return StoredShortcut(
+                key: "x",
+                command: true,
+                shift: false,
+                option: false,
+                control: false,
+                keyCode: 7
+            )
+        case .selectAll:
+            return StoredShortcut(
+                key: "a",
+                command: true,
+                shift: false,
+                option: false,
+                control: false,
+                keyCode: 0
+            )
         }
     }
 }
@@ -442,53 +546,37 @@ func cmuxIsLikelyWebInspectorResponder(_ responder: NSResponder?) -> Bool {
     return false
 }
 
-private func browserFindCommandEquivalent(for event: NSEvent) -> BrowserFindCommandEquivalent? {
-    let flags = event.modifierFlags
-        .intersection(.deviceIndependentFlagsMask)
-        .subtracting([.numericPad, .function, .capsLock])
+private func browserFindCommandEquivalent(
+    for event: NSEvent,
+    shortcutForAction: (KeyboardShortcutSettings.Action) -> StoredShortcut = KeyboardShortcutSettings.shortcut(for:)
+) -> BrowserFindCommandEquivalent? {
+    BrowserFindCommandEquivalent.allCases.first { command in
+        shortcutForAction(command.action).matches(event: event)
+    }
+}
 
-    let normalizedChars = KeyboardLayout.normalizedCharacters(for: event).lowercased()
-    let hasSingleASCIIShortcutChar =
-        normalizedChars.count == 1 && normalizedChars.allSatisfy(\.isASCII)
-    let producedAnyASCIIShortcutChar = normalizedChars.contains(where: \.isASCII)
-    func matches(_ chars: String, keyCode: UInt16) -> Bool {
-        if hasSingleASCIIShortcutChar {
-            return normalizedChars == chars
-        }
-        if !producedAnyASCIIShortcutChar {
-            return event.keyCode == keyCode
-        }
+private func browserDocumentEditingCommandEquivalent(for event: NSEvent) -> BrowserDocumentEditingCommandEquivalent? {
+    BrowserDocumentEditingCommandEquivalent.allCases.first { command in
+        command.shortcut.matches(event: event)
+    }
+}
+
+/// For browser content, let the focused document/editor try native editing commands
+/// before cmux's menu fallback. Rich web apps often implement copy/cut/select-all
+/// in contentEditable handlers that AppKit's Edit menu path cannot reproduce.
+func shouldRouteBrowserDocumentEditingCommandEquivalentThroughWebContentFirst(
+    _ event: NSEvent,
+    responder: NSResponder? = nil
+) -> Bool {
+    guard browserDocumentEditingCommandEquivalent(for: event) != nil else {
         return false
     }
 
-    switch flags {
-    case [.command]:
-        if matches("e", keyCode: 14) { // kVK_ANSI_E
-            return .useSelection
-        }
-        if matches("f", keyCode: 3) { // kVK_ANSI_F
-            return .find
-        }
-        if matches("g", keyCode: 5) { // kVK_ANSI_G
-            return .findNext
-        }
-        return nil
-    case [.command, .shift]:
-        if matches("f", keyCode: 3) { // kVK_ANSI_F
-            return .findInDirectory
-        }
-        if matches("g", keyCode: 5) { // kVK_ANSI_G
-            return .findPrevious
-        }
-        return nil
-    case [.command, .option, .shift]:
-        if matches("f", keyCode: 3) { // kVK_ANSI_F
-            return .hideFind
-        }
-        return nil
-    default:
-        return nil
+    if cmuxIsLikelyWebInspectorResponder(responder) {
+        return false
     }
+
+    return true
 }
 
 /// For browser content, let the page try browser-local Find-family commands before cmux's menu fallback.

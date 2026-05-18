@@ -222,6 +222,19 @@ struct SessionEntry: Identifiable, Hashable {
     /// Shell command that resumes this session in a new terminal, with the agent's
     /// known per-session settings injected as CLI flags.
     var resumeCommand: String? {
+        resumeCommandWithCwd
+    }
+
+    /// Shell command that resumes this session after guarding the launch directory.
+    var resumeCommandWithCwd: String? {
+        guard let command = resumeCommandWithoutWorkingDirectory else { return nil }
+        guard let cwd = resumeWorkingDirectory else {
+            return command
+        }
+        return "cd \(Self.shellQuote(cwd)) && \(command)"
+    }
+
+    private var resumeCommandWithoutWorkingDirectory: String? {
         switch specifics {
         case let .claude(model, permissionMode):
             var parts = ["claude --resume \(sessionId)"]
@@ -289,14 +302,6 @@ struct SessionEntry: Identifiable, Hashable {
             }
             return nil
         }
-    }
-
-    var resumeCommandWithCwd: String? {
-        guard let resumeCommand else { return nil }
-        guard let cwd = resumeWorkingDirectory else {
-            return resumeCommand
-        }
-        return "cd \(Self.shellQuote(cwd)) && \(resumeCommand)"
     }
 
     private var claudeConfigDirectoryForResume: String? {

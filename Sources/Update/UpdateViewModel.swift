@@ -39,6 +39,37 @@ class UpdateViewModel: ObservableObject {
         detectedUpdateVersion = nil
     }
 
+    func dismissDetectedAvailableUpdate() {
+        clearDetectedUpdate()
+
+        var didDismissUpdate = false
+        if case .updateAvailable(let update) = state {
+            update.reply(.dismiss)
+            didDismissUpdate = true
+            state = .idle
+        }
+
+        if let overrideState, case .updateAvailable(let update) = overrideState {
+            if !didDismissUpdate {
+                update.reply(.dismiss)
+            }
+            self.overrideState = nil
+        }
+    }
+
+    func cancelActiveStateForNewCheck() {
+        state.cancel()
+        state = .idle
+        overrideState = nil
+    }
+
+    func applyDriverState(_ newState: UpdateState) {
+        if case .updateAvailable(let update) = newState {
+            recordDetectedUpdate(update.appcastItem)
+        }
+        state = newState
+    }
+
     var text: String {
         #if DEBUG
         if let debugOverrideText { return debugOverrideText }
@@ -301,7 +332,7 @@ class UpdateViewModel: ObservableObject {
             case 1, 2, 3001, 3002:
                 return String(localized: "update.error.signatureError.message", defaultValue: "The update's signature could not be verified. Please try again later.")
             case 1003, 1005, 4005:
-                return String(localized: "update.error.permissionError.message", defaultValue: "Move cmux into Applications and relaunch to enable updates.")
+                return String(localized: "update.error.permissionError.message", defaultValue: "Move zerocmux into Applications and relaunch to enable updates.")
             default:
                 break
             }

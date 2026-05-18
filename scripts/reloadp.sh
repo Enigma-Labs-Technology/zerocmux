@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Release -destination 'platform=macOS' build
+xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Release -destination 'platform=macOS' build
 pkill -x zerocmux || true
 pkill -x cmux || true
 sleep 0.2

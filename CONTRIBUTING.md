@@ -54,13 +54,13 @@ zig build -Demit-xcframework=true -Doptimize=ReleaseFast
 ### Basic tests (run on VM)
 
 ```bash
-ssh cmux-vm 'cd /Users/cmux/GhosttyTabs && xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug -destination "platform=macOS" build && pkill -x "zerocmux DEV" || true && APP=$(find /Users/cmux/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug/zerocmux DEV.app" -print -quit) && open "$APP" && for i in {1..20}; do [ -S /tmp/zerocmux-debug.sock ] && break; sleep 0.5; done && python3 tests/test_update_timing.py && python3 tests/test_signals_auto.py && python3 tests/test_ctrl_socket.py && python3 tests/test_notifications.py'
+ssh cmux-vm 'cd /Users/cmux/GhosttyTabs && xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Debug -destination "platform=macOS" build && pkill -x "zerocmux DEV" || true && APP=$(find /Users/cmux/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug/zerocmux DEV.app" -print -quit) && open "$APP" && for i in {1..20}; do [ -S /tmp/zerocmux-debug.sock ] && break; sleep 0.5; done && python3 tests/test_update_timing.py && python3 tests/test_signals_auto.py && python3 tests/test_ctrl_socket.py && python3 tests/test_notifications.py'
 ```
 
 ### UI tests (run on VM)
 
 ```bash
-ssh cmux-vm 'cd /Users/cmux/GhosttyTabs && xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug -destination "platform=macOS" -only-testing:cmuxUITests test'
+ssh cmux-vm 'cd /Users/cmux/GhosttyTabs && xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Debug -destination "platform=macOS" -only-testing:cmuxUITests test'
 ```
 
 ## Ghostty Submodule

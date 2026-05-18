@@ -1055,9 +1055,18 @@ final class GhosttySpaceReleaseRegressionTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         defer {
             GhosttyNSView.debugGhosttySurfaceKeyEventObserver = nil
+            window.makeFirstResponder(nil)
+            hostedView.setFocusHandler(nil)
+            hostedView.setActive(false)
+            hostedView.setVisibleInUI(false)
+            hostedView.removeFromSuperview()
+            window.contentView = nil
             window.orderOut(nil)
+            window.close()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
         }
 
         guard let contentView = window.contentView else {
@@ -1122,9 +1131,18 @@ final class KoreanIMEReturnCommitRegressionTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         defer {
             GhosttyNSView.debugGhosttySurfaceKeyEventObserver = nil
+            window.makeFirstResponder(nil)
+            hostedView.setFocusHandler(nil)
+            hostedView.setActive(false)
+            hostedView.setVisibleInUI(false)
+            hostedView.removeFromSuperview()
+            window.contentView = nil
             window.orderOut(nil)
+            window.close()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
         }
 
         guard let contentView = window.contentView else {
@@ -1563,14 +1581,19 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let surfaceView: GhosttyNSView
     }
 
-    private func makeHostedTerminalWindow() throws -> HostedTerminalWindow {
+    private func makeHostedTerminalWindow(
+        initialCommand: String? = nil,
+        initialInput: String? = nil
+    ) throws -> HostedTerminalWindow {
         _ = NSApplication.shared
 
         let surface = TerminalSurface(
             tabId: UUID(),
             context: GHOSTTY_SURFACE_CONTEXT_SPLIT,
             configTemplate: nil,
-            workingDirectory: nil
+            workingDirectory: nil,
+            initialCommand: initialCommand,
+            initialInput: initialInput
         )
         let hostedView = surface.hostedView
 
@@ -1580,6 +1603,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
 
         let contentView = try XCTUnwrap(window.contentView)
         hostedView.frame = contentView.bounds
@@ -1600,6 +1624,129 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
             hostedView: hostedView,
             surfaceView: surfaceView
         )
+    }
+
+    private func tearDownHostedTerminalWindow(_ terminal: HostedTerminalWindow) {
+        terminal.window.makeFirstResponder(nil)
+        terminal.hostedView.setFocusHandler(nil)
+        terminal.hostedView.setActive(false)
+        terminal.hostedView.setVisibleInUI(false)
+        terminal.hostedView.removeFromSuperview()
+        terminal.window.contentView = nil
+        terminal.window.orderOut(nil)
+        terminal.window.close()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+    }
+
+    private func readTerminalText(from terminal: HostedTerminalWindow) throws -> String {
+        let runtimeSurface = try XCTUnwrap(terminal.surface.surface)
+        let topLeft = ghostty_point_s(
+            tag: GHOSTTY_POINT_SURFACE,
+            coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+            x: 0,
+            y: 0
+        )
+        let bottomRight = ghostty_point_s(
+            tag: GHOSTTY_POINT_SURFACE,
+            coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+            x: 0,
+            y: 0
+        )
+        let selection = ghostty_selection_s(
+            top_left: topLeft,
+            bottom_right: bottomRight,
+            rectangle: false
+        )
+
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_text(runtimeSurface, selection, &text) else {
+            return ""
+        }
+        defer { ghostty_surface_free_text(runtimeSurface, &text) }
+        guard let ptr = text.text, text.text_len > 0 else { return "" }
+        let data = Data(bytes: ptr, count: Int(text.text_len))
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private func waitForTerminalText(
+        from terminal: HostedTerminalWindow,
+        timeout: TimeInterval = 5,
+        matching predicate: (String) -> Bool
+    ) throws -> String {
+        let deadline = Date().addingTimeInterval(timeout)
+        var latest = try readTerminalText(from: terminal)
+        while Date() < deadline {
+            if predicate(latest) { return latest }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            latest = try readTerminalText(from: terminal)
+        }
+        return latest
+    }
+
+    private func shellSingleQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private func pythonSingleQuoted(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        return "'\(escaped)'"
+    }
+
+    private func waitForFileContents(
+        at url: URL,
+        timeout: TimeInterval = 5
+    ) -> String? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let contents = try? String(contentsOf: url, encoding: .utf8) {
+                return contents
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func cmuxZshTerminalKeyboardResetSequence() throws -> Data {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let integrationPath = repoRoot
+            .appendingPathComponent("Resources/shell-integration/cmux-zsh-integration.zsh")
+            .path
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [
+            "-f",
+            "-c",
+            """
+            source \(shellSingleQuoted(integrationPath)) >/dev/null 2>&1 || true
+            if (( $+functions[_cmux_reset_terminal_keyboard_protocols] )); then
+              _cmux_reset_terminal_keyboard_protocols
+            fi
+            """
+        ]
+        process.environment = [
+            "CMUX_TEST_FORCE_KEYBOARD_RESET": "1"
+        ]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        try process.run()
+        process.waitUntilExit()
+        return output.fileHandleForReading.readDataToEndOfFile()
+    }
+
+    private func processTerminalOutput(_ data: Data, in terminal: HostedTerminalWindow) throws {
+        guard !data.isEmpty else { return }
+        let runtimeSurface = try XCTUnwrap(terminal.surface.surface)
+        data.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress?.assumingMemoryBound(to: CChar.self) else { return }
+            ghostty_surface_process_output(runtimeSurface, baseAddress, UInt(rawBuffer.count))
+        }
     }
 
     private func snapshotPasteboardItems(_ pasteboard: NSPasteboard) -> [PasteboardItemSnapshot] {
@@ -1648,7 +1795,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let hostedTerminal = try makeHostedTerminalWindow()
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
 
         window.makeFirstResponder(surfaceView)
         XCTAssertNotNil(surfaceView.terminalSurface)
@@ -1681,7 +1828,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let hostedTerminal = try makeHostedTerminalWindow()
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
 
         window.makeFirstResponder(surfaceView)
         XCTAssertNotNil(surfaceView.terminalSurface)
@@ -1710,6 +1857,114 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         }
     }
 
+    func testStaleKittyKeyboardAfterClearHistoryDoesNotEncodePlainLetterAsCSIU() throws {
+        let captureReadyMarker = "CMUX_KBD_READY_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        let captureMarker = "CMUX_KBD_HEX_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        let scriptURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cmux-kbd-capture-\(UUID().uuidString).py")
+        let readyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cmux-kbd-ready-\(UUID().uuidString).txt")
+        let resultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cmux-kbd-result-\(UUID().uuidString).txt")
+        let script = """
+        #!/usr/bin/python3
+        import os
+        import select
+        import sys
+        import termios
+        import time
+        import tty
+
+        ready_path = \(pythonSingleQuoted(readyURL.path))
+        result_path = \(pythonSingleQuoted(resultURL.path))
+        fd = 0
+        sys.stdout.write("\\x1b[>3u\(captureReadyMarker)\\n")
+        sys.stdout.flush()
+        with open(ready_path, "w", encoding="utf-8") as ready_file:
+            ready_file.write("ready")
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            data = bytearray()
+            if select.select([sys.stdin], [], [], 2.0)[0]:
+                data.extend(os.read(fd, 1))
+                deadline = time.monotonic() + 1.0
+                idle_deadline = time.monotonic() + 0.35
+                while time.monotonic() < deadline and time.monotonic() < idle_deadline:
+                    if select.select([sys.stdin], [], [], 0.05)[0]:
+                        data.extend(os.read(fd, 64))
+                        idle_deadline = time.monotonic() + 0.35
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+        captured = data.hex()
+        with open(result_path, "w", encoding="utf-8") as result_file:
+            result_file.write(captured)
+        print("\\r\\n\(captureMarker)=" + captured, flush=True)
+        """
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: scriptURL.path
+        )
+        defer {
+            try? FileManager.default.removeItem(at: scriptURL)
+            try? FileManager.default.removeItem(at: readyURL)
+            try? FileManager.default.removeItem(at: resultURL)
+        }
+
+        let hostedTerminal = try makeHostedTerminalWindow(
+            initialInput: "exec \(shellSingleQuoted(scriptURL.path))\n"
+        )
+        let window = hostedTerminal.window
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
+
+        guard waitForFileContents(at: readyURL) != nil else {
+            let terminalText = (try? readTerminalText(from: hostedTerminal)) ?? ""
+            XCTFail("Expected Kitty enable marker script to start before clear-history. Terminal text: \(terminalText)")
+            return
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        let keyboardResetData = try cmuxZshTerminalKeyboardResetSequence()
+        XCTAssertEqual(
+            keyboardResetData,
+            Data("\u{1B}[>m\u{1B}[<8u".utf8),
+            "cmuxZshTerminalKeyboardResetSequence must reset modifyOtherKeys and Kitty keyboard state"
+        )
+        try processTerminalOutput(keyboardResetData, in: hostedTerminal)
+
+        // Mirrors the surface.clear_history socket handler path: clear_screen binding, then refresh.
+        XCTAssertTrue(hostedTerminal.surface.performBindingAction("clear_screen"))
+        hostedTerminal.surface.forceRefresh(reason: "unit.clearHistory")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        let sent = hostedTerminal.hostedView.debugSendSyntheticKeyPressAndReleaseForUITest(
+            characters: "c",
+            charactersIgnoringModifiers: "c",
+            keyCode: 8
+        )
+        XCTAssertTrue(sent, "Expected ordinary c keyDown to be dispatched through ghostty_surface_key")
+
+        guard let capturedHex = waitForFileContents(at: resultURL) else {
+            let terminalText = (try? readTerminalText(from: hostedTerminal)) ?? ""
+            XCTFail("Expected raw PTY byte capture result file. Terminal text: \(terminalText)")
+            return
+        }
+        let trimmedCapturedHex = capturedHex.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        XCTAssertEqual(
+            trimmedCapturedHex,
+            "63",
+            "A plain c at the shell prompt must write one ASCII byte to PTY input, not a Kitty CSI-u sequence"
+        )
+        let captureText = (try? readTerminalText(from: hostedTerminal)) ?? ""
+        XCTAssertFalse(
+            captureText.contains("c9;1:3u") || captureText.contains("99;1:3u"),
+            "CSI-u response bodies must not land in terminal output as printable text"
+        )
+    }
+
     // MARK: - Terminal Paste Fallback
 
     func testCommandVPasteStillInvokesTerminalPasteWhenMainMenuMisses() throws {
@@ -1719,7 +1974,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let terminalSurface = hostedTerminal.surface
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
 
         window.makeFirstResponder(surfaceView)
         XCTAssertNotNil(surfaceView.terminalSurface)
@@ -1792,7 +2047,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let terminalSurface = hostedTerminal.surface
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
 
         window.makeFirstResponder(surfaceView)
         XCTAssertNotNil(surfaceView.terminalSurface)
@@ -1879,7 +2134,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
         let terminalSurface = hostedTerminal.surface
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminalWindow(hostedTerminal) }
 
         window.makeFirstResponder(surfaceView)
         XCTAssertNotNil(surfaceView.terminalSurface)

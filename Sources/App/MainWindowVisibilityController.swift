@@ -152,15 +152,17 @@ final class MainWindowVisibilityController {
             dependencies.unhideApplication()
             trace("focus.unhide.end", reason: reason, windows: [window])
         }
+        let effectiveActivation = activationRequiringKeyTransfer(activation, makeKey: makeKey)
+
         if activationTiming == .beforeWindowOrdering {
-            activate(activation)
+            activate(effectiveActivation)
         }
         let shouldActivateBeforeWindowOrdering = activationTiming == .afterWindowOrdering &&
             deminiaturize &&
             dependencies.windowOperations.isMiniaturized(window)
         if shouldActivateBeforeWindowOrdering {
             trace("focus.activate.beforeMiniaturize.begin", reason: reason, windows: [window])
-            activate(activation)
+            activate(effectiveActivation)
             trace("focus.activate.beforeMiniaturize.end", reason: reason, windows: [window])
         }
         if deminiaturize, dependencies.windowOperations.isMiniaturized(window) {
@@ -180,7 +182,7 @@ final class MainWindowVisibilityController {
         }
         if activationTiming == .afterWindowOrdering && !shouldActivateBeforeWindowOrdering {
             trace("focus.activate.begin", reason: reason, windows: [window])
-            activate(activation)
+            activate(effectiveActivation)
             trace("focus.activate.end", reason: reason, windows: [window])
         }
         log("focus", reason: reason, windows: [window])
@@ -368,7 +370,9 @@ final class MainWindowVisibilityController {
         activation: Activation = .runningApplication([.activateAllWindows]),
         makeKey: Bool = true
     ) -> NSWindow? {
-        let windows = uniqueWindows(windows)
+        let windows = uniqueWindows(windows).filter { window in
+            makeKey || !dependencies.windowOperations.isMiniaturized(window)
+        }
         guard !windows.isEmpty else {
             log("reveal.empty", reason: reason, windows: [])
             return nil
@@ -382,8 +386,9 @@ final class MainWindowVisibilityController {
         for window in windows {
             dependencies.windowOperations.softShow(window)
         }
+        let effectiveActivation = activationRequiringKeyTransfer(activation, makeKey: makeKey)
         trace("reveal.activate.begin", reason: reason, windows: windows)
-        activate(activation)
+        activate(effectiveActivation)
         trace("reveal.activate.end", reason: reason, windows: windows)
 
         let focusWindow = resolvedPreferredFocusWindow(preferredWindow: preferredWindow, in: windows)
@@ -456,6 +461,10 @@ final class MainWindowVisibilityController {
         case .runningApplication(let options):
             dependencies.activateRunningApplication(options)
         }
+    }
+
+    private func activationRequiringKeyTransfer(_ activation: Activation, makeKey: Bool) -> Activation {
+        makeKey ? activation : .none
     }
 
     private func uniqueWindows(_ windows: [NSWindow]) -> [NSWindow] {

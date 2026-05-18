@@ -80,9 +80,21 @@ extension CLINotifyProcessIntegrationRegressionTests {
         return fd
     }
 
+    func waitForSocketFile(at path: String, timeout: TimeInterval = 5.0) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if FileManager.default.fileExists(atPath: path) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        return FileManager.default.fileExists(atPath: path)
+    }
+
     func startMockServer(
         listenerFD: Int32,
         state: MockSocketServerState,
+        closeAfterFirstResponse: Bool = false,
         handler: @escaping @Sendable (String) -> String
     ) -> XCTestExpectation {
         let handled = expectation(description: "cli mock socket handled")
@@ -122,6 +134,9 @@ extension CLINotifyProcessIntegrationRegressionTests {
                     let response = handler(line) + "\n"
                     _ = response.withCString { ptr in
                         Darwin.write(clientFD, ptr, strlen(ptr))
+                    }
+                    if closeAfterFirstResponse {
+                        return
                     }
                 }
             }
@@ -190,9 +205,15 @@ extension CLINotifyProcessIntegrationRegressionTests {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
+        let exitSignal = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            exitSignal.signal()
+        }
+
         do {
             try process.run()
         } catch {
+            process.terminationHandler = nil
             return ProcessRunResult(status: -1, stdout: "", stderr: String(describing: error), timedOut: false)
         }
         if let standardInput, let stdinPipe {
@@ -200,17 +221,12 @@ extension CLINotifyProcessIntegrationRegressionTests {
             try? stdinPipe.fileHandleForWriting.close()
         }
 
-        let exitSignal = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
-            process.waitUntilExit()
-            exitSignal.signal()
-        }
-
         let timedOut = exitSignal.wait(timeout: .now() + timeout) == .timedOut
         if timedOut {
             process.terminate()
-            _ = exitSignal.wait(timeout: .now() + 1)
+            _ = exitSignal.wait(timeout: .now() + 5)
         }
+        process.terminationHandler = nil
 
         let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""

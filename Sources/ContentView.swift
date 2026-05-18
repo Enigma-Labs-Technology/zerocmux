@@ -847,7 +847,7 @@ enum MountedWorkspacePresentationPolicy {
     static func resolve(
         isSelectedWorkspace: Bool,
         isRetiringWorkspace: Bool,
-        shouldPrimeInBackground: Bool
+        shouldPrimeInBackground: Bool = false
     ) -> MountedWorkspacePresentation {
         let isRenderedVisible = isSelectedWorkspace || isRetiringWorkspace
         let renderOpacity: Double = {
@@ -1080,8 +1080,16 @@ struct ContentView: View {
     @State private var commandPaletteResolvedSearchFingerprint: Int?
     @State private var commandPaletteResolvedMatchingQuery = ""
     @State private var commandPaletteTerminalOpenTargetAvailability: Set<TerminalDirectoryOpenTarget> = []
+    @State private var commandPaletteForkableAgentActivePanelKey: String?
+    @State private var commandPaletteForkableAgentProbeIDsByPanelKey: [String: UUID] = [:]
+    @State var commandPaletteForkableAgentSupportedPanelKeys: Set<String> = []
+    @State var commandPaletteForkableAgentSnapshotsByPanelKey: [String: SessionRestorableAgentSnapshot] = [:]
+    @State var commandPaletteForkableAgentSnapshotFingerprintsByPanelKey: [String: String] = [:]
+    @State var commandPaletteForkableAgentRemoteContextsByPanelKey: [String: Bool] = [:]
+    @State private var commandPaletteForkableAgentAvailabilityTasksByPanelKey: [String: Task<Void, Never>] = [:]
+    @State private var commandPaletteForkableAgentProbeFingerprintsByPanelKey: [String: String] = [:]
     @State private var isCommandPaletteSearchPending = false
-    @State private var commandPalettePendingActivation: CommandPalettePendingActivation?
+    @State private var commandPalettePendingActivationState: CommandPalettePendingActivation?
     @State private var commandPaletteResultsRevision: UInt64 = 0
     @State private var commandPaletteUsageHistoryByCommandId: [String: CommandPaletteUsageEntry] = [:]
     @AppStorage(CommandPaletteRenameSelectionSettings.selectAllOnFocusKey)
@@ -2141,6 +2149,18 @@ struct ContentView: View {
             },
             onOpenFilePreview: { filePath in
                 openFilePreviewFromSidebar(filePath: filePath)
+            },
+            onOpenAsPane: { mode in
+                openRightSidebarToolPane(mode)
+            },
+            onClose: {
+#if DEBUG
+                cmuxDebugLog("rightSidebar.closeButton")
+#endif
+                fileExplorerState.setVisible(false)
+                if let observedWindow {
+                    _ = AppDelegate.shared?.restoreTerminalFocusAfterRightSidebarHidden(in: observedWindow)
+                }
             }
         )
         .frame(width: rightSidebarWidth)
@@ -2416,6 +2436,19 @@ struct ContentView: View {
             workingDirectory: targetCwd,
             initialTerminalInput: inputWithReturn
         )
+    }
+
+    func openRightSidebarToolPane(_ mode: RightSidebarMode) {
+        guard mode.canOpenAsPane,
+              let workspace = tabManager.selectedWorkspace,
+              let paneId = workspace.bonsplitController.focusedPaneId ?? workspace.bonsplitController.allPaneIds.first else {
+            NSSound.beep()
+            return
+        }
+
+        sidebarSelectionState.selection = .tabs
+        workspace.clearSplitZoom()
+        _ = workspace.openOrFocusRightSidebarToolSurface(inPane: paneId, mode: mode, focus: true)
     }
 
     private func openFilePreviewFromSidebar(filePath: String) {
@@ -5169,6 +5202,7 @@ struct ContentView: View {
         if commandPaletteTerminalOpenTargetAvailability != terminalOpenTargets {
             commandPaletteTerminalOpenTargetAvailability = terminalOpenTargets
         }
+        refreshCommandPaletteForkableAgentAvailabilityIfNeeded(scope: scope)
         let commandsContext = scope == .commands
             ? commandPaletteCommandsContext(terminalOpenTargets: terminalOpenTargets)
             : nil
@@ -5441,7 +5475,7 @@ struct ContentView: View {
         let usageHistory = commandPaletteUsageHistoryByCommandId
         let queryIsEmpty = CommandPaletteFuzzyMatcher.preparedQuery(matchingQuery).isEmpty
         let historyTimestamp = Date().timeIntervalSince1970
-        commandPalettePendingActivation = nil
+        commandPalettePendingActivationState = nil
         cancelCommandPaletteSearch()
         if Self.commandPaletteShouldSynchronouslySeedResults(
             hasVisibleResultsForScope: commandPaletteVisibleResultsScope == scope
@@ -5512,7 +5546,7 @@ struct ContentView: View {
                     commandsByID: commandPaletteSearchCommandsByID
                 )
                 let resultIDs = cachedCommandPaletteResults.map(\.id)
-                let pendingActivation = commandPalettePendingActivation
+                let pendingActivation = commandPalettePendingActivationState
                 let resolvedActivation = Self.commandPaletteResolvedPendingActivation(
                     pendingActivation,
                     requestID: requestID,
@@ -5529,7 +5563,7 @@ struct ContentView: View {
                     fingerprint: fingerprint
                 )
                 if Self.commandPalettePendingActivationRequestID(pendingActivation) == requestID {
-                    commandPalettePendingActivation = nil
+                    commandPalettePendingActivationState = nil
                 }
                 commandPaletteResultsRevision &+= 1
                 if commandPaletteSearchRequestID == requestID {
@@ -5949,6 +5983,8 @@ struct ContentView: View {
             return String(localized: "commandPalette.kind.markdown", defaultValue: "Markdown")
         case .filePreview:
             return String(localized: "commandPalette.kind.filePreview", defaultValue: "File Preview")
+        case .rightSidebarTool:
+            return String(localized: "commandPalette.kind.rightSidebarTool", defaultValue: "Tool")
         }
     }
 
@@ -5962,6 +5998,8 @@ struct ContentView: View {
             return ["markdown", "note", "preview"]
         case .filePreview:
             return ["file", "preview", "text", "pdf", "image"]
+        case .rightSidebarTool:
+            return ["tool", "sidebar", "files", "find", "vault"]
         }
     }
 
@@ -5979,6 +6017,274 @@ struct ContentView: View {
             return []
         }
         return TerminalDirectoryOpenTarget.availableTargets()
+    }
+
+    static func commandPaletteForkableAgentPanelKey(workspaceId: UUID, panelId: UUID) -> String {
+        "\(workspaceId.uuidString):\(panelId.uuidString)"
+    }
+
+    private enum CommandPaletteForkSnapshotAvailability {
+        case unsupported
+        case supportedWithoutProbe
+        case requiresProbe
+    }
+
+    private static func commandPaletteSnapshotForkAvailability(
+        _ snapshot: SessionRestorableAgentSnapshot,
+        isRemoteTerminal: Bool = false
+    ) -> CommandPaletteForkSnapshotAvailability {
+        guard snapshot.forkCommand != nil else { return .unsupported }
+        if isRemoteTerminal,
+           snapshot.forkStartupInput(allowLauncherScript: false) == nil {
+            return .unsupported
+        }
+        switch snapshot.kind {
+        case .claude, .codex:
+            return .supportedWithoutProbe
+        case .opencode:
+            return snapshot.launchCommand?.launcher == "omo" || isRemoteTerminal ? .supportedWithoutProbe : .requiresProbe
+        default:
+            return .unsupported
+        }
+    }
+
+    static func commandPaletteForkSnapshotFingerprint(
+        _ snapshot: SessionRestorableAgentSnapshot
+    ) -> String {
+        let launchCommand = snapshot.launchCommand
+        let launchArguments = launchCommand?.arguments.joined(separator: "\u{1f}") ?? ""
+        let parts: [String] = [
+            snapshot.kind.rawValue,
+            snapshot.sessionId,
+            snapshot.workingDirectory ?? "",
+            launchCommand?.launcher ?? "",
+            launchCommand?.executablePath ?? "",
+            launchArguments,
+            launchCommand?.workingDirectory ?? "",
+            launchCommand?.source ?? "",
+            snapshot.forkCommand ?? ""
+        ]
+        return parts.joined(separator: "\u{1e}")
+    }
+
+    static func commandPaletteForkCacheFingerprint(
+        snapshot: SessionRestorableAgentSnapshot,
+        fallbackFingerprint: String?
+    ) -> String {
+        fallbackFingerprint ?? commandPaletteForkSnapshotFingerprint(snapshot)
+    }
+
+    static func commandPalettePanelHasForkableAgent(
+        workspaceId: UUID,
+        panelId: UUID,
+        supportedPanelKeys: Set<String>,
+        supportedRemoteContextsByPanelKey: [String: Bool] = [:],
+        fallbackSnapshot: SessionRestorableAgentSnapshot?,
+        isRemoteTerminal: Bool = false
+    ) -> Bool {
+        let panelKey = commandPaletteForkableAgentPanelKey(
+            workspaceId: workspaceId,
+            panelId: panelId
+        )
+        if supportedPanelKeys.contains(panelKey) {
+            if let fallbackSnapshot {
+                return commandPaletteSnapshotForkAvailability(
+                    fallbackSnapshot,
+                    isRemoteTerminal: isRemoteTerminal
+                ) != .unsupported
+            }
+            guard let supportedRemoteContext = supportedRemoteContextsByPanelKey[panelKey] else {
+                return true
+            }
+            return supportedRemoteContext == isRemoteTerminal
+        }
+        if let fallbackSnapshot {
+            return commandPaletteSnapshotForkAvailability(
+                fallbackSnapshot,
+                isRemoteTerminal: isRemoteTerminal
+            ) == .supportedWithoutProbe
+        }
+        return false
+    }
+
+    private func refreshCommandPaletteForkableAgentAvailabilityIfNeeded(scope: CommandPaletteListScope) {
+        guard scope == .commands,
+              let panelContext = focusedPanelContext,
+              panelContext.panel.panelType == .terminal else {
+            commandPaletteForkableAgentActivePanelKey = nil
+            cancelCommandPaletteForkableAgentAvailabilityProbe()
+            return
+        }
+
+        let workspaceId = panelContext.workspace.id
+        let panelId = panelContext.panelId
+        let isRemoteTerminal = panelContext.workspace.isRemoteTerminalSurface(panelId)
+        let panelKey = Self.commandPaletteForkableAgentPanelKey(workspaceId: workspaceId, panelId: panelId)
+        let panelChanged = commandPaletteForkableAgentActivePanelKey != panelKey
+        commandPaletteForkableAgentActivePanelKey = panelKey
+        let fallbackSnapshot = panelContext.workspace.restoredAgentSnapshotsByPanelId[panelId]
+
+        if let fallbackSnapshot {
+            let fallbackFingerprint = Self.commandPaletteForkSnapshotFingerprint(fallbackSnapshot)
+            if let cachedFingerprint = commandPaletteForkableAgentSnapshotFingerprintsByPanelKey[panelKey],
+               cachedFingerprint != fallbackFingerprint {
+                cancelCommandPaletteForkableAgentAvailabilityProbe(for: panelKey)
+                commandPaletteForkableAgentSupportedPanelKeys.remove(panelKey)
+                commandPaletteForkableAgentSnapshotsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentSnapshotFingerprintsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentRemoteContextsByPanelKey.removeValue(forKey: panelKey)
+            }
+            switch Self.commandPaletteSnapshotForkAvailability(
+                fallbackSnapshot,
+                isRemoteTerminal: isRemoteTerminal
+            ) {
+            case .supportedWithoutProbe:
+                cancelCommandPaletteForkableAgentAvailabilityProbe(for: panelKey)
+                commandPaletteForkableAgentSupportedPanelKeys.insert(panelKey)
+                commandPaletteForkableAgentSnapshotsByPanelKey[panelKey] = fallbackSnapshot
+                commandPaletteForkableAgentSnapshotFingerprintsByPanelKey[panelKey] = fallbackFingerprint
+                commandPaletteForkableAgentRemoteContextsByPanelKey[panelKey] = isRemoteTerminal
+                return
+            case .unsupported:
+                cancelCommandPaletteForkableAgentAvailabilityProbe(for: panelKey)
+                commandPaletteForkableAgentSupportedPanelKeys.remove(panelKey)
+                commandPaletteForkableAgentSnapshotsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentSnapshotFingerprintsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentRemoteContextsByPanelKey.removeValue(forKey: panelKey)
+                return
+            case .requiresProbe:
+                if commandPaletteForkableAgentSupportedPanelKeys.contains(panelKey),
+                   commandPaletteForkableAgentSnapshotFingerprintsByPanelKey[panelKey] == fallbackFingerprint,
+                   commandPaletteForkableAgentRemoteContextsByPanelKey[panelKey] == isRemoteTerminal,
+                   !panelChanged {
+                    return
+                }
+                startCommandPaletteForkableAgentAvailabilityProbe(
+                    panelKey: panelKey,
+                    workspaceId: workspaceId,
+                    panelId: panelId,
+                    fallbackSnapshot: fallbackSnapshot,
+                    fallbackFingerprint: fallbackFingerprint,
+                    isRemoteTerminal: isRemoteTerminal
+                )
+                return
+            }
+        }
+
+        if commandPaletteForkableAgentSupportedPanelKeys.contains(panelKey),
+           commandPaletteForkableAgentRemoteContextsByPanelKey[panelKey] == isRemoteTerminal,
+           !panelChanged {
+            return
+        }
+
+        startCommandPaletteForkableAgentAvailabilityProbe(
+            panelKey: panelKey,
+            workspaceId: workspaceId,
+            panelId: panelId,
+            fallbackSnapshot: nil,
+            fallbackFingerprint: nil,
+            isRemoteTerminal: isRemoteTerminal
+        )
+    }
+
+    private func startCommandPaletteForkableAgentAvailabilityProbe(
+        panelKey: String,
+        workspaceId: UUID,
+        panelId: UUID,
+        fallbackSnapshot: SessionRestorableAgentSnapshot?,
+        fallbackFingerprint: String?,
+        isRemoteTerminal: Bool
+    ) {
+        let probeFingerprint = "\(fallbackFingerprint ?? "")\u{1f}\(isRemoteTerminal ? "remote" : "local")"
+        if let task = commandPaletteForkableAgentAvailabilityTasksByPanelKey[panelKey] {
+            guard commandPaletteForkableAgentProbeFingerprintsByPanelKey[panelKey] != probeFingerprint else { return }
+            task.cancel()
+            commandPaletteForkableAgentAvailabilityTasksByPanelKey.removeValue(forKey: panelKey)
+            commandPaletteForkableAgentProbeIDsByPanelKey.removeValue(forKey: panelKey)
+            commandPaletteForkableAgentProbeFingerprintsByPanelKey.removeValue(forKey: panelKey)
+        }
+        let probeID = UUID()
+        commandPaletteForkableAgentProbeIDsByPanelKey[panelKey] = probeID
+        commandPaletteForkableAgentProbeFingerprintsByPanelKey[panelKey] = probeFingerprint
+
+        commandPaletteForkableAgentAvailabilityTasksByPanelKey[panelKey] = Task {
+            let index = await RestorableAgentSessionIndex.loadIncludingProcessDetectedSnapshots()
+            guard !Task.isCancelled else { return }
+            let snapshot = index.snapshot(workspaceId: workspaceId, panelId: panelId) ?? fallbackSnapshot
+            let supportsFork: Bool
+            if let snapshot {
+                supportsFork = await AgentForkSupport.supportsFork(
+                    snapshot: snapshot,
+                    isRemoteContext: isRemoteTerminal
+                )
+            } else {
+                supportsFork = false
+            }
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard commandPaletteForkableAgentProbeIDsByPanelKey[panelKey] == probeID else { return }
+                guard commandPaletteForkableAgentProbeFingerprintsByPanelKey[panelKey] == probeFingerprint else { return }
+                if let fallbackFingerprint,
+                   let currentContext = focusedPanelContext,
+                   currentContext.workspace.id == workspaceId,
+                   currentContext.panelId == panelId,
+                   let currentFallbackSnapshot = currentContext.workspace.restoredAgentSnapshotsByPanelId[panelId],
+                   Self.commandPaletteForkSnapshotFingerprint(currentFallbackSnapshot) != fallbackFingerprint {
+                    commandPaletteForkableAgentProbeIDsByPanelKey.removeValue(forKey: panelKey)
+                    commandPaletteForkableAgentProbeFingerprintsByPanelKey.removeValue(forKey: panelKey)
+                    commandPaletteForkableAgentAvailabilityTasksByPanelKey.removeValue(forKey: panelKey)
+                    return
+                }
+                let wasSupported = commandPaletteForkableAgentSupportedPanelKeys.contains(panelKey)
+                let hadCachedSnapshot = commandPaletteForkableAgentSnapshotsByPanelKey[panelKey] != nil
+                let shouldRefreshResults: Bool
+                if supportsFork {
+                    shouldRefreshResults = !wasSupported
+                    commandPaletteForkableAgentSupportedPanelKeys.insert(panelKey)
+                    commandPaletteForkableAgentRemoteContextsByPanelKey[panelKey] = isRemoteTerminal
+                    if let snapshot {
+                        commandPaletteForkableAgentSnapshotsByPanelKey[panelKey] = snapshot
+                        commandPaletteForkableAgentSnapshotFingerprintsByPanelKey[panelKey] = Self.commandPaletteForkCacheFingerprint(
+                            snapshot: snapshot,
+                            fallbackFingerprint: fallbackFingerprint
+                        )
+                    }
+                } else {
+                    shouldRefreshResults = wasSupported || hadCachedSnapshot
+                    commandPaletteForkableAgentSupportedPanelKeys.remove(panelKey)
+                    commandPaletteForkableAgentSnapshotsByPanelKey.removeValue(forKey: panelKey)
+                    commandPaletteForkableAgentSnapshotFingerprintsByPanelKey.removeValue(forKey: panelKey)
+                    commandPaletteForkableAgentRemoteContextsByPanelKey.removeValue(forKey: panelKey)
+                }
+                commandPaletteForkableAgentProbeIDsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentProbeFingerprintsByPanelKey.removeValue(forKey: panelKey)
+                commandPaletteForkableAgentAvailabilityTasksByPanelKey.removeValue(forKey: panelKey)
+                if shouldRefreshResults,
+                   isCommandPalettePresented,
+                   commandPaletteForkableAgentActivePanelKey == panelKey {
+                    scheduleCommandPaletteResultsRefresh(
+                        query: commandPaletteQuery,
+                        forceSearchCorpusRefresh: true
+                    )
+                }
+            }
+        }
+    }
+
+    private func cancelCommandPaletteForkableAgentAvailabilityProbe() {
+        for task in commandPaletteForkableAgentAvailabilityTasksByPanelKey.values {
+            task.cancel()
+        }
+        commandPaletteForkableAgentAvailabilityTasksByPanelKey.removeAll()
+        commandPaletteForkableAgentProbeIDsByPanelKey.removeAll()
+        commandPaletteForkableAgentProbeFingerprintsByPanelKey.removeAll()
+    }
+
+    private func cancelCommandPaletteForkableAgentAvailabilityProbe(for panelKey: String) {
+        commandPaletteForkableAgentAvailabilityTasksByPanelKey.removeValue(forKey: panelKey)?.cancel()
+        commandPaletteForkableAgentProbeIDsByPanelKey.removeValue(forKey: panelKey)
+        commandPaletteForkableAgentProbeFingerprintsByPanelKey.removeValue(forKey: panelKey)
     }
 
     private func commandPaletteCommandsContext(
@@ -6265,7 +6571,7 @@ struct ContentView: View {
         contributions.append(
             CommandPaletteCommandContribution(
                 commandId: "palette.installCLI",
-                title: constant(String(localized: "command.installCLI.title", defaultValue: "Shell Command: Install 'cmux' in PATH")),
+                title: constant(String(localized: "command.installCLI.title", defaultValue: "Shell Command: Install 'zerocmux' in PATH")),
                 subtitle: constant(String(localized: "command.installCLI.subtitle", defaultValue: "CLI")),
                 keywords: ["install", "cli", "path", "shell", "command", "symlink"],
                 when: { !$0.bool(CommandPaletteContextKeys.cliInstalledInPATH) }
@@ -6274,7 +6580,7 @@ struct ContentView: View {
         contributions.append(
             CommandPaletteCommandContribution(
                 commandId: "palette.uninstallCLI",
-                title: constant(String(localized: "command.uninstallCLI.title", defaultValue: "Shell Command: Uninstall 'cmux' from PATH")),
+                title: constant(String(localized: "command.uninstallCLI.title", defaultValue: "Shell Command: Uninstall 'zerocmux' from PATH")),
                 subtitle: constant(String(localized: "command.uninstallCLI.subtitle", defaultValue: "CLI")),
                 keywords: ["uninstall", "remove", "cli", "path", "shell", "command", "symlink"],
                 when: { $0.bool(CommandPaletteContextKeys.cliInstalledInPATH) }
@@ -7753,6 +8059,52 @@ struct ContentView: View {
         }
     }
 
+    struct CommandPalettePendingActivationResolution: Equatable {
+        let resolvedActivation: CommandPaletteResolvedActivation?
+        let shouldClearPendingActivation: Bool
+    }
+
+    static func commandPalettePendingActivation(
+        _ pendingActivation: CommandPalettePendingActivation?,
+        rebasedTo requestID: UInt64
+    ) -> CommandPalettePendingActivation? {
+        switch pendingActivation {
+        case .selected(_, let fallbackSelectedIndex, let preferredCommandID):
+            return .selected(
+                requestID: requestID,
+                fallbackSelectedIndex: fallbackSelectedIndex,
+                preferredCommandID: preferredCommandID
+            )
+        case .command(_, let commandID):
+            return .command(requestID: requestID, commandID: commandID)
+        case nil:
+            return nil
+        }
+    }
+
+    static func commandPalettePendingActivationResolution(
+        _ pendingActivation: CommandPalettePendingActivation?,
+        requestID: UInt64,
+        resultIDs: [String]
+    ) -> CommandPalettePendingActivationResolution {
+        let resolvedActivation = commandPaletteResolvedPendingActivation(
+            pendingActivation,
+            requestID: requestID,
+            resultIDs: resultIDs
+        )
+        return CommandPalettePendingActivationResolution(
+            resolvedActivation: resolvedActivation,
+            shouldClearPendingActivation: commandPalettePendingActivationRequestID(pendingActivation) == requestID
+        )
+    }
+
+    static func commandPaletteForkPriorityBoost(commandId: String, query: String) -> Int {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "fork" else {
+            return 0
+        }
+        return commandId == "palette.forkAgentConversationRight" ? 1_000 : 0
+    }
+
     static func commandPaletteContextFingerprint(
         boolValues: [String: Bool],
         stringValues: [String: String]
@@ -7972,7 +8324,7 @@ struct ContentView: View {
     private func runCommandPaletteResult(commandID: String) {
         guard commandPaletteHasCurrentResolvedResults else {
             if isCommandPalettePresented {
-                commandPalettePendingActivation = .command(
+                commandPalettePendingActivationState = .command(
                     requestID: commandPaletteSearchRequestID,
                     commandID: commandID
                 )
@@ -7985,7 +8337,7 @@ struct ContentView: View {
     private func runSelectedCommandPaletteResult() {
         guard commandPaletteHasCurrentResolvedResults else {
             if isCommandPalettePresented {
-                commandPalettePendingActivation = .selected(
+                commandPalettePendingActivationState = .selected(
                     requestID: commandPaletteSearchRequestID,
                     fallbackSelectedIndex: commandPaletteSelectedResultIndex,
                     preferredCommandID: commandPaletteSelectionAnchorCommandID
@@ -8180,6 +8532,7 @@ struct ContentView: View {
             commandPaletteRestoreFocusTarget = nil
         }
         isCommandPalettePresented = true
+        commandPaletteForkableAgentActivePanelKey = nil
         refreshCommandPaletteUsageHistory()
         resetCommandPaletteListState(initialQuery: initialQuery)
     }
@@ -8225,6 +8578,8 @@ struct ContentView: View {
         }
 #endif
         cancelCommandPaletteSearch()
+        cancelCommandPaletteForkableAgentAvailabilityProbe()
+        commandPaletteForkableAgentActivePanelKey = nil
         commandPaletteSearchRequestID &+= 1
         isCommandPalettePresented = false
         commandPaletteMode = .commands
@@ -8256,7 +8611,7 @@ struct ContentView: View {
         commandPaletteResolvedSearchFingerprint = nil
         commandPaletteTerminalOpenTargetAvailability = []
         isCommandPaletteSearchPending = false
-        commandPalettePendingActivation = nil
+        commandPalettePendingActivationState = nil
         commandPaletteResultsRevision &+= 1
         if let window = observedWindow {
             _ = window.makeFirstResponder(nil)
@@ -9124,11 +9479,28 @@ private final class SidebarTabItemSettingsStore: ObservableObject {
     }
 }
 
-private struct SidebarTabItemPresentationSnapshot: Equatable {
+struct SidebarTabItemPresentationSnapshot: Equatable {
     let tabId: UUID
     let unreadCount: Int
     let latestNotificationText: String?
     let showsModifierShortcutHints: Bool
+}
+
+enum SidebarTabItemPresentationResolutionPolicy {
+    static func resolved(
+        live: SidebarTabItemPresentationSnapshot,
+        frozen: SidebarTabItemPresentationSnapshot?
+    ) -> SidebarTabItemPresentationSnapshot {
+        guard let frozen, frozen.tabId == live.tabId else {
+            return live
+        }
+        return SidebarTabItemPresentationSnapshot(
+            tabId: live.tabId,
+            unreadCount: live.unreadCount,
+            latestNotificationText: live.latestNotificationText,
+            showsModifierShortcutHints: frozen.showsModifierShortcutHints
+        )
+    }
 }
 
 struct VerticalTabsSidebar: View {
@@ -9591,6 +9963,10 @@ struct VerticalTabsSidebar: View {
         let frozenPresentation = frozenTabItemPresentation?.tabId == tab.id
             ? frozenTabItemPresentation
             : nil
+        let resolvedPresentation = SidebarTabItemPresentationResolutionPolicy.resolved(
+            live: livePresentation,
+            frozen: frozenPresentation
+        )
 
         return TabItemView(
             tabManager: tabManager,
@@ -9605,13 +9981,13 @@ struct VerticalTabsSidebar: View {
             workspaceShortcutModifierSymbol: renderContext.workspaceNumberShortcut.numberedDigitHintPrefix,
             canCloseWorkspace: renderContext.canCloseWorkspace,
             accessibilityWorkspaceCount: renderContext.workspaceCount,
-            unreadCount: frozenPresentation?.unreadCount ?? liveUnreadCount,
-            latestNotificationText: frozenPresentation?.latestNotificationText ?? liveLatestNotificationText,
+            unreadCount: resolvedPresentation.unreadCount,
+            latestNotificationText: resolvedPresentation.latestNotificationText,
             rowSpacing: tabRowSpacing,
             setSelectionToTabs: { selection = .tabs },
             selectedTabIds: $selectedTabIds,
             lastSidebarSelectionIndex: $lastSidebarSelectionIndex,
-            showsModifierShortcutHints: frozenPresentation?.showsModifierShortcutHints ?? liveShowsModifierShortcutHints,
+            showsModifierShortcutHints: resolvedPresentation.showsModifierShortcutHints,
             dragAutoScrollController: dragAutoScrollController,
             draggedTabId: $draggedTabId,
             dropIndicator: $dropIndicator,
@@ -10194,6 +10570,10 @@ enum ShortcutHintDebugSettings {
     static let defaultTitlebarHintY = 0.0
     static let defaultPaneHintX = 0.0
     static let defaultPaneHintY = 0.0
+    static let defaultRightSidebarCloseHintX = -10.0
+    static let defaultRightSidebarCloseHintY = 3.3
+    static let defaultRightSidebarFocusHintX = -1.6
+    static let defaultRightSidebarFocusHintY = 1.7
     static let defaultAlwaysShowHints = false
     static let defaultShowHintsOnCommandHold = true
     static let defaultShowHintsOnControlHold = true
@@ -10202,6 +10582,12 @@ enum ShortcutHintDebugSettings {
 
     static func clamped(_ value: Double) -> Double {
         min(max(value, offsetRange.lowerBound), offsetRange.upperBound)
+    }
+
+    static func alwaysShowHints(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        defaultAlwaysShowHints || environment["CMUX_UI_TEST_SHORTCUT_HINTS_ALWAYS_SHOW"] == "1"
     }
 
     static func showHintsOnCommandHoldEnabled(defaults: UserDefaults = .standard) -> Bool {
@@ -11124,7 +11510,7 @@ private struct TabItemView: View, Equatable {
         switch tab.remoteConnectionState {
         case .connected:
             return String(localized: "remote.status.connected", defaultValue: "Connected")
-        case .connecting:
+        case .connecting, .reconnecting:
             return String(localized: "remote.status.connecting", defaultValue: "Connecting")
         case .error:
             return String(localized: "remote.status.error", defaultValue: "Error")
@@ -12074,7 +12460,7 @@ private struct TabItemView: View, Equatable {
                 locale: .current,
                 target
             )
-        case .connecting:
+        case .connecting, .reconnecting:
             return String(
                 format: String(
                     localized: "sidebar.remote.help.connecting",
@@ -13667,20 +14053,6 @@ final class DraggableFolderNSView: NSView, NSDraggingSource {
         )
         #endif
     }
-}
-
-func temporarilyDisableWindowDragging(window: NSWindow?) -> Bool? {
-    guard let window else { return nil }
-    let wasMovable = window.isMovable
-    if wasMovable {
-        window.isMovable = false
-    }
-    return wasMovable
-}
-
-func restoreWindowDragging(window: NSWindow?, previousMovableState: Bool?) {
-    guard let window, let previousMovableState else { return }
-    window.isMovable = previousMovableState
 }
 
 /// Wrapper view that tries NSGlassEffectView (macOS 26+) when available or requested

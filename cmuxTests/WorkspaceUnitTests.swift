@@ -599,6 +599,8 @@ final class WorkspaceRenameShortcutDefaultsTests: XCTestCase {
 final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
     private var originalSettingsFileStore: KeyboardShortcutSettingsFileStore!
     private let settingsFileBackupsDefaultsKey = "cmux.settingsFile.backups.v1"
+    private let importedManagedDefaultsKey = "cmux.settingsFile.importedManagedDefaults.v1"
+    private var previousImportedManagedDefaults: Data?
 
     func testShortcutConfigStringCanonicalizesNumberedDigitsWhenRequested() {
         let stroke = ShortcutStroke(
@@ -623,6 +625,8 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         originalSettingsFileStore = KeyboardShortcutSettings.settingsFileStore
+        previousImportedManagedDefaults = UserDefaults.standard.data(forKey: importedManagedDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: importedManagedDefaultsKey)
         KeyboardShortcutSettings.resetAll()
     }
 
@@ -630,6 +634,12 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
         KeyboardShortcutSettings.settingsFileStore = originalSettingsFileStore
         AppIconSettings.resetLiveEnvironmentProviderForTesting()
         KeyboardShortcutSettings.resetAll()
+        if let previousImportedManagedDefaults {
+            UserDefaults.standard.set(previousImportedManagedDefaults, forKey: importedManagedDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: importedManagedDefaultsKey)
+        }
+        previousImportedManagedDefaults = nil
         super.tearDown()
     }
 
@@ -1525,26 +1535,10 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
 
     @MainActor
     func testManagedWorkspacePlacementChangesDefaultInsertionBehavior() throws {
-        let defaults = UserDefaults.standard
-        let managedKey = WorkspacePlacementSettings.placementKey
-        let previousValue = defaults.object(forKey: managedKey)
-        let previousBackups = defaults.data(forKey: settingsFileBackupsDefaultsKey)
-        defer {
-            if let previousValue {
-                defaults.set(previousValue, forKey: managedKey)
-            } else {
-                defaults.removeObject(forKey: managedKey)
-            }
-
-            if let previousBackups {
-                defaults.set(previousBackups, forKey: settingsFileBackupsDefaultsKey)
-            } else {
-                defaults.removeObject(forKey: settingsFileBackupsDefaultsKey)
-            }
-        }
-
-        defaults.removeObject(forKey: managedKey)
-        defaults.removeObject(forKey: settingsFileBackupsDefaultsKey)
+        let suiteName = "KeyboardShortcutSettingsFileStoreTests.ManagedWorkspacePlacement.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let directoryURL = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directoryURL) }
@@ -1564,10 +1558,12 @@ final class KeyboardShortcutSettingsFileStoreTests: XCTestCase {
         _ = KeyboardShortcutSettingsFileStore(
             primaryPath: settingsFileURL.path,
             fallbackPath: nil,
+            userDefaults: defaults,
             startWatching: false
         )
+        XCTAssertEqual(WorkspacePlacementSettings.current(defaults: defaults), .top)
 
-        let manager = TabManager()
+        let manager = TabManager(workspacePlacementDefaults: defaults)
         guard let first = manager.tabs.first else {
             XCTFail("Expected initial workspace")
             return
@@ -2204,9 +2200,9 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
             XCTFail("Expected TabManager to initialise with at least one workspace")
             return
         }
-        _ = manager.addWorkspace()
-        _ = manager.addWorkspace()
-        let fourth = manager.addWorkspace()
+        _ = manager.addWorkspace(placementOverride: .afterCurrent)
+        _ = manager.addWorkspace(placementOverride: .afterCurrent)
+        let fourth = manager.addWorkspace(placementOverride: .afterCurrent)
         let baselineOrder = manager.tabs.map(\.id)
 
         manager.selectWorkspace(fourth)
@@ -2224,8 +2220,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
         }
 
         manager.setPinned(first, pinned: true)
-        let second = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let second = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(third)
 
         let baselineOrder = manager.tabs.map(\.id)
@@ -2247,8 +2243,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
             return
         }
 
-        let second = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let second = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(third)
 
         manager.afterCaptureWorkspaceCreationSnapshot = {
@@ -2269,8 +2265,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
             return
         }
 
-        let second = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let second = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(third)
 
         manager.afterCaptureWorkspaceCreationSnapshot = {
@@ -2291,8 +2287,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
             return
         }
 
-        let closingWorkspace = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let closingWorkspace = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(third)
 
         let closingWorkspaceId = closingWorkspace.id
@@ -2321,8 +2317,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
         }
 
         manager.setPinned(first, pinned: true)
-        let second = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let second = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(first)
         let baselineOrder = manager.tabs.map(\.id)
 
@@ -2344,8 +2340,8 @@ final class WorkspaceCreationPlacementTests: XCTestCase {
             return
         }
 
-        let second = manager.addWorkspace()
-        let third = manager.addWorkspace()
+        let second = manager.addWorkspace(placementOverride: .afterCurrent)
+        let third = manager.addWorkspace(placementOverride: .afterCurrent)
         manager.selectWorkspace(second)
 
         manager.afterCaptureWorkspaceCreationSnapshot = {
@@ -3132,12 +3128,27 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
     }
 
     private func makeWindow() -> NSWindow {
-        NSWindow(
+        let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 220),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
+        return window
+    }
+
+    private func tearDownTerminalWindow(_ window: NSWindow, hostedViews: [GhosttySurfaceScrollView]) {
+        window.makeFirstResponder(nil)
+        for hostedView in hostedViews {
+            hostedView.setFocusHandler(nil)
+            hostedView.setVisibleInUI(false)
+            hostedView.removeFromSuperview()
+        }
+        window.contentView = nil
+        window.orderOut(nil)
+        window.close()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
     }
 
     private func makeMouseEvent(
@@ -3216,7 +3227,7 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
         }
 
         let window = makeWindow()
-        defer { window.orderOut(nil) }
+        defer { tearDownTerminalWindow(window, hostedViews: [leftPanel.hostedView, rightPanel.hostedView]) }
         guard let contentView = window.contentView else {
             XCTFail("Expected content view")
             return
@@ -3291,7 +3302,7 @@ final class WorkspaceTerminalFocusRecoveryTests: XCTestCase {
         }
 
         let window = makeWindow()
-        defer { window.orderOut(nil) }
+        defer { tearDownTerminalWindow(window, hostedViews: [leftPanel.hostedView, rightPanel.hostedView]) }
         guard let contentView = window.contentView else {
             XCTFail("Expected content view")
             return

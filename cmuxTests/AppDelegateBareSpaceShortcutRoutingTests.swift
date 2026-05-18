@@ -9,97 +9,54 @@ import XCTest
 
 @MainActor
 final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
-    private var savedShortcutsByAction: [KeyboardShortcutSettings.Action: StoredShortcut] = [:]
-    private var actionsWithPersistedShortcut: Set<KeyboardShortcutSettings.Action> = []
     private var originalSettingsFileStore: KeyboardShortcutSettingsFileStore!
 
     override func setUp() {
         super.setUp()
         executionTimeAllowance = 30
-        actionsWithPersistedShortcut = Set(
-            KeyboardShortcutSettings.Action.allCases.filter {
-                UserDefaults.standard.object(forKey: $0.defaultsKey) != nil
-            }
-        )
-        savedShortcutsByAction = Dictionary(
-            uniqueKeysWithValues: actionsWithPersistedShortcut.map { action in
-                (action, KeyboardShortcutSettings.shortcut(for: action))
-            }
-        )
-        originalSettingsFileStore = KeyboardShortcutSettings.settingsFileStore
-        KeyboardShortcutSettings.resetAll()
+        originalSettingsFileStore = KeyboardShortcutSettings.installIsolatedTestFileStore(prefix: "zerocmux-bare-space-shortcuts")
+        #if DEBUG
+        KeyboardShortcutSettings.removeAllShortcutOverridesForTesting()
+        #endif
     }
 
     override func tearDown() {
+        #if DEBUG
+        KeyboardShortcutSettings.removeAllShortcutOverridesForTesting()
+        #endif
         KeyboardShortcutSettings.settingsFileStore = originalSettingsFileStore
-        for action in KeyboardShortcutSettings.Action.allCases {
-            if actionsWithPersistedShortcut.contains(action),
-               let savedShortcut = savedShortcutsByAction[action] {
-                KeyboardShortcutSettings.setShortcut(savedShortcut, for: action)
-            } else {
-                KeyboardShortcutSettings.resetShortcut(for: action)
-            }
-        }
         super.tearDown()
     }
 
     func testBareSpaceShortcutDispatchesConfiguredAction() {
-        guard let appDelegate = AppDelegate.shared else {
-            XCTFail("Expected AppDelegate.shared")
-            return
-        }
+        let context = makeShortcutRoutingContext()
+        defer { context.cleanup() }
 
-        let windowId = appDelegate.createMainWindow()
-        defer { closeWindow(withId: windowId) }
-
-        guard let window = window(withId: windowId),
-              let manager = appDelegate.tabManagerFor(windowId: windowId) else {
-            XCTFail("Expected test window and manager")
-            return
-        }
-
-        window.makeKeyAndOrderFront(nil)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
-        let initialCount = manager.tabs.count
+        let initialCount = context.manager.tabs.count
         let shortcut = StoredShortcut(key: "space", command: false, shift: false, option: false, control: false)
 
         withTemporaryShortcut(action: .newTab, shortcut: shortcut) {
-            guard let event = makeKeyDownEvent(key: " ", keyCode: 49, windowNumber: window.windowNumber) else {
+            guard let event = makeKeyDownEvent(key: " ", keyCode: 49, windowNumber: context.eventWindowNumber) else {
                 XCTFail("Failed to construct Space event")
                 return
             }
 
 #if DEBUG
-            XCTAssertTrue(appDelegate.debugHandleCustomShortcut(event: event))
+            XCTAssertTrue(context.appDelegate.debugHandleCustomShortcut(event: event))
 #else
             XCTFail("debugHandleCustomShortcut is only available in DEBUG")
 #endif
         }
 
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-        XCTAssertEqual(manager.tabs.count, initialCount + 1, "Bare Space should dispatch when explicitly configured")
+        XCTAssertEqual(context.manager.tabs.count, initialCount + 1, "Bare Space should dispatch when explicitly configured")
     }
 
     func testBareSpaceChordPrefixArmsConfiguredShortcut() {
-        guard let appDelegate = AppDelegate.shared else {
-            XCTFail("Expected AppDelegate.shared")
-            return
-        }
+        let context = makeShortcutRoutingContext()
+        defer { context.cleanup() }
 
-        let windowId = appDelegate.createMainWindow()
-        defer { closeWindow(withId: windowId) }
-
-        guard let window = window(withId: windowId),
-              let manager = appDelegate.tabManagerFor(windowId: windowId) else {
-            XCTFail("Expected test window and manager")
-            return
-        }
-
-        window.makeKeyAndOrderFront(nil)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-
-        let initialCount = manager.tabs.count
+        let initialCount = context.manager.tabs.count
         let shortcut = StoredShortcut(
             key: "space",
             command: false,
@@ -110,23 +67,23 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         )
 
         withTemporaryShortcut(action: .newTab, shortcut: shortcut) {
-            guard let prefixEvent = makeKeyDownEvent(key: " ", keyCode: 49, windowNumber: window.windowNumber),
-                  let actionEvent = makeKeyDownEvent(key: "n", keyCode: 45, windowNumber: window.windowNumber) else {
+            guard let prefixEvent = makeKeyDownEvent(key: " ", keyCode: 49, windowNumber: context.eventWindowNumber),
+                  let actionEvent = makeKeyDownEvent(key: "n", keyCode: 45, windowNumber: context.eventWindowNumber) else {
                 XCTFail("Failed to construct Space chord events")
                 return
             }
 
 #if DEBUG
-            XCTAssertTrue(appDelegate.debugHandleCustomShortcut(event: prefixEvent))
-            XCTAssertEqual(manager.tabs.count, initialCount, "Bare Space prefix must not fire the action early")
-            XCTAssertTrue(appDelegate.debugHandleCustomShortcut(event: actionEvent))
+            XCTAssertTrue(context.appDelegate.debugHandleCustomShortcut(event: prefixEvent))
+            XCTAssertEqual(context.manager.tabs.count, initialCount, "Bare Space prefix must not fire the action early")
+            XCTAssertTrue(context.appDelegate.debugHandleCustomShortcut(event: actionEvent))
 #else
             XCTFail("debugHandleCustomShortcut is only available in DEBUG")
 #endif
         }
 
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-        XCTAssertEqual(manager.tabs.count, initialCount + 1, "Bare Space chord should dispatch on the second stroke")
+        XCTAssertEqual(context.manager.tabs.count, initialCount + 1, "Bare Space chord should dispatch on the second stroke")
     }
 
     func testCreateMainWindowUsesPersistedGeometryWhenNoSourceWindow() throws {
@@ -134,19 +91,16 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         let appDelegate = AppDelegate()
         defer { AppDelegate.shared = previousShared }
 
-        let defaults = UserDefaults.standard
+        let isolatedDefaults = makeIsolatedDefaults()
+        let defaults = isolatedDefaults.defaults
+        appDelegate.debugPersistedWindowGeometryDefaultsForTesting = defaults
+        defer { defaults.removePersistentDomain(forName: isolatedDefaults.suiteName) }
         let persistedGeometryKey = AppDelegate.debugPersistedWindowGeometryDefaultsKey
-        let previousPersistedGeometry = defaults.object(forKey: persistedGeometryKey)
         var windowId: UUID?
         defer {
             if let windowId {
                 closeWindow(withId: windowId)
             }
-            restoreDefaultsValue(
-                previousPersistedGeometry,
-                forKey: persistedGeometryKey,
-                defaults: defaults
-            )
         }
 
         let screen = try XCTUnwrap(NSScreen.main ?? NSScreen.screens.first)
@@ -210,6 +164,14 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         shortcut: StoredShortcut,
         _ body: () -> Void
     ) {
+        #if DEBUG
+        let originalOverride = KeyboardShortcutSettings.shortcutOverrideForTesting(for: action)
+        defer {
+            KeyboardShortcutSettings.setShortcutOverrideForTesting(originalOverride, for: action)
+        }
+        KeyboardShortcutSettings.setShortcutOverrideForTesting(shortcut, for: action)
+        body()
+        #else
         let hadPersistedShortcut = UserDefaults.standard.object(forKey: action.defaultsKey) != nil
         let originalShortcut = KeyboardShortcutSettings.shortcut(for: action)
         defer {
@@ -221,6 +183,65 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         }
         KeyboardShortcutSettings.setShortcut(shortcut, for: action)
         body()
+        #endif
+    }
+
+    private struct ShortcutRoutingContext {
+        let appDelegate: AppDelegate
+        let manager: TabManager
+        let window: NSWindow
+        let windowId: UUID
+        let eventWindowNumber: Int
+        let previousShared: AppDelegate?
+        let previousActiveManager: TabManager?
+
+        @MainActor
+        func cleanup() {
+            appDelegate.unregisterMainWindowContextForTesting(windowId: windowId, notifyChange: false)
+            window.makeFirstResponder(nil)
+            window.contentView = nil
+            window.orderOut(nil)
+            window.close()
+            for workspace in manager.tabs {
+                manager.closeWorkspace(workspace)
+            }
+            AppDelegate.shared = previousShared
+            if let previousActiveManager {
+                TerminalController.shared.setActiveTabManager(previousActiveManager)
+            }
+        }
+    }
+
+    private func makeShortcutRoutingContext() -> ShortcutRoutingContext {
+        let previousShared = AppDelegate.shared
+        let previousActiveManager = previousShared?.tabManager
+        let appDelegate = AppDelegate()
+        let manager = TabManager()
+        let windowId = UUID()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.identifier = NSUserInterfaceItemIdentifier("cmux.main.\(windowId.uuidString)")
+        AppDelegate.shared = appDelegate
+        appDelegate.registerMainWindowContextForTesting(
+            windowId: windowId,
+            tabManager: manager,
+            window: window,
+            notifyChange: false
+        )
+        return ShortcutRoutingContext(
+            appDelegate: appDelegate,
+            manager: manager,
+            window: window,
+            windowId: windowId,
+            eventWindowNumber: 0,
+            previousShared: previousShared,
+            previousActiveManager: previousActiveManager
+        )
     }
 
     private func window(withId windowId: UUID) -> NSWindow? {
@@ -234,11 +255,12 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
     }
 
-    private func restoreDefaultsValue(_ value: Any?, forKey key: String, defaults: UserDefaults) {
-        if let value {
-            defaults.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
+    private func makeIsolatedDefaults() -> (defaults: UserDefaults, suiteName: String) {
+        let suiteName = "zerocmux-bare-space-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            fatalError("Failed to create isolated UserDefaults suite")
         }
+        defaults.removePersistentDomain(forName: suiteName)
+        return (defaults, suiteName)
     }
 }

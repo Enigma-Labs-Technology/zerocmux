@@ -236,13 +236,16 @@ struct SessionBrowserPanelSnapshot: Codable, Sendable {
     var backHistoryURLStrings: [String]?
     var forwardHistoryURLStrings: [String]?
 }
-
 struct SessionMarkdownPanelSnapshot: Codable, Sendable {
     var filePath: String
 }
 
 struct SessionFilePreviewPanelSnapshot: Codable, Sendable {
     var filePath: String
+}
+
+struct SessionRightSidebarToolPanelSnapshot: Codable, Sendable {
+    var mode: RightSidebarMode
 }
 
 struct SessionPanelSnapshot: Codable, Sendable {
@@ -253,6 +256,7 @@ struct SessionPanelSnapshot: Codable, Sendable {
     var directory: String?
     var isPinned: Bool
     var isManuallyUnread: Bool
+    var hasUnreadIndicator: Bool? = nil
     var gitBranch: SessionGitBranchSnapshot?
     var listeningPorts: [Int]
     var ttyName: String?
@@ -260,6 +264,7 @@ struct SessionPanelSnapshot: Codable, Sendable {
     var browser: SessionBrowserPanelSnapshot?
     var markdown: SessionMarkdownPanelSnapshot?
     var filePreview: SessionFilePreviewPanelSnapshot?
+    var rightSidebarTool: SessionRightSidebarToolPanelSnapshot?
 }
 
 enum SessionSplitOrientation: String, Codable, Sendable {
@@ -339,6 +344,8 @@ struct SessionWorkspaceSnapshot: Codable, Sendable {
     var customDescription: String?
     var customColor: String?
     var isPinned: Bool
+    var isManuallyUnread: Bool? = nil
+    var hasUnreadIndicator: Bool? = nil
     var terminalScrollBarHidden: Bool?
     var currentDirectory: String
     var focusedPanelId: UUID?
@@ -348,6 +355,7 @@ struct SessionWorkspaceSnapshot: Codable, Sendable {
     var logEntries: [SessionLogEntrySnapshot]
     var progress: SessionProgressSnapshot?
     var gitBranch: SessionGitBranchSnapshot?
+    var remote: SessionRemoteWorkspaceSnapshot?
 }
 
 struct SessionTabManagerSnapshot: Codable, Sendable {

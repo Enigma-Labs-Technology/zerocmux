@@ -220,7 +220,7 @@ else
     echo "==> Building GhosttyKit.xcframework (this may take a few minutes)..."
     (
       cd ghostty
-      zig build -Demit-xcframework=true -Dxcframework-target=universal -Doptimize=ReleaseFast
+      zig build -Demit-xcframework=true -Dxcframework-target=universal -Doptimize=ReleaseFast -Dsentry=false -Dcrash-report-subdir=zerocmux/crash
     )
     echo "$GHOSTTY_KEY" > "$LOCAL_KEY_STAMP"
     echo "$GHOSTTY_SHA" > "$LEGACY_LOCAL_SHA_STAMP"

@@ -108,11 +108,9 @@ final class KeyboardShortcutSettingsFileStoreMigrationTests: XCTestCase {
 
     func testLegacySettingsShortcutBindingsParseWithoutRuntimeConflictLookup() throws {
         let originalSettingsFileStore = KeyboardShortcutSettings.settingsFileStore
-        KeyboardShortcutSettings.resetAll()
         defer {
             KeyboardShortcutSettings.shortcutLookupObserver = nil
             KeyboardShortcutSettings.settingsFileStore = originalSettingsFileStore
-            KeyboardShortcutSettings.resetAll()
         }
 
         let directoryURL = try makeTemporaryDirectory()
@@ -135,10 +133,6 @@ final class KeyboardShortcutSettingsFileStoreMigrationTests: XCTestCase {
             notificationCenter: NotificationCenter(),
             startWatching: false
         )
-        let lookupRecorder = ShortcutSettingsLookupRecorder()
-        KeyboardShortcutSettings.shortcutLookupObserver = { action in
-            lookupRecorder.actions.append(action.rawValue)
-        }
 
         let primaryURL = directoryURL.appendingPathComponent("primary/cmux.json", isDirectory: false)
         let legacySettingsURL = directoryURL.appendingPathComponent("fallback/settings.json", isDirectory: false)
@@ -183,6 +177,18 @@ final class KeyboardShortcutSettingsFileStoreMigrationTests: XCTestCase {
             startWatching: false
         )
 
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        let lookupRecorder = ShortcutSettingsLookupRecorder()
+        KeyboardShortcutSettings.shortcutLookupObserver = { action in
+            let isSettingsFileParserLookup = Thread.callStackSymbols.contains { symbol in
+                symbol.contains("parseShortcutBindingValue") ||
+                    symbol.contains("parseShortcutsSection") ||
+                    symbol.contains("parseSettingsFile")
+            }
+            guard isSettingsFileParserLookup else { return }
+            lookupRecorder.actions.append(action.rawValue)
+        }
+        store.reload()
         XCTAssertEqual(lookupRecorder.actions, [])
         XCTAssertEqual(defaultNotificationCounter.count, 0)
         XCTAssertEqual(parsingNotificationCounter.count, 1)

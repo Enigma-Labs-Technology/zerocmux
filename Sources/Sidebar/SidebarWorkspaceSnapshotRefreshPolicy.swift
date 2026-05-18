@@ -42,7 +42,7 @@ extension SidebarWorkspaceSnapshotBuilder.Snapshot {
 }
 
 // Context-menu actions should update stable row affordances immediately while
-// keeping telemetry-heavy sidebar details frozen until the menu lifecycle ends.
+// keeping heavier sidebar details frozen until the menu lifecycle ends.
 struct SidebarWorkspaceSnapshotRefreshPolicy {
     struct Decision: Equatable {
         let workspaceSnapshotStorage: SidebarWorkspaceSnapshotBuilder.Snapshot?

@@ -51458,7 +51458,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This is a generated preview of the effective config. No base Ghostty config file was found, so only zerocmux overrides are shown."
+            "value": "This is a generated preview of the effective config. No base Ghostty config file was found, so only zerozerocmux overrides are shown."
           }
         },
         "ja": {
@@ -103825,7 +103825,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Shows the right-edge terminal scroll bar in shell scrollback. zerocmux hides it automatically for alternate-screen style TUI surfaces and you can also disable it per workspace."
+            "value": "Shows the right-edge terminal scroll bar in shell scrollback. zerozerocmux hides it automatically for alternate-screen style TUI surfaces and you can also disable it per workspace."
           }
         },
         "ja": {

@@ -14,6 +14,7 @@ final class GhosttyCommandShiftForwardingTests: XCTestCase {
     private struct HostedTerminal {
         let surface: TerminalSurface
         let window: NSWindow
+        let hostedView: GhosttySurfaceScrollView
         let surfaceView: GhosttyNSView
     }
 
@@ -32,6 +33,7 @@ final class GhosttyCommandShiftForwardingTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         let contentView = try XCTUnwrap(window.contentView)
         hostedView.frame = contentView.bounds
         hostedView.autoresizingMask = [.width, .height]
@@ -45,8 +47,21 @@ final class GhosttyCommandShiftForwardingTests: XCTestCase {
         return HostedTerminal(
             surface: surface,
             window: window,
+            hostedView: hostedView,
             surfaceView: try XCTUnwrap(findGhosttyNSView(in: hostedView))
         )
+    }
+
+    private func tearDownHostedTerminal(_ terminal: HostedTerminal) {
+        terminal.window.makeFirstResponder(nil)
+        terminal.hostedView.setFocusHandler(nil)
+        terminal.hostedView.setActive(false)
+        terminal.hostedView.setVisibleInUI(false)
+        terminal.hostedView.removeFromSuperview()
+        terminal.window.contentView = nil
+        terminal.window.orderOut(nil)
+        terminal.window.close()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
     }
 
     private func findGhosttyNSView(in view: NSView) -> GhosttyNSView? {
@@ -65,7 +80,7 @@ final class GhosttyCommandShiftForwardingTests: XCTestCase {
         let hostedTerminal = try makeHostedTerminal()
         let window = hostedTerminal.window
         let surfaceView = hostedTerminal.surfaceView
-        defer { window.orderOut(nil) }
+        defer { tearDownHostedTerminal(hostedTerminal) }
 
         XCTAssertTrue(window.makeFirstResponder(surfaceView), "Expected Ghostty surface view to accept first responder")
         XCTAssertNotNil(surfaceView.terminalSurface)

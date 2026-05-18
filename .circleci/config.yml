@@ -73,7 +73,7 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v1-spm-<< parameters.prefix >>-{{ checksum "GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" }}
+            - v1-spm-<< parameters.prefix >>-{{ checksum "cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" }}
             - v1-spm-<< parameters.prefix >>-
 
   save-swift-package-cache:
@@ -85,7 +85,7 @@ commands:
         default: .ci-source-packages
     steps:
       - save_cache:
-          key: v1-spm-<< parameters.prefix >>-{{ checksum "GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" }}
+          key: v1-spm-<< parameters.prefix >>-{{ checksum "cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" }}
           paths:
             - << parameters.path >>
 
@@ -119,7 +119,7 @@ commands:
             mkdir -p "$SOURCE_PACKAGES_DIR"
 
             for attempt in 1 2 3; do
-              if xcodebuild -project GhosttyTabs.xcodeproj -scheme << parameters.scheme >> -configuration Debug \
+              if xcodebuild -project cmux.xcodeproj -scheme << parameters.scheme >> -configuration Debug \
                 -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
                 -resolvePackageDependencies; then
                 exit 0
@@ -155,7 +155,7 @@ jobs:
             export CMUX_SKIP_ZIG_BUILD=1
             SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
             run_unit_tests() {
-              xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
+              xcodebuild -project cmux.xcodeproj -scheme zerocmux-unit -configuration Debug \
                 -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
                 -disableAutomaticPackageResolution \
                 -destination "platform=macOS" \
@@ -177,7 +177,7 @@ jobs:
               rm -rf ~/Library/Developer/Xcode/DerivedData/GhosttyTabs-*
               rm -rf "$SOURCE_PACKAGES_DIR"
               mkdir -p "$SOURCE_PACKAGES_DIR"
-              xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
+              xcodebuild -project cmux.xcodeproj -scheme zerocmux-unit -configuration Debug \
                 -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
                 -resolvePackageDependencies \
                 CMUX_SKIP_ZIG_BUILD=1
@@ -248,7 +248,7 @@ jobs:
           command: |
             export CMUX_SKIP_ZIG_BUILD=1
             SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug \
+            xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Debug \
               -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
               -disableAutomaticPackageResolution \
               -destination "platform=macOS" \
@@ -282,7 +282,7 @@ jobs:
           no_output_timeout: 35m
           command: |
             export CMUX_SKIP_ZIG_BUILD=1
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Release -derivedDataPath build-universal \
+            xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Release -derivedDataPath build-universal \
               -destination "generic/platform=macOS" \
               -clonedSourcePackagesDirPath .spm-cache \
               -disableAutomaticPackageResolution \

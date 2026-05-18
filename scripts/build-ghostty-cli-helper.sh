@@ -33,6 +33,85 @@ target_arch_for_triple() {
   esac
 }
 
+sdk_supports_zig_arm64() {
+  local sdk_path="$1"
+  local libsystem="$sdk_path/usr/lib/libSystem.tbd"
+  [[ -f "$libsystem" ]] || return 1
+  grep -Eq '(^|[^[:alnum:]_])arm64-macos([^[:alnum:]_]|$)' "$libsystem"
+}
+
+sdk_is_zig_015_compatible() {
+  local sdk_path="$1"
+  local real_sdk=""
+  real_sdk="$(cd "$sdk_path" 2>/dev/null && pwd -P)" || return 1
+  local sdk_version=""
+  sdk_version="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$sdk_path/SDKSettings.plist" 2>/dev/null || true)"
+  case "$sdk_version" in
+    2[6-9]*|[3-9]*) return 1 ;;
+  esac
+  case "$(basename "$real_sdk")" in
+    MacOSX2[6-9]*.sdk) return 1 ;;
+  esac
+  sdk_supports_zig_arm64 "$sdk_path"
+}
+
+select_zig_macos_sdk() {
+  local current_sdk=""
+  current_sdk="$(/usr/bin/xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  if [[ -n "$current_sdk" && -d "$current_sdk" ]] && sdk_is_zig_015_compatible "$current_sdk"; then
+    echo "$current_sdk"
+    return 0
+  fi
+
+  local sdk=""
+  local -a candidates=()
+  for sdk in \
+    /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk \
+    /Applications/Xcode*.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX*.sdk; do
+    [[ -d "$sdk" ]] || continue
+    candidates+=("$sdk")
+  done
+
+  if [[ "${#candidates[@]}" -gt 0 ]]; then
+    while IFS= read -r sdk; do
+      if sdk_is_zig_015_compatible "$sdk"; then
+        echo "$sdk"
+        return 0
+      fi
+    done < <(printf '%s\n' "${candidates[@]}" | sort -r)
+  fi
+
+  [[ -n "$current_sdk" ]] && echo "$current_sdk"
+}
+
+prepare_zig_xcrun_wrapper() {
+  local sdk_path=""
+  sdk_path="$(select_zig_macos_sdk || true)"
+  [[ -n "$sdk_path" ]] || return 0
+
+  local current_sdk=""
+  current_sdk="$(/usr/bin/xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  if [[ "$sdk_path" == "$current_sdk" ]]; then
+    return 0
+  fi
+
+  ZIG_MACOS_SDKROOT="$sdk_path"
+  ZIG_XCRUN_WRAPPER_DIR="$TMP_DIR/xcrun-wrapper"
+  mkdir -p "$ZIG_XCRUN_WRAPPER_DIR"
+  cat > "$ZIG_XCRUN_WRAPPER_DIR/xcrun" <<'EOF'
+#!/bin/sh
+case " $* " in
+  *" --show-sdk-path "*)
+    printf '%s\n' "$ZIG_MACOS_SDKROOT"
+    exit 0
+    ;;
+esac
+exec /usr/bin/xcrun "$@"
+EOF
+  chmod +x "$ZIG_XCRUN_WRAPPER_DIR/xcrun"
+  echo "Using macOS SDK $ZIG_MACOS_SDKROOT for Zig"
+}
+
 select_zig_for_target() {
   local target="${1:-}"
   local desired_arch
@@ -169,9 +248,11 @@ build_helper() {
     build
     cli-helper
     -Dapp-runtime=none
+    -Dcrash-report-subdir=zerocmux/crash
     -Demit-macos-app=false
     -Demit-xcframework=false
     -Doptimize=ReleaseFast
+    -Dsentry=false
     --prefix
     "$prefix"
   )
@@ -183,12 +264,19 @@ build_helper() {
   echo "Building Ghostty CLI helper with $zig_bin${target:+ for $target}"
   (
     cd "$GHOSTTY_DIR"
-    "${args[@]}"
+    if [[ -n "${ZIG_XCRUN_WRAPPER_DIR:-}" ]]; then
+      PATH="$ZIG_XCRUN_WRAPPER_DIR:$PATH" ZIG_MACOS_SDKROOT="$ZIG_MACOS_SDKROOT" "${args[@]}"
+    else
+      "${args[@]}"
+    fi
   )
 }
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmux-ghostty-helper.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
+ZIG_XCRUN_WRAPPER_DIR=""
+ZIG_MACOS_SDKROOT=""
+prepare_zig_xcrun_wrapper
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 

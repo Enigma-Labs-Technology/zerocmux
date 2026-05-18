@@ -4,6 +4,9 @@ extension KeyboardShortcutSettings {
     static func shortcutIfBound(for action: Action) -> StoredShortcut? {
         #if DEBUG
         shortcutLookupObserver?(action)
+        if let override = shortcutOverridesForTesting[action] {
+            return override.isUnbound ? nil : override
+        }
         #endif
 
         if let data = UserDefaults.standard.data(forKey: action.defaultsKey),
@@ -37,6 +40,26 @@ extension KeyboardShortcutSettings {
     static func unbindShortcut(for action: Action) {
         setShortcut(.unbound, for: action)
     }
+
+    #if DEBUG
+    private static var shortcutOverridesForTesting: [Action: StoredShortcut] = [:]
+
+    static func shortcutOverrideForTesting(for action: Action) -> StoredShortcut? {
+        shortcutOverridesForTesting[action]
+    }
+
+    static func setShortcutOverrideForTesting(_ shortcut: StoredShortcut?, for action: Action) {
+        if let shortcut {
+            shortcutOverridesForTesting[action] = shortcut
+        } else {
+            shortcutOverridesForTesting.removeValue(forKey: action)
+        }
+    }
+
+    static func removeAllShortcutOverridesForTesting() {
+        shortcutOverridesForTesting.removeAll()
+    }
+    #endif
 
     static func settingsFileManagedSubtitle(for action: Action) -> String? {
         guard isManagedBySettingsFile(action) else { return nil }

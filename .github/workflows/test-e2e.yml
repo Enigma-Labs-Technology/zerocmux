@@ -166,7 +166,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .ci-source-packages
-          key: spm-${{ inputs.runner || 'macos-latest' }}-${{ hashFiles('GhosttyTabs.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ inputs.runner || 'macos-latest' }}-${{ hashFiles('cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ inputs.runner || 'macos-latest' }}-
 
       - name: Resolve Swift packages
@@ -175,7 +175,7 @@ jobs:
           SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
           mkdir -p "$SOURCE_PACKAGES_DIR"
           for attempt in 1 2 3; do
-            if xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux-unit -configuration Debug \
+            if xcodebuild -project cmux.xcodeproj -scheme zerocmux-unit -configuration Debug \
               -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
               -resolvePackageDependencies; then
               exit 0
@@ -243,7 +243,7 @@ jobs:
           fi
 
           XCODEBUILD_CMD=(
-            xcodebuild -project GhosttyTabs.xcodeproj -scheme zerocmux -configuration Debug
+            xcodebuild -project cmux.xcodeproj -scheme zerocmux -configuration Debug
             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR"
             -disableAutomaticPackageResolution
             -destination "platform=macOS"

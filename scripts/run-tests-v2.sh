@@ -21,7 +21,7 @@ echo "== build =="
 # module file ... was built".
 rm -rf "$DERIVED_DATA_PATH/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules" || true
 xcodebuild \
-  -project GhosttyTabs.xcodeproj \
+  -project cmux.xcodeproj \
   -scheme zerocmux \
   -configuration Debug \
   -destination "platform=macOS" \

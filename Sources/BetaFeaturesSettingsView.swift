@@ -37,7 +37,7 @@ struct BetaFeaturesSettingsView: View {
             BetaFeaturesWarningNote(
                 String(
                     localized: "settings.betaFeatures.warning",
-                    defaultValue: "These features are unstable and may change or break. Enable them only when you are testing them."
+                    defaultValue: "Feed and Dock are unstable and may change or break. Enable them only when you are testing them."
                 )
             )
 
