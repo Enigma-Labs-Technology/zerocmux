@@ -248,18 +248,24 @@ build_helper() {
     build
     cli-helper
     -Dapp-runtime=none
-    -Dcrash-report-subdir=zerocmux/crash
     -Demit-macos-app=false
     -Demit-xcframework=false
     -Doptimize=ReleaseFast
     -Dsentry=false
-    --prefix
-    "$prefix"
   )
+
+  if grep -Fq '"crash-report-subdir"' "$GHOSTTY_DIR/src/build/Config.zig" 2>/dev/null; then
+    args+=("-Dcrash-report-subdir=${GHOSTTYKIT_CRASH_REPORT_SUBDIR:-zerocmux/crash}")
+  fi
 
   if [[ -n "$effective_target" ]]; then
     args+=("-Dtarget=$effective_target")
   fi
+
+  args+=(
+    --prefix
+    "$prefix"
+  )
 
   echo "Building Ghostty CLI helper with $zig_bin${target:+ for $target}"
   (

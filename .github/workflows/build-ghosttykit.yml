@@ -42,13 +42,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.ghosttykit-tag.outputs.tag }}"
-          if gh release view "$TAG" --repo "$GHOSTTYKIT_RELEASE_REPO" >/dev/null 2>&1; then
+          PRIMARY_TAG="${{ steps.ghosttykit-tag.outputs.tag }}"
+          LEGACY_TAG="xcframework-${{ steps.ghostty-sha.outputs.sha }}"
+          if gh release view "$PRIMARY_TAG" --repo "$GHOSTTYKIT_RELEASE_REPO" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release $TAG already exists, skipping build"
+            echo "Release $PRIMARY_TAG already exists, skipping build"
+          elif [ "$PRIMARY_TAG" != "$LEGACY_TAG" ] && gh release view "$LEGACY_TAG" --repo "$GHOSTTYKIT_RELEASE_REPO" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Legacy release $LEGACY_TAG already exists, skipping build"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Release $TAG not found, will build"
+            echo "Release $PRIMARY_TAG not found, will build"
           fi
 
       - name: Select Xcode
@@ -83,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/install-zig-ci.sh
-          cd ghostty && zig build -Demit-xcframework=true -Demit-macos-app=false -Dxcframework-target=universal -Doptimize=ReleaseFast -Dsentry=false -Dcrash-report-subdir=zerocmux/crash
+          ./scripts/build-ghosttykit-xcframework.sh
 
       - name: Package xcframework
         if: steps.check-release.outputs.exists == 'false'

@@ -274,10 +274,7 @@ else
     echo "==> Seeding cache from prebuilt GhosttyKit.xcframework"
   else
     echo "==> Building GhosttyKit.xcframework (this may take a few minutes)..."
-    (
-      cd ghostty
-      zig build -Demit-xcframework=true -Dxcframework-target=universal -Doptimize=ReleaseFast -Dsentry=false -Dcrash-report-subdir=zerocmux/crash
-    )
+    "$SCRIPT_DIR/build-ghosttykit-xcframework.sh"
     echo "$GHOSTTY_KEY" > "$LOCAL_KEY_STAMP"
     echo "$GHOSTTY_SHA" > "$LEGACY_LOCAL_SHA_STAMP"
   fi
