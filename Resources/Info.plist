@@ -177,7 +177,7 @@
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://github.com/kernelalex/zerocmux/releases/latest/download/appcast.xml</string>
 	<key>SUScheduledCheckInterval</key>

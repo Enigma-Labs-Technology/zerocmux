@@ -220,7 +220,7 @@ fileprivate struct PermissionRequestView: View {
 
                 Button(String(localized: "common.allow", defaultValue: "Allow")) {
                     request.reply(SUUpdatePermissionResponse(
-                        automaticUpdateChecks: false,
+                        automaticUpdateChecks: true,
                         sendSystemProfile: false
                     ))
                     dismiss()

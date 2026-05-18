@@ -20,18 +20,18 @@ class UpdateDriver: NSObject, SPUUserDriver {
 #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if env["CMUX_UI_TEST_TRIGGER_UPDATE_CHECK"] == "1" || env["CMUX_UI_TEST_AUTO_ALLOW_PERMISSION"] == "1" {
-            UpdateLogStore.shared.append("auto-deny automatic update permission (ui test)")
+            UpdateLogStore.shared.append("auto-allow automatic update checks (ui test)")
             DispatchQueue.main.async {
-                reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false))
+                reply(SUUpdatePermissionResponse(automaticUpdateChecks: true, sendSystemProfile: false))
             }
             return
         }
 #endif
-        // Never show Sparkle's permission UI. Background update checks and
-        // system profile sharing stay disabled unless a manual check is run.
-        UpdateLogStore.shared.append("auto-deny automatic update permission (no UI)")
+        // Never show Sparkle's permission UI. Background update checks are
+        // enabled, while system profile sharing stays disabled.
+        UpdateLogStore.shared.append("auto-allow automatic update checks (no UI)")
         DispatchQueue.main.async {
-            reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false))
+            reply(SUUpdatePermissionResponse(automaticUpdateChecks: true, sendSystemProfile: false))
         }
     }
 

@@ -13,13 +13,13 @@ enum UpdateSettings {
 
     static func apply(to defaults: UserDefaults) {
         defaults.register(defaults: [
-            automaticChecksKey: false,
+            automaticChecksKey: true,
             automaticallyUpdateKey: false,
             scheduledCheckIntervalKey: scheduledCheckInterval,
             sendProfileInfoKey: false,
         ])
 
-        defaults.set(false, forKey: automaticChecksKey)
+        defaults.set(true, forKey: automaticChecksKey)
 
         if let interval = defaults.object(forKey: scheduledCheckIntervalKey) as? NSNumber {
             let currentInterval = interval.doubleValue
@@ -138,8 +138,8 @@ class UpdateController {
         UpdateLogStore.shared.append("starting launch update probe")
         updater.checkForUpdateInformation()
 
-        // Re-probe every hour so the banner appears even if the app has been running
-        // for a while when a new version is published.
+        // Re-probe on the configured interval so the banner appears even if
+        // the app has been running for a while when a new version is published.
         backgroundProbeTimer?.invalidate()
         backgroundProbeTimer = Timer.scheduledTimer(withTimeInterval: backgroundProbeInterval, repeats: true) { [weak self] _ in
             guard let self, self.updater.automaticallyChecksForUpdates else { return }

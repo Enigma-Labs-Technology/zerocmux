@@ -552,7 +552,7 @@ final class GhosttyConfigTests: XCTestCase {
         XCTAssertFalse(ClaudeCodeIntegrationSettings.hooksEnabled(defaults: defaults))
     }
 
-    func testUpdateSettingsDisableAutomaticChecksAndProfileInfo() {
+    func testUpdateSettingsEnableAutomaticChecksAndDisableAutoInstallAndProfileInfo() {
         let suiteName = "cmux.tests.updateSettings.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             XCTFail("Failed to create isolated user defaults suite")
@@ -568,7 +568,7 @@ final class GhosttyConfigTests: XCTestCase {
 
         UpdateSettings.apply(to: defaults)
 
-        XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
+        XCTAssertTrue(defaults.bool(forKey: UpdateSettings.automaticChecksKey))
         XCTAssertFalse(defaults.bool(forKey: UpdateSettings.automaticallyUpdateKey))
         XCTAssertFalse(defaults.bool(forKey: UpdateSettings.sendProfileInfoKey))
     }
