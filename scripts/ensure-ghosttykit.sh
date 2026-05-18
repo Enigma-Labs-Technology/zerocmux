@@ -105,6 +105,7 @@ LEGACY_LOCAL_SHA_STAMP="$LOCAL_XCFRAMEWORK/.ghostty_sha"
 LOCK_DIR="$CACHE_ROOT/$GHOSTTY_KEY.lock"
 GHOSTTYKIT_CHECKSUMS_FILE="${CMUX_GHOSTTYKIT_CHECKSUMS_FILE:-$SCRIPT_DIR/ghosttykit-checksums.txt}"
 GHOSTTYKIT_ARCHIVE_VALIDATOR="${CMUX_GHOSTTYKIT_ARCHIVE_VALIDATOR:-$SCRIPT_DIR/validate-xcframework-archive.py}"
+GHOSTTYKIT_RELEASE_TAG_HELPER="${CMUX_GHOSTTYKIT_RELEASE_TAG_HELPER:-$SCRIPT_DIR/ghosttykit-release-tag.sh}"
 
 mkdir -p "$CACHE_ROOT"
 
@@ -141,7 +142,28 @@ try_fetch_prebuilt_xcframework() {
   fi
 
   local repo="${GHOSTTYKIT_REPO:-kernelalex/zerocmux}"
-  local url="${GHOSTTYKIT_URL:-https://github.com/${repo}/releases/download/xcframework-${GHOSTTY_SHA}/GhosttyKit.xcframework.tar.gz}"
+  local primary_tag legacy_tag
+  if [[ -n "${GHOSTTYKIT_RELEASE_TAG:-}" ]]; then
+    primary_tag="$GHOSTTYKIT_RELEASE_TAG"
+  else
+    primary_tag="$("$GHOSTTYKIT_RELEASE_TAG_HELPER" "$GHOSTTY_SHA")"
+  fi
+  legacy_tag="xcframework-$GHOSTTY_SHA"
+
+  local urls=()
+  local tags=()
+  if [[ -n "${GHOSTTYKIT_URL:-}" ]]; then
+    urls+=("$GHOSTTYKIT_URL")
+    tags+=("${GHOSTTYKIT_RELEASE_TAG:-custom-url}")
+  else
+    urls+=("https://github.com/${repo}/releases/download/${primary_tag}/GhosttyKit.xcframework.tar.gz")
+    tags+=("$primary_tag")
+    if [[ -z "${GHOSTTYKIT_RELEASE_TAG:-}" && "$primary_tag" != "$legacy_tag" ]]; then
+      urls+=("https://github.com/${repo}/releases/download/${legacy_tag}/GhosttyKit.xcframework.tar.gz")
+      tags+=("$legacy_tag")
+    fi
+  fi
+
   if [[ ! -f "$GHOSTTYKIT_CHECKSUMS_FILE" ]]; then
     echo "==> Missing GhosttyKit checksum manifest; falling back to local build." >&2
     return 1
@@ -158,11 +180,45 @@ try_fetch_prebuilt_xcframework() {
   tmp_tar="$tmp_dir/GhosttyKit.xcframework.tar.gz"
   tmp_extract="$tmp_dir/extract"
   mkdir -p "$tmp_extract"
-  echo "==> Fetching prebuilt GhosttyKit.xcframework for ${GHOSTTY_SHA:0:12}..."
-  if ! curl -fSL --connect-timeout 10 --max-time 300 --retry 3 --retry-delay 2 --retry-all-errors -o "$tmp_tar" "$url"; then
+
+  local downloaded_tag="" last_download_status=1
+  for i in "${!urls[@]}"; do
+    local url="${urls[$i]}"
+    local tag="${tags[$i]}"
+    rm -f "$tmp_tar"
+
+    if [[ "${#urls[@]}" -gt 1 ]]; then
+      local http_status
+      http_status="$(
+        curl --silent --show-error --location --head \
+          --connect-timeout 10 \
+          --max-time "${CMUX_GHOSTTYKIT_DOWNLOAD_HEAD_MAX_TIME:-30}" \
+          --output /dev/null \
+          --write-out "%{http_code}" \
+          "$url" || true
+      )"
+      if [[ "$http_status" == "404" ]]; then
+        echo "==> GhosttyKit release $tag is not available; trying fallback if present."
+        continue
+      fi
+    fi
+
+    echo "==> Fetching prebuilt GhosttyKit.xcframework for ${GHOSTTY_SHA:0:12} from $tag..."
+    if curl -fSL --connect-timeout 10 --max-time 300 --retry 3 --retry-delay 2 --retry-all-errors -o "$tmp_tar" "$url"; then
+      downloaded_tag="$tag"
+      break
+    fi
+
+    last_download_status=$?
+    if [[ "$i" -lt "$((${#urls[@]} - 1))" ]]; then
+      echo "==> GhosttyKit release $tag download failed; trying fallback release."
+    fi
+  done
+
+  if [[ -z "$downloaded_tag" ]]; then
     rm -rf "$tmp_dir"
     echo "==> Prebuilt xcframework not available; falling back to local build."
-    return 1
+    return "$last_download_status"
   fi
 
   actual_sha="$(hash_file "$tmp_tar")"

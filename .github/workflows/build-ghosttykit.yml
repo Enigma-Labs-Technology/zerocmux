@@ -30,12 +30,19 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Ghostty SHA: $SHA"
 
+      - name: Compute GhosttyKit release tag
+        id: ghosttykit-tag
+        run: |
+          TAG="$(./scripts/ghosttykit-release-tag.sh "${{ steps.ghostty-sha.outputs.sha }}")"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "GhosttyKit release tag: $TAG"
+
       - name: Check if xcframework release already exists
         id: check-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="xcframework-${{ steps.ghostty-sha.outputs.sha }}"
+          TAG="${{ steps.ghosttykit-tag.outputs.tag }}"
           if gh release view "$TAG" --repo "$GHOSTTYKIT_RELEASE_REPO" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release $TAG already exists, skipping build"
@@ -93,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="xcframework-${{ steps.ghostty-sha.outputs.sha }}"
+          TAG="${{ steps.ghosttykit-tag.outputs.tag }}"
           gh release create "$TAG" \
             --repo "$GHOSTTYKIT_RELEASE_REPO" \
             --prerelease \
