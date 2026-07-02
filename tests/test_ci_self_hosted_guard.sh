@@ -31,16 +31,16 @@ if grep -R -n -E 'runs-on:.*(warp-macos|blacksmith-|depot-)|os: (warp-macos|blac
 fi
 
 # ci.yml jobs
-check_runner "$CI_FILE" "app-host-unit-tests" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
-check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "app-host-unit-tests" 'runs-on: macos-15' "GitHub-hosted macos-15"
+check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: macos-15' "GitHub-hosted macos-15"
 check_runner "$CI_FILE" "release-build" 'runs-on: macos-26' "GitHub-hosted macos-26"
-check_runner "$CI_FILE" "ui-regressions" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "ui-regressions" 'runs-on: macos-15' "GitHub-hosted macos-15"
 
 # build-ghosttykit.yml
-check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-15' "GitHub-hosted macos-15"
 
 # ci-macos-compat.yml uses matrix.os.
-check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-15' "GitHub-hosted macos-15"
 
 # release.yml signing job
 check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: macos-26' "GitHub-hosted macos-26"

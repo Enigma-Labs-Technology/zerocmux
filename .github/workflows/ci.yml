@@ -284,7 +284,7 @@ jobs:
     # sessions. Validated head-to-head that blacksmith-6vcpu-macos-15 runs the
     # full app-host suite with 0 unexpected failures, identical to warp-15, so
     # route through the shared MACOS_RUNNER_15 var like the other macOS jobs.
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -651,7 +651,7 @@ jobs:
   swift-package-tests:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
@@ -832,7 +832,7 @@ jobs:
     # Keep lag validation separate from UI regressions so functional UI failures
     # and performance regressions stay isolated. Broader interactive UI suites
     # still run via test-e2e.yml on GitHub-hosted runners.
-    runs-on: macos-latest
+    runs-on: macos-15
     # A cold DerivedData cache (any project.pbxproj or Package.resolved change
     # mints a new cache key with no restore-keys fallback) forces a full
     # zerocmux build whose Swift codegen alone can run 20+ min. Project/package
@@ -1146,7 +1146,7 @@ jobs:
   release-ghostty-cli-helper:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
@@ -1330,7 +1330,7 @@ jobs:
   ui-regressions:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     # Cold builds after project/package changes can spend more than 25 minutes
     # in build-for-testing before the UI regression script starts.
     timeout-minutes: 45

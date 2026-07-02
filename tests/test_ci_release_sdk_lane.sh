@@ -40,8 +40,8 @@ require_job_contains \
 require_job_contains \
   "$CI_FILE" \
   "release-ghostty-cli-helper" \
-  'runs-on: macos-latest' \
-  "CI must build the real Ghostty CLI helper on a GitHub-hosted macOS runner"
+  'runs-on: macos-15' \
+  "CI must build the real Ghostty CLI helper on GitHub-hosted macOS 15"
 
 require_job_contains \
   "$CI_FILE" \
