@@ -23511,6 +23511,15 @@ struct CMUXCLI {
         return source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "clear"
     }
 
+    private func socketPanelOption(_ surfaceId: String?) -> String {
+        guard let surfaceId = surfaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !surfaceId.isEmpty,
+              UUID(uuidString: surfaceId) != nil else {
+            return ""
+        }
+        return " --panel=\(surfaceId)"
+    }
+
     private func resolvePreferredWorkspaceIdForClaudeHook(
         preferred: String?,
         fallback: String?,
@@ -27714,24 +27723,11 @@ export default CMUXSessionRestore;
             switch action {
             case .codexConfigToml:
                 let configPath = "\(configDir)/config.toml"
-                let existingContent: String = fm.fileExists(atPath: configPath)
-                    ? ((try? String(contentsOfFile: configPath, encoding: .utf8)) ?? "")
-                    : ""
-                let newContent: String
-                if existingContent.contains("codex_hooks") {
-                    // Replace existing value (might be false) with true
-                    newContent = existingContent.replacingOccurrences(
-                        of: "codex_hooks\\s*=\\s*\\w+",
-                        with: "codex_hooks = true",
-                        options: .regularExpression
-                    )
-                } else if existingContent.contains("[features]") {
-                    newContent = existingContent.replacingOccurrences(
-                        of: "[features]",
-                        with: "[features]\ncodex_hooks = true"
-                    )
+                let existingContent: String
+                if fm.fileExists(atPath: configPath) {
+                    existingContent = try String(contentsOfFile: configPath, encoding: .utf8)
                 } else {
-                    newContent = existingContent + "\n[features]\ncodex_hooks = true\n"
+                    existingContent = ""
                 }
                 let trustClean = Self.codexConfigTomlRemovingHookTrust(
                     in: existingContent,

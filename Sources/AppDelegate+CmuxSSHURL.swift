@@ -378,7 +378,7 @@ final class CmuxSSHURLProcessLauncher {
     }
 }
 
-private final class ProcessOutputCollector {
+final class ProcessOutputCollector {
     private let stdout: Pipe
     private let stderr: Pipe
     private let lock = NSLock()

@@ -1129,7 +1129,7 @@ final class CmuxSettingsFileStore {
         synchronizeManagedAppearanceTerminalTheme: Bool
     ) {
         var backups = loadBackups()
-        var importedManagedDefaults = loadImportedManagedDefaults()
+        var importedManagedDefaults = Self.loadImportedManagedDefaults()
         var sideEffects = ManagedDefaultBatchSideEffects()
         let currentManagedIdentifiers = Set(backups.keys)
         let nextManagedIdentifiers = Set(snapshot.managedUserDefaults.keys)

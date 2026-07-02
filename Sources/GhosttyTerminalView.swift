@@ -11990,18 +11990,6 @@ struct GhosttyTerminalView: NSViewRepresentable {
         return .synchronizeWithoutLayoutFlush(window)
     }
 
-    enum HostCallbackPortalGeometrySynchronizationAction: Equatable {
-        case synchronizeWithoutLayoutFlush(window: Int)
-        case skip
-    }
-
-    static func hostCallbackPortalGeometrySynchronizationAction(
-        window: Int?
-    ) -> HostCallbackPortalGeometrySynchronizationAction {
-        guard let window else { return .skip }
-        return .synchronizeWithoutLayoutFlush(window: window)
-    }
-
     private static func synchronizePortalGeometry(
         for host: HostContainerView,
         coordinator: Coordinator

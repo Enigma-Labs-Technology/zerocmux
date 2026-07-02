@@ -250,7 +250,7 @@ extension TerminalController: ControlSystemContext {
 
             if shouldActivate {
                 if let targetWindow {
-                    _ = AppDelegate.shared?.focusWindowForAppActivation(targetWindow, reason: .feedback)
+                    _ = AppDelegate.shared?.focusWindowForAppActivation(targetWindow, reason: .focusMainWindow)
                 } else {
                     // The legacy body also passed .activateIgnoringOtherApps; the
                     // option is deprecated and documented as a no-op on macOS 14+

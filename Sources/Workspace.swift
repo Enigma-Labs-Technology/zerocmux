@@ -8372,38 +8372,23 @@ final class Workspace: Identifiable, ObservableObject {
     func openOrFocusFilePreviewSplit(
         from panelId: UUID,
         filePath: String
-    ) -> MarkdownPanel? {
-        let markdownPanel = MarkdownPanel(workspaceId: id, filePath: filePath)
-        panels[markdownPanel.id] = markdownPanel
-        panelTitles[markdownPanel.id] = markdownPanel.displayTitle
-
-        let newTab = Bonsplit.Tab(
-            title: markdownPanel.displayTitle,
-            icon: markdownPanel.displayIcon,
-            kind: SurfaceKind.markdown.rawValue,
-            isDirty: markdownPanel.isDirty,
-            isLoading: false,
-            isPinned: false
-        )
-        bindSurface(newTab.id, toPanelId: markdownPanel.id)
-
-        isProgrammaticSplit = true
-        defer { isProgrammaticSplit = false }
-        guard bonsplitController.splitPane(
-            paneId,
-            orientation: orientation,
-            withTab: newTab,
-            insertFirst: insertFirst
-        ) != nil else {
-            panels.removeValue(forKey: markdownPanel.id)
-            panelTitles.removeValue(forKey: markdownPanel.id)
-            removeSurfaceMapping(forSurfaceId: newTab.id)
-            return nil
+    ) -> FilePreviewPanel? {
+        let canonical = (filePath as NSString).resolvingSymlinksInPath
+        for (existingId, panel) in panels {
+            guard let preview = panel as? FilePreviewPanel else { continue }
+            if (preview.filePath as NSString).resolvingSymlinksInPath == canonical {
+                focusPanel(existingId)
+                return preview
+            }
         }
 
-        guard let sourcePane = paneId(forPanelId: panelId) else { return nil }
+        if let targetPane = preferredRightSideTargetPane(fromPanelId: panelId) {
+            return newFilePreviewSurface(inPane: targetPane, filePath: filePath, focus: true)
+        }
+
+        guard let sourcePaneId = paneId(forPanelId: panelId) else { return nil }
         return splitPaneWithFilePreview(
-            targetPane: sourcePane,
+            targetPane: sourcePaneId,
             orientation: .horizontal,
             insertFirst: false,
             filePath: filePath
@@ -8676,7 +8661,9 @@ final class Workspace: Identifiable, ObservableObject {
             panel.close()
         }
         panels.removeAll(keepingCapacity: false)
-        surfaceIdToPanelId.removeAll(keepingCapacity: false)
+        for surfaceId in Array(surfaceIdToPanelId.keys) {
+            removeSurfaceMapping(forSurfaceId: surfaceId)
+        }
         panelSubscriptions.removeAll(keepingCapacity: false)
         pendingRemoteTerminalChildExitSurfaceIds.removeAll(keepingCapacity: false)
         pruneSurfaceMetadata(validSurfaceIds: [])

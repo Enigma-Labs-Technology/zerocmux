@@ -18,20 +18,6 @@ private func browserPopupPanelShouldSuppressStaleCloseTabShortcut(_ event: NSEve
 /// NSPanel subclass that intercepts the configured Close Tab shortcut before the swizzled
 /// `cmux_performKeyEquivalent` can dispatch it to the main menu's
 /// "Close Tab" action (which would close the parent browser tab).
-final class BrowserPopupPanel: NSPanel {
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if AppDelegate.shared?.handleBrowserPopupCloseShortcutKeyEquivalent(event: event, popupWindow: self) == true {
-            return true
-        }
-        if browserPopupPanelShouldSuppressStaleCloseTabShortcut(event) {
-            #if DEBUG
-            cmuxDebugLog("popup.panel.closeShortcut suppressStaleDefault")
-            #endif
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-}
 
 /// Hosts a popup `CmuxWebView` in a standalone `NSPanel`, created when a page
 /// calls `window.open()` (scripted new-window requests).

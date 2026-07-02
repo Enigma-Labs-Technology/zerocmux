@@ -1,13 +1,6 @@
 import CmuxFoundation
 import SwiftUI
 
-func titlebarShortcutHintShouldShow(
-    shortcut: StoredShortcut,
-    alwaysShowShortcutHints: Bool,
-    modifierPressed: Bool
-) -> Bool {
-    !shortcut.isUnbound && (alwaysShowShortcutHints || (shortcut.command && modifierPressed))
-}
 
 enum ShortcutHintAnimation {
     static let visibility: Animation = .easeOut(duration: 0.12)

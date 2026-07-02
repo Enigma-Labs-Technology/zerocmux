@@ -5976,13 +5976,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             TerminalController.shared.setActiveTabManager(nil)
         }
 
-        commandPaletteVisibilityByWindowId.removeValue(forKey: windowId)
-        commandPalettePendingOpenByWindowId.removeValue(forKey: windowId)
-        commandPaletteRecentRequestAtByWindowId.removeValue(forKey: windowId)
-        commandPaletteEscapeSuppressionByWindowId.remove(windowId)
-        commandPaletteEscapeSuppressionStartedAtByWindowId.removeValue(forKey: windowId)
-        commandPaletteSelectionByWindowId.removeValue(forKey: windowId)
-        commandPaletteSnapshotByWindowId.removeValue(forKey: windowId)
+        // zerocmux: command-palette per-window state now lives in CmuxCommandPalette
+        // and is cleaned up with the window contexts above.
     }
 #endif
 
@@ -16025,11 +16020,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         browserPanelOwning(webView)?.isBrowserFocusModeActive == true
     }
 
-    private func isWebViewFocused(_ panel: BrowserPanel) -> Bool {
-        guard let window = panel.webView.window else { return false }
-        guard let fr = window.firstResponder as? NSView else { return false }
-        return fr.isDescendant(of: panel.webView)
-    }
 
     private func browserFocusModePanelForShortcutEvent(_ event: NSEvent) -> BrowserPanel? {
         // Resolve the panel from the web view that owns the responder chain (the
