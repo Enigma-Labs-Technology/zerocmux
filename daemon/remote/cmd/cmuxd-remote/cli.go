@@ -130,7 +130,7 @@ func init() {
 	}
 }
 
-// runCLI is the entry point for the "cli" subcommand (or busybox "cmux" invocation).
+// runCLI is the entry point for the "cli" subcommand (or busybox "zerocmux" invocation).
 func runCLI(args []string) int {
 	socketPath := os.Getenv("CMUX_SOCKET_PATH")
 
@@ -141,7 +141,7 @@ func runCLI(args []string) int {
 		switch args[i] {
 		case "--socket":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "cmux: --socket requires a path")
+				fmt.Fprintln(os.Stderr, "zerocmux: --socket requires a path")
 				return 2
 			}
 			socketPath = args[i+1]
@@ -177,7 +177,7 @@ doneFlags:
 		refreshAddr = readSocketAddrFile
 	}
 	if socketPath == "" {
-		fmt.Fprintln(os.Stderr, "cmux: CMUX_SOCKET_PATH not set and --socket not provided")
+		fmt.Fprintln(os.Stderr, "zerocmux: CMUX_SOCKET_PATH not set and --socket not provided")
 		return 1
 	}
 
@@ -226,7 +226,7 @@ doneFlags:
 
 	spec, ok := commandIndex[cmdName]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "cmux: unknown command %q\n", cmdName)
+		fmt.Fprintf(os.Stderr, "zerocmux: unknown command %q\n", cmdName)
 		return 2
 	}
 
@@ -236,7 +236,7 @@ doneFlags:
 	case protoV2:
 		return execV2(socketPath, spec, cmdArgs, jsonOutput, refreshAddr)
 	default:
-		fmt.Fprintf(os.Stderr, "cmux: internal error: unknown protocol for %q\n", cmdName)
+		fmt.Fprintf(os.Stderr, "zerocmux: internal error: unknown protocol for %q\n", cmdName)
 		return 1
 	}
 }
@@ -248,7 +248,7 @@ func execV1(socketPath string, spec *commandSpec, args []string, refreshAddr fun
 	if !spec.noParams {
 		parsed, err := parseFlags(args, spec.flagKeys)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+			fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 			return 2
 		}
 		for _, key := range spec.flagKeys {
@@ -260,7 +260,7 @@ func execV1(socketPath string, spec *commandSpec, args []string, refreshAddr fun
 
 	resp, err := socketRoundTrip(socketPath, cmd, refreshAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 		return 1
 	}
 	fmt.Print(resp)
@@ -280,7 +280,7 @@ func execV2(socketPath string, spec *commandSpec, args []string, jsonOutput bool
 	if !spec.noParams {
 		parsed, err := parseFlags(args, spec.flagKeys)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+			fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 			return 2
 		}
 		// Map flag keys to JSON param keys (e.g. "workspace" → "workspace_id" where appropriate)
@@ -305,7 +305,7 @@ func execV2(socketPath string, spec *commandSpec, args []string, jsonOutput bool
 
 	resp, err := socketRoundTripV2(socketPath, spec.v2Method, params, refreshAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 		return 1
 	}
 
@@ -320,21 +320,21 @@ func execV2(socketPath string, spec *commandSpec, args []string, jsonOutput bool
 // runRPC sends an arbitrary JSON-RPC method with optional JSON params.
 func runRPC(socketPath string, args []string, jsonOutput bool, refreshAddr func() string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "cmux rpc: requires a method name")
+		fmt.Fprintln(os.Stderr, "zerocmux rpc: requires a method name")
 		return 2
 	}
 	method := args[0]
 	var params map[string]any
 	if len(args) > 1 {
 		if err := json.Unmarshal([]byte(args[1]), &params); err != nil {
-			fmt.Fprintf(os.Stderr, "cmux rpc: invalid JSON params: %v\n", err)
+			fmt.Fprintf(os.Stderr, "zerocmux rpc: invalid JSON params: %v\n", err)
 			return 2
 		}
 	}
 
 	resp, err := socketRoundTripV2(socketPath, method, params, refreshAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 		return 1
 	}
 	fmt.Println(resp)
@@ -537,7 +537,7 @@ func runWorkspaceGroupRelay(socketPath string, args []string, jsonOutput bool, r
 // runBrowserRelay handles "zerocmux browser <subcommand>" by mapping to browser.* v2 methods.
 func runBrowserRelay(socketPath string, args []string, jsonOutput bool, refreshAddr func() string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "cmux browser: requires a subcommand (%s)\n", browserSubcommandHint())
+		fmt.Fprintf(os.Stderr, "zerocmux browser: requires a subcommand (%s)\n", browserSubcommandHint())
 		return 2
 	}
 
@@ -546,14 +546,14 @@ func runBrowserRelay(socketPath string, args []string, jsonOutput bool, refreshA
 
 	spec, ok := browserCommands[sub]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "cmux browser: unknown subcommand %q\n", sub)
+		fmt.Fprintf(os.Stderr, "zerocmux browser: unknown subcommand %q\n", sub)
 		return 2
 	}
 
 	params := make(map[string]any)
 	parsed, err := parseFlags(subArgs, spec.flagKeys)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cmux browser: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zerocmux browser: %v\n", err)
 		return 2
 	}
 	for _, key := range spec.flagKeys {
@@ -599,7 +599,7 @@ func runBrowserRelay(socketPath string, args []string, jsonOutput bool, refreshA
 
 	resp, err := socketRoundTripV2(socketPath, spec.method, params, refreshAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cmux: %v\n", err)
+		fmt.Fprintf(os.Stderr, "zerocmux: %v\n", err)
 		return 1
 	}
 	if jsonOutput {
@@ -786,7 +786,7 @@ func parseFlags(args []string, keys []string) (parsedFlags, error) {
 }
 
 // readSocketAddrFile reads the socket address from ~/.cmux/socket_addr as a fallback
-// when CMUX_SOCKET_PATH is not set. Written by the cmux app after the relay establishes.
+// when CMUX_SOCKET_PATH is not set. Written by the zerocmux app after the relay establishes.
 func readSocketAddrFile() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -834,7 +834,7 @@ func currentRelayAuth(socketPath string) *relayAuthState {
 	return readRelayAuthFile(socketPath)
 }
 
-// dialSocket connects to the cmux socket. If addr contains a colon and doesn't
+// dialSocket connects to the zerocmux socket. If addr contains a colon and doesn't
 // start with '/', it's treated as a TCP address (host:port); otherwise Unix socket.
 // For TCP connections, refreshAddr is used only to recover from a stale socket_addr
 // rewrite, not to poll for relay readiness.
@@ -894,7 +894,7 @@ func authenticateRelayConn(conn net.Conn, auth *relayAuthState) error {
 	if err := json.Unmarshal([]byte(line), &challenge); err != nil {
 		return fmt.Errorf("invalid relay auth challenge")
 	}
-	if challenge.Protocol != "cmux-relay-auth" || challenge.Version != 1 || challenge.RelayID != auth.RelayID || challenge.Nonce == "" {
+	if challenge.Protocol != "zerocmux-relay-auth" || challenge.Version != 1 || challenge.RelayID != auth.RelayID || challenge.Nonce == "" {
 		return fmt.Errorf("relay auth challenge mismatch")
 	}
 
@@ -1056,7 +1056,7 @@ func randomHex(n int) string {
 }
 
 func cliUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: cmux [--socket <path>] [--json] <command> [args...]")
+	fmt.Fprintln(os.Stderr, "Usage: zerocmux [--socket <path>] [--json] <command> [args...]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  ping                     Check connectivity")
@@ -1077,8 +1077,8 @@ func cliUsage() {
 	fmt.Fprintln(os.Stderr, "                            set-anchor, new-workspace, set-color, set-icon, move, focus)")
 	fmt.Fprintln(os.Stderr, "  browser <sub>             Browser commands through the local zerocmux browser relay")
 	fmt.Fprintln(os.Stderr, "  claude-teams [args...]     Launch Claude Code in teammate mode")
-	fmt.Fprintln(os.Stderr, "  omo [args...]              Launch OpenCode with cmux integration")
-	fmt.Fprintln(os.Stderr, "  omx [args...]              Launch Oh My Codex with cmux integration")
-	fmt.Fprintln(os.Stderr, "  omc [args...]              Launch Oh My Claude Code with cmux integration")
+	fmt.Fprintln(os.Stderr, "  omo [args...]              Launch OpenCode with zerocmux integration")
+	fmt.Fprintln(os.Stderr, "  omx [args...]              Launch Oh My Codex with zerocmux integration")
+	fmt.Fprintln(os.Stderr, "  omc [args...]              Launch Oh My Claude Code with zerocmux integration")
 	fmt.Fprintln(os.Stderr, "  rpc <method> [json-params] Send arbitrary JSON-RPC")
 }

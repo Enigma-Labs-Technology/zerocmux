@@ -9,12 +9,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ${{ vars.MACOS_RUNNER_15 || 'macos-latest' }}
+          - os: macos-latest
             timeout: 30
             startup_smoke: true
             virtual_display: true
             skip_zig: false
-          - os: ${{ vars.MACOS_RUNNER_26 || 'macos-latest' }}
+          - os: macos-26
             timeout: 30
             startup_smoke: true
             virtual_display: false

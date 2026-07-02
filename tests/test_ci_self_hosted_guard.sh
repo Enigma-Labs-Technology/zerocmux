@@ -31,9 +31,9 @@ if grep -R -n -E 'runs-on:.*(warp-macos|blacksmith-|depot-)|os: (warp-macos|blac
 fi
 
 # ci.yml jobs
-check_runner "$CI_FILE" "tests" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "app-host-unit-tests" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
 check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
-check_runner "$CI_FILE" "release-build" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
+check_runner "$CI_FILE" "release-build" 'runs-on: macos-26' "GitHub-hosted macos-26"
 check_runner "$CI_FILE" "ui-regressions" 'runs-on: macos-latest' "GitHub-hosted macos-latest"
 
 # build-ghosttykit.yml

@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   activation_changes:
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       macos: ${{ steps.detect.outputs.macos }}
@@ -356,7 +356,7 @@ jobs:
       - activation_changes
       - activation-session-benchmark
     if: ${{ always() }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check activation benchmark routing

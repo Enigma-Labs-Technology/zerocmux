@@ -29,31 +29,27 @@ require_job_contains() {
   fi
 }
 
-require_job_contains \
-  "$RELEASE_FILE" \
-  "build-ghostty-cli-helper" \
-  'runs-on: ${{ vars.MACOS_RUNNER_15 || '\''blacksmith-6vcpu-macos-15'\'' }}' \
-  "release must build the real Ghostty CLI helper on macOS 15"
-
+# zerocmux: release.yml keeps the fork's single-job model (prebuilt GhosttyKit +
+# zig installed via install-zig-ci.sh); GitHub-hosted runners only.
 require_job_contains \
   "$RELEASE_FILE" \
   "build-sign-notarize" \
-  'runs-on: ${{ vars.MACOS_RUNNER_26 || '\''blacksmith-6vcpu-macos-26'\'' }}' \
-  "release must sign+notarize on the macOS 26 runner variable after importing the Developer ID intermediate chain"
+  './scripts/download-prebuilt-ghosttykit.sh' \
+  "release must consume the prebuilt GhosttyKit xcframework"
 
 require_job_contains \
   "$CI_FILE" \
   "release-ghostty-cli-helper" \
-  'runs-on: ${{ vars.MACOS_RUNNER_15 || '\''blacksmith-6vcpu-macos-15'\'' }}' \
-  "CI must build the real Ghostty CLI helper on macOS 15"
+  'runs-on: macos-latest' \
+  "CI must build the real Ghostty CLI helper on a GitHub-hosted macOS runner"
 
 require_job_contains \
   "$CI_FILE" \
   "release-build" \
-  'runs-on: ${{ vars.MACOS_RUNNER_26_RELEASE || '\''blacksmith-6vcpu-macos-26'\'' }}' \
-  "CI release-build must compile the app on macOS 26 using the release-specific runner variable"
+  'runs-on: macos-26' \
+  "CI release-build must compile the app on GitHub-hosted macOS 26"
 
-for workflow in "$CI_FILE" "$RELEASE_FILE"; do
+for workflow in "$CI_FILE"; do
   if ! grep -Fq "CMUX_SKIP_ZIG_BUILD=1 xcodebuild" "$workflow"; then
     echo "FAIL: $(basename "$workflow") must skip the in-build Zig helper on macOS 26" >&2
     exit 1

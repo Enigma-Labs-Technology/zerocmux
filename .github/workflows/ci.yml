@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       macos: ${{ steps.detect.outputs.macos }}
@@ -82,7 +82,7 @@ jobs:
             --head-sha "$HEAD_SHA"
 
   workflow-guard-tests:
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -225,7 +225,7 @@ jobs:
   remote-daemon-tests:
     needs: changes
     if: ${{ needs.changes.outputs.go == 'true' }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -246,7 +246,7 @@ jobs:
   react-apps-check:
     needs: changes
     if: ${{ needs.changes.outputs.web == 'true' }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -284,7 +284,7 @@ jobs:
     # sessions. Validated head-to-head that blacksmith-6vcpu-macos-15 runs the
     # full app-host suite with 0 unexpected failures, identical to warp-15, so
     # route through the shared MACOS_RUNNER_15 var like the other macOS jobs.
-    runs-on: ${{ vars.MACOS_RUNNER_15 || 'macos-latest' }}
+    runs-on: macos-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -603,7 +603,7 @@ jobs:
       - swift-package-tests
       - agent-session-web-resources
     if: ${{ always() }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check app-host unit test routing
@@ -651,7 +651,7 @@ jobs:
   swift-package-tests:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: ${{ vars.MACOS_RUNNER_15 || 'macos-latest' }}
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
@@ -808,7 +808,7 @@ jobs:
   agent-session-web-resources:
     needs: changes
     if: ${{ needs.changes.outputs.agent_session_web == 'true' }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -832,7 +832,7 @@ jobs:
     # Keep lag validation separate from UI regressions so functional UI failures
     # and performance regressions stay isolated. Broader interactive UI suites
     # still run via test-e2e.yml on GitHub-hosted runners.
-    runs-on: ${{ vars.MACOS_RUNNER_DISPLAY || 'macos-latest' }}
+    runs-on: macos-latest
     # A cold DerivedData cache (any project.pbxproj or Package.resolved change
     # mints a new cache key with no restore-keys fallback) forces a full
     # zerocmux build whose Swift codegen alone can run 20+ min. Project/package
@@ -842,7 +842,7 @@ jobs:
     steps:
       - name: Validate display runner identity
         env:
-          REQUESTED_RUNNER: ${{ vars.MACOS_RUNNER_DISPLAY || 'macos-latest' }}
+          REQUESTED_RUNNER: macos-latest
           RUNNER_CONTEXT_NAME: ${{ runner.name }}
         run: |
           set -euo pipefail
@@ -1146,7 +1146,7 @@ jobs:
   release-ghostty-cli-helper:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: ${{ vars.MACOS_RUNNER_15 || 'macos-latest' }}
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
@@ -1214,7 +1214,7 @@ jobs:
     # Release builds need enough disk for a universal Release build plus the
     # restored SwiftPM cache. Default to a clean paid macOS 26 runner instead
     # of the generic persistent macOS 26 pool.
-    runs-on: ${{ vars.MACOS_RUNNER_26_RELEASE || 'macos-latest' }}
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
@@ -1330,14 +1330,14 @@ jobs:
   ui-regressions:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
-    runs-on: ${{ vars.MACOS_RUNNER_DISPLAY || 'macos-latest' }}
+    runs-on: macos-latest
     # Cold builds after project/package changes can spend more than 25 minutes
     # in build-for-testing before the UI regression script starts.
     timeout-minutes: 45
     steps:
       - name: Validate display runner identity
         env:
-          REQUESTED_RUNNER: ${{ vars.MACOS_RUNNER_DISPLAY || 'macos-latest' }}
+          REQUESTED_RUNNER: macos-latest
           RUNNER_CONTEXT_NAME: ${{ runner.name }}
         run: |
           set -euo pipefail
@@ -1838,7 +1838,7 @@ jobs:
       - release-build
       - ui-regressions
     if: ${{ always() }}
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Check routed CI jobs
         env:
