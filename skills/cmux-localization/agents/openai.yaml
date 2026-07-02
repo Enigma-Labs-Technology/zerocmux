@@ -1,0 +1,4 @@
+interface:
+  display_name: "zerocmux Localization"
+  short_description: "Localize and audit every zerocmux user-facing string change."
+  default_prompt: "Use this skill whenever changing zerocmux UI text, settings labels, menu items, shortcut metadata, schema/config text, docs, command/help output, alerts, tooltips, or web messages."

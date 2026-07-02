@@ -1,4 +1,5 @@
 import XCTest
+import CmuxTerminal
 import AppKit
 
 #if canImport(cmux_DEV)
@@ -190,7 +191,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
         try "plain text".write(to: fileURL, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
-        let pasteboard = NSPasteboard(name: .init("cmux-test-legacy-filename-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-legacy-filename-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         pasteboard.setPropertyList(
             [fileURL.path],
@@ -211,16 +212,16 @@ final class FinderFileDropRegressionTests: XCTestCase {
 
     func testImageFileURLDropInsertsOriginalLocalImagePaths() throws {
         let imageDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux image file drop \(UUID().uuidString)")
+            .appendingPathComponent("zerocmux image file drop \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: imageDirectory) }
 
-        let firstURL = imageDirectory.appendingPathComponent("cmux ssh 2.png")
-        let secondURL = imageDirectory.appendingPathComponent("cmux ssh.png")
+        let firstURL = imageDirectory.appendingPathComponent("zerocmux ssh 2.png")
+        let secondURL = imageDirectory.appendingPathComponent("zerocmux ssh.png")
         try make1x1PNG(color: .systemRed).write(to: firstURL)
         try make1x1PNG(color: .systemGreen).write(to: secondURL)
 
-        let pasteboard = NSPasteboard(name: .init("cmux-test-image-file-url-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-image-file-url-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.writeObjects([firstURL as NSURL, secondURL as NSURL]))
 
@@ -245,16 +246,16 @@ final class FinderFileDropRegressionTests: XCTestCase {
 
     func testImageFileURLDropUploadsOriginalFilesForRemoteTerminal() throws {
         let imageDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux remote image file drop \(UUID().uuidString)")
+            .appendingPathComponent("zerocmux remote image file drop \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: imageDirectory) }
 
-        let firstURL = imageDirectory.appendingPathComponent("cmux ssh 2.png")
-        let secondURL = imageDirectory.appendingPathComponent("cmux ssh.png")
+        let firstURL = imageDirectory.appendingPathComponent("zerocmux ssh 2.png")
+        let secondURL = imageDirectory.appendingPathComponent("zerocmux ssh.png")
         try make1x1PNG(color: .systemRed).write(to: firstURL)
         try make1x1PNG(color: .systemGreen).write(to: secondURL)
 
-        let pasteboard = NSPasteboard(name: .init("cmux-test-remote-image-file-url-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-remote-image-file-url-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.writeObjects([firstURL as NSURL, secondURL as NSURL]))
 
@@ -271,7 +272,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
     }
 
     func testImagePasteboardDropMaterializesEveryImageForLocalInsertion() throws {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-multi-image-local-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-multi-image-local-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         let items = try [
             makeImagePasteboardItem(color: .systemRed),
@@ -292,7 +293,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
             .split(separator: " ")
             .map(String.init)
         defer {
-            GhosttyPasteboardHelper.cleanupTransferredTemporaryImageFiles(
+            GhosttyApp.terminalPasteboard.cleanupTransferredTemporaryImageFiles(
                 paths.map { URL(fileURLWithPath: $0) }
             )
         }
@@ -303,7 +304,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
     }
 
     func testImagePasteboardItemWithDirectImageAndRTFDAttachmentMaterializesOnce() throws {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-image-rtfd-duplicate-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-image-rtfd-duplicate-\(UUID().uuidString)"))
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.writeObjects([try makeImagePasteboardItemWithRTFDAttachment(color: .systemRed)]))
 
@@ -320,7 +321,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
             .split(separator: " ")
             .map(String.init)
         defer {
-            GhosttyPasteboardHelper.cleanupTransferredTemporaryImageFiles(
+            GhosttyApp.terminalPasteboard.cleanupTransferredTemporaryImageFiles(
                 paths.map { URL(fileURLWithPath: $0) }
             )
         }
@@ -331,7 +332,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
     }
 
     func testImagePasteboardItemTIFFDropNormalizesToPNGForLocalInsertion() throws {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-image-tiff-normalization-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-image-tiff-normalization-\(UUID().uuidString)"))
         pasteboard.clearContents()
         let item = NSPasteboardItem()
         item.setData(try make1x1TIFF(color: .systemBlue), forType: .tiff)
@@ -350,7 +351,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
             .split(separator: " ")
             .map(String.init)
         defer {
-            GhosttyPasteboardHelper.cleanupTransferredTemporaryImageFiles(
+            GhosttyApp.terminalPasteboard.cleanupTransferredTemporaryImageFiles(
                 paths.map { URL(fileURLWithPath: $0) }
             )
         }
@@ -364,7 +365,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
     }
 
     func testImagePasteboardDropMaterializesEveryImageForRemoteUpload() throws {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-multi-image-remote-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-multi-image-remote-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         let items = try [
             makeImagePasteboardItem(color: .systemRed),
@@ -381,7 +382,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
             return XCTFail("expected remote image upload plan, got \(plan)")
         }
         defer {
-            GhosttyPasteboardHelper.cleanupTransferredTemporaryImageFiles(urls)
+            GhosttyApp.terminalPasteboard.cleanupTransferredTemporaryImageFiles(urls)
         }
 
         XCTAssertEqual(urls.count, 2)
@@ -391,8 +392,8 @@ final class FinderFileDropRegressionTests: XCTestCase {
 
     func testFileExplorerPathInsertionEscapesMultiplePathsLikeTerminalDrop() {
         let paths = [
-            "/tmp/cmux path/one file.txt",
-            "/tmp/cmux path/quote's file.txt"
+            "/tmp/zerocmux path/one file.txt",
+            "/tmp/zerocmux path/quote's file.txt"
         ]
 
         let text = FileExplorerTerminalPathInsertion.insertedText(forPaths: paths)
@@ -407,10 +408,10 @@ final class FinderFileDropRegressionTests: XCTestCase {
 
     func testFileURLTextInsertionIsExtensionAgnostic() {
         let urls = [
-            URL(fileURLWithPath: "/tmp/cmux drop/image.png"),
-            URL(fileURLWithPath: "/tmp/cmux drop/report.pdf"),
-            URL(fileURLWithPath: "/tmp/cmux drop/movie.mov"),
-            URL(fileURLWithPath: "/tmp/cmux drop/archive.zip")
+            URL(fileURLWithPath: "/tmp/zerocmux drop/image.png"),
+            URL(fileURLWithPath: "/tmp/zerocmux drop/report.pdf"),
+            URL(fileURLWithPath: "/tmp/zerocmux drop/movie.mov"),
+            URL(fileURLWithPath: "/tmp/zerocmux drop/archive.zip")
         ]
 
         let text = TerminalImageTransferPlanner.insertedText(forFileURLs: urls)
@@ -496,7 +497,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
     }
 
     func testFilePreviewTransferRoutesToTextEvenWhenTargetPasteboardOmitsFileURLType() throws {
-        let filePath = "/tmp/cmux drop/from image pane.png"
+        let filePath = "/tmp/zerocmux drop/from image pane.png"
         let dragId = UUID()
         _ = FilePreviewDragRegistry.shared.register(
             FilePreviewDragEntry(filePath: filePath, displayTitle: "from image pane.png"),
@@ -520,7 +521,7 @@ final class FinderFileDropRegressionTests: XCTestCase {
             "sourcePaneId": UUID().uuidString,
             "sourceProcessId": Int(ProcessInfo.processInfo.processIdentifier),
         ])
-        let pasteboard = NSPasteboard(name: .init("cmux-test-file-preview-transfer-drop-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-file-preview-transfer-drop-\(UUID().uuidString)"))
         pasteboard.clearContents()
         pasteboard.setData(transferData, forType: DragOverlayRoutingPolicy.filePreviewTransferType)
         pasteboard.setData(transferData, forType: DragOverlayRoutingPolicy.bonsplitTabTransferType)
@@ -587,8 +588,8 @@ final class FinderFileDropRegressionTests: XCTestCase {
     func testFileExplorerRelativePathInsertionStandardizesMacOSSymlinkedRoots() {
         XCTAssertEqual(
             FileExplorerTerminalPathInsertion.relativePath(
-                for: "/private/tmp/cmux-project/Sources/App.swift",
-                rootPath: "/tmp/cmux-project"
+                for: "/private/tmp/zerocmux-project/Sources/App.swift",
+                rootPath: "/tmp/zerocmux-project"
             ),
             "Sources/App.swift"
         )

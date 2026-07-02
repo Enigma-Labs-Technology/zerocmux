@@ -27,6 +27,7 @@ from typing import Deque, Iterable
 
 DEFAULT_HZ = 120.0
 DEFAULT_HISTORY = 480
+BORDER_THICKNESS = 2
 
 
 @dataclass
@@ -123,14 +124,14 @@ def cmux_bin_from_args(value: str | None) -> str:
     env_value = os.environ.get("CMUX_FRAME_PROBE_CMUX")
     if env_value:
         return env_value
-    tmp_cli = "/tmp/cmux-cli"
+    tmp_cli = "/tmp/zerocmux-cli"
     if os.access(tmp_cli, os.X_OK):
         return tmp_cli
-    for candidate in ("cmux-dev", "cmux"):
+    for candidate in ("zerocmux-dev", "zerocmux"):
         resolved = shutil.which(candidate)
         if resolved:
             return resolved
-    return "cmux"
+    return "zerocmux"
 
 
 def notify_command(cmux_bin: str, index: int) -> list[str]:
@@ -246,12 +247,17 @@ def classify_gap(gap_ms: float, budget_ms: float) -> str:
 def draw(stdscr: curses.window, stats: FrameStats, notify: NotifyState, args: argparse.Namespace) -> None:
     stdscr.erase()
     height, width = stdscr.getmaxyx()
+    content_y = BORDER_THICKNESS if height >= BORDER_THICKNESS * 2 + 1 else 0
+    content_x = BORDER_THICKNESS if width >= BORDER_THICKNESS * 2 + 1 else 0
+    content_height = max(0, height - (BORDER_THICKNESS * 2)) if height >= BORDER_THICKNESS * 2 + 1 else height
+    content_width = max(0, width - (BORDER_THICKNESS * 2)) if width >= BORDER_THICKNESS * 2 + 1 else width
     summary = stats.summary()
     budget = stats.budget_ms
     rows = [
         "zerocmux frame probe TUI",
+        f"visible terminal cells: columns={width} rows={height} inner={content_width}x{content_height}",
         "terminal cadence proxy, not a Core Animation compositor counter",
-        f"target={stats.hz:.1f}Hz budget={budget:.2f}ms hiccup>={stats.hiccup_ms:.2f}ms cmux={args.cmux_bin}",
+        f"target={stats.hz:.1f}Hz budget={budget:.2f}ms hiccup>={stats.hiccup_ms:.2f}ms zerocmux={args.cmux_bin}",
         f"socket={args.socket_path or os.environ.get('CMUX_SOCKET_PATH') or '(auto)'}",
         "",
         (
@@ -271,16 +277,42 @@ def draw(stdscr: curses.window, stats: FrameStats, notify: NotifyState, args: ar
         "",
     ]
 
-    for row, text in enumerate(rows[: max(0, height - 1)]):
-        add_line(stdscr, row, 0, text[: max(0, width - 1)])
+    draw_bounds_border(stdscr, height, width)
 
-    if height > len(rows):
-        graph_width = max(0, width - 1)
+    max_text_rows = max(0, content_height - 1)
+    for row, text in enumerate(rows[:max_text_rows]):
+        add_line(stdscr, content_y + row, content_x, text[: max(0, content_width)])
+
+    graph_y = content_y + min(len(rows), max_text_rows)
+    if content_height > len(rows) and graph_y < height - 1:
+        graph_width = max(0, content_width)
         samples = list(stats.gaps_ms)[-graph_width:]
         graph = "".join(classify_gap(gap, budget) for gap in samples)
-        add_line(stdscr, len(rows), 0, graph)
+        add_line(stdscr, graph_y, content_x, graph)
 
     stdscr.refresh()
+
+
+def draw_bounds_border(stdscr: curses.window, height: int, width: int) -> None:
+    if height < 2 or width < 2:
+        return
+    if height < BORDER_THICKNESS * 2 + 1 or width < BORDER_THICKNESS * 2 + 2:
+        horizontal = "#" * width
+        add_line(stdscr, 0, 0, horizontal)
+        add_line(stdscr, height - 1, 0, horizontal)
+        for row in range(1, height - 1):
+            add_line(stdscr, row, 0, "#")
+            add_line(stdscr, row, width - 1, "#")
+        return
+
+    top = "#" * width
+    inner = "##" + "=" * max(0, width - 4) + "##"
+    for row in range(BORDER_THICKNESS):
+        add_line(stdscr, row, 0, top if row == 0 else inner)
+        add_line(stdscr, height - 1 - row, 0, top if row == 0 else inner)
+    for row in range(BORDER_THICKNESS, height - BORDER_THICKNESS):
+        add_line(stdscr, row, 0, "##")
+        add_line(stdscr, row, width - BORDER_THICKNESS, "##")
 
 
 def notify_line(state: NotifyState, args: argparse.Namespace) -> str:
@@ -433,12 +465,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--cmux-bin",
         default=None,
-        help="zerocmux binary path, defaults to CMUX_FRAME_PROBE_CMUX, /tmp/cmux-cli, cmux-dev, then cmux",
+        help="zerocmux binary path, defaults to CMUX_FRAME_PROBE_CMUX, /tmp/zerocmux-cli, zerocmux-dev, then zerocmux",
     )
     parser.add_argument(
         "--socket-path",
         default=os.environ.get("CMUX_FRAME_PROBE_SOCKET"),
-        help="cmux Unix socket path, also accepted from CMUX_FRAME_PROBE_SOCKET",
+        help="zerocmux Unix socket path, also accepted from CMUX_FRAME_PROBE_SOCKET",
     )
     parser.add_argument(
         "--auto-notify",

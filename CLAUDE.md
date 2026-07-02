@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-zerocmux (formerly cmux) is a native macOS Swift/AppKit terminal workspace built
+zerocmux (formerly zerocmux) is a native macOS Swift/AppKit terminal workspace built
 on libghostty, with workspace tabs, split panes, an in-app browser, OSC-based
 notifications, and a CLI/socket automation surface. `README.md` and `AGENTS.md`
 have product-level details; this file is the operational guide for agents.
@@ -188,11 +188,11 @@ tail -f "$(cat /tmp/zerocmux-last-debug-log-path 2>/dev/null || echo /tmp/zerocm
 - Tagged Debug app (`./scripts/reload.sh --tag <tag>`): `/tmp/zerocmux-debug-<tag>.log`
 - `reload.sh` writes the current path to `/tmp/zerocmux-last-debug-log-path`
 - `reload.sh` writes the selected dev CLI path to `/tmp/zerocmux-last-cli-path`
-- `reload.sh` updates `/tmp/zerocmux-cli` and `$HOME/.local/bin/zerocmux-dev` to that CLI, plus legacy `cmux` aliases
+- `reload.sh` updates `/tmp/zerocmux-cli` and `$HOME/.local/bin/zerocmux-dev` to that CLI, plus legacy `zerocmux` aliases
 
 - Implementation: `Packages/CMUXDebugLog/Sources/CMUXDebugLog/DebugEventLog.swift`
 - App shim: `Sources/App/DebugLogging.swift`
-- Free function `cmuxDebugLog("message")` — logs with timestamp and appends to file in real time from cmux code
+- Free function `cmuxDebugLog("message")` — logs with timestamp and appends to file in real time from zerocmux code
 - The package implementation and app shim are `#if DEBUG`; all call sites must be wrapped in `#if DEBUG` / `#endif`
 - 500-entry ring buffer; `CMUXDebugLog.DebugEventLog.shared.dump()` writes full buffer to file
 - Key events logged in `AppDelegate.swift` (monitor, performKeyEquivalent)
@@ -235,7 +235,7 @@ The app has a **Debug** menu in the macOS menu bar (only in DEBUG builds). Use i
 - **Submodule safety:** When modifying a submodule (ghostty, vendor/bonsplit, etc.), always push the submodule commit to its remote `main` branch BEFORE committing the updated pointer in the parent repo. Never commit on a detached HEAD or temporary branch — the commit will be orphaned and lost. Verify with: `cd <submodule> && git merge-base --is-ancestor HEAD origin/main`.
 - **All user-facing strings must be localized.** Use `String(localized: "key.name", defaultValue: "English text")` for every string shown in the UI (labels, buttons, menus, dialogs, tooltips, error messages). Keys go in `Resources/Localizable.xcstrings` with translations for all supported languages (currently English and Japanese). Never use bare string literals in SwiftUI `Text()`, `Button()`, alert titles, etc.
 - **Shortcut policy:** Every new zerocmux-owned keyboard shortcut must be added to `KeyboardShortcutSettings`, visible/editable in Settings, supported in `~/.config/cmux/cmux.json`, and documented in the keyboard shortcut and configuration docs.
-- **Snapshot boundary for list subtrees.** In any SwiftUI panel whose `body` contains a `LazyVStack` / `LazyHStack` / `List` / `ForEach` of rows, no view below that boundary may hold a reference to an `ObservableObject` / `@Observable` store (no `@ObservedObject`, `@EnvironmentObject`, `@StateObject`, `@Bindable`, or even a plain `let store: SomeStore` property). Rows and drop-gaps receive immutable value snapshots plus closure action bundles only. Violating this reintroduces the "orthogonal @Published change invalidates every row and thrashes `LazyLayoutViewCache`" class of 100% CPU spin loop that hit the Sessions panel and the workspace sidebar (https://github.com/manaflow-ai/cmux/issues/2586). Reference pattern: `IndexSectionActions` / `SectionGapActions` / `SessionSearchFn` in `Sources/SessionIndexView.swift`.
+- **Snapshot boundary for list subtrees.** In any SwiftUI panel whose `body` contains a `LazyVStack` / `LazyHStack` / `List` / `ForEach` of rows, no view below that boundary may hold a reference to an `ObservableObject` / `@Observable` store (no `@ObservedObject`, `@EnvironmentObject`, `@StateObject`, `@Bindable`, or even a plain `let store: SomeStore` property). Rows and drop-gaps receive immutable value snapshots plus closure action bundles only. Violating this reintroduces the "orthogonal @Published change invalidates every row and thrashes `LazyLayoutViewCache`" class of 100% CPU spin loop that hit the Sessions panel and the workspace sidebar (https://github.com/kernelalex/zerocmux/issues/2586). Reference pattern: `IndexSectionActions` / `SectionGapActions` / `SessionSearchFn` in `Sources/SessionIndexView.swift`.
 - **No state mutation inside view-body computations.** A function called from `body` (directly or through a helper) must not write `@Published` state, schedule a `Task { @MainActor in store.x = … }`, or `DispatchQueue.main.async` a store write. That creates a re-render feedback loop and pegs the main thread (same root-cause family as the snapshot-boundary rule). State-changing work triggered by "new data appeared" belongs in a `reload()` completion, a `didSet`, or a property-observer — never in the projection that feeds `ForEach`.
 
 ## Test quality policy

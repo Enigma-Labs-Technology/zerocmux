@@ -1,8 +1,8 @@
-# cmux Customization Examples
+# zerocmux Customization Examples
 
 Use these examples as starting points. Merge only the relevant top-level keys
 into the target config file named above each code block. Unlabeled JSON examples
-target `cmux.json`. Preserve unrelated sections, then run `cmux reload-config`
+target `cmux.json`. Preserve unrelated sections, then run `zerocmux reload-config`
 when available.
 
 Prefer project-local `.cmux/cmux.json` for team workflows and global
@@ -124,14 +124,14 @@ controls for repeated local development.
 {
   "controls": [
     { "id": "git", "title": "Git", "command": "lazygit", "cwd": ".", "height": 320 },
-    { "id": "feed", "title": "Feed", "command": "cmux feed tui --opentui", "height": 260 }
+    { "id": "feed", "title": "Feed", "command": "zerocmux feed tui --opentui", "height": 260 }
   ]
 }
 ```
 
 ## SSH Devbox
 
-Use this when the user's normal environment is remote, or when local cmux should
+Use this when the user's normal environment is remote, or when local zerocmux should
 open a known SSH session beside project notes or a browser preview.
 
 ```json
@@ -243,7 +243,7 @@ for the docs stack.
                       {
                         "type": "terminal",
                         "name": "Markdown",
-                        "command": "cmux markdown open docs/README.md --direction right --focus false; exec ${SHELL:-/bin/zsh} -l"
+                        "command": "zerocmux markdown open docs/README.md --direction right --focus false; exec ${SHELL:-/bin/zsh} -l"
                       }
                     ]
                   }
@@ -321,7 +321,7 @@ or release-monitoring commands. Prefer Dock controls for long-running monitors.
     {
       "id": "feed",
       "title": "Feed",
-      "command": "cmux feed tui --opentui",
+      "command": "zerocmux feed tui --opentui",
       "height": 260
     }
   ]

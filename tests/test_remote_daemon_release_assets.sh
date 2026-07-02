@@ -2,13 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmux-remote-assets-test.XXXXXX")"
+OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/zerocmux-remote-assets-test.XXXXXX")"
 trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 "$ROOT_DIR/scripts/build_remote_daemon_release_assets.sh" \
   --version "0.62.0-test" \
   --release-tag "v0.62.0-test" \
-  --repo "manaflow-ai/cmux" \
+  --repo "kernelalex/zerocmux" \
   --output-dir "$OUTPUT_DIR" >/dev/null
 
 for asset in \
@@ -67,13 +67,13 @@ PY
 # ------------------------------------------------------------------
 # Test with --asset-suffix (nightly-style immutable asset names)
 # ------------------------------------------------------------------
-SUFFIX_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmux-remote-assets-suffix-test.XXXXXX")"
+SUFFIX_DIR="$(mktemp -d "${TMPDIR:-/tmp}/zerocmux-remote-assets-suffix-test.XXXXXX")"
 trap 'rm -rf "$OUTPUT_DIR" "$SUFFIX_DIR"' EXIT
 
 "$ROOT_DIR/scripts/build_remote_daemon_release_assets.sh" \
   --version "0.62.0-nightly.123456" \
   --release-tag "nightly" \
-  --repo "manaflow-ai/cmux" \
+  --repo "kernelalex/zerocmux" \
   --output-dir "$SUFFIX_DIR" \
   --asset-suffix "123456" >/dev/null
 

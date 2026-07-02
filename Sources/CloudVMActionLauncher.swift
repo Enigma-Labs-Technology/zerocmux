@@ -5,14 +5,29 @@ import Foundation
 final class CloudVMActionLauncher {
     static let shared = CloudVMActionLauncher()
 
+    struct Completion {
+        let terminationStatus: Int32
+        let output: String
+        let workspaceId: UUID?
+
+        var succeeded: Bool {
+            terminationStatus == 0
+        }
+    }
+
     private init() {}
 
     func terminateAll() {
     }
 
     @discardableResult
-    func start(socketPath: String, preferredWindow: NSWindow?) -> Bool {
+    func start(
+        socketPath: String,
+        preferredWindow: NSWindow?,
+        onCompletion: ((Completion) -> Void)? = nil
+    ) -> Bool {
         _ = socketPath
+        _ = onCompletion
         presentStartFailure(
             summary: String(
                 localized: "command.cloudVM.failed.removed",

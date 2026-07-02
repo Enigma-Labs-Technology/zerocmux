@@ -8,9 +8,9 @@ final class FindSelectionShortcutUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        dataPath = "/tmp/cmux-ui-test-find-selection-\(UUID().uuidString).json"
+        dataPath = "/tmp/zerocmux-ui-test-find-selection-\(UUID().uuidString).json"
         try? FileManager.default.removeItem(atPath: dataPath)
-        socketPath = "/tmp/cmux-ui-test-socket-\(UUID().uuidString).sock"
+        socketPath = "/tmp/zerocmux-ui-test-socket-\(UUID().uuidString).sock"
         try? FileManager.default.removeItem(atPath: socketPath)
     }
 
@@ -309,11 +309,12 @@ final class FindSelectionShortcutUITests: XCTestCase {
     }
 
     private func waitForCondition(timeout: TimeInterval, predicate: @escaping () -> Bool) -> Bool {
-        let expectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in predicate() },
-            object: nil
-        )
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if predicate() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return predicate()
     }
 
 }

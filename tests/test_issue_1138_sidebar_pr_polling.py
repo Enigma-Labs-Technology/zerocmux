@@ -188,7 +188,7 @@ def _run_case(base: Path, *, shell: str, shell_args: list[str], script: Path, sc
     bindir = base / "bin"
     repo = base / "repo"
     repo_git = repo / ".git"
-    socket_path = base / "cmux.sock"
+    socket_path = base / "zerocmux.sock"
     send_log = base / f"{shell}-{scenario}-send.log"
     gh_args_log = base / f"{shell}-{scenario}-gh-args.log"
     head_file = repo_git / "HEAD"
@@ -271,8 +271,8 @@ def _run_case(base: Path, *, shell: str, shell_args: list[str], script: Path, sc
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     cases = [
-        ("zsh", ["-f", "-c"], root / "Resources" / "shell-integration" / "cmux-zsh-integration.zsh"),
-        ("bash", ["--noprofile", "--norc", "-c"], root / "Resources" / "shell-integration" / "cmux-bash-integration.bash"),
+        ("zsh", ["-f", "-c"], root / "Resources" / "shell-integration" / "zerocmux-zsh-integration.zsh"),
+        ("bash", ["--noprofile", "--norc", "-c"], root / "Resources" / "shell-integration" / "zerocmux-bash-integration.bash"),
     ]
     scenarios = [
         "prompt_does_not_call_gh",

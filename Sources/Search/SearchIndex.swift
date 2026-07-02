@@ -481,7 +481,7 @@ actor SearchIndex {
 extension URL {
     static var cmuxSearchDatabaseURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("cmux", isDirectory: true)
+            .appendingPathComponent("zerocmux", isDirectory: true)
             .appendingPathComponent("search.db", isDirectory: false)
     }
 }

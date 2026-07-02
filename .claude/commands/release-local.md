@@ -18,11 +18,11 @@ Full end-to-end release built locally. Bumps version, updates changelog, tags, t
 - If there are no user-facing changes, ask the user if they still want to release
 - **Collect contributors:** For each PR referenced in the commits, get the author:
   ```bash
-  gh pr view <N> --repo manaflow-ai/cmux --json author --jq '.author.login'
+  gh pr view <N> --repo kernelalex/zerocmux --json author --jq '.author.login'
   ```
 - Also check for linked issue reporters (the person who filed the bug):
   ```bash
-  gh issue view <N> --repo manaflow-ai/cmux --json author --jq '.author.login'
+  gh issue view <N> --repo kernelalex/zerocmux --json author --jq '.author.login'
   ```
 - Build a deduplicated list of all contributor `@handle`s for the release
 
@@ -55,7 +55,7 @@ Full end-to-end release built locally. Bumps version, updates changelog, tags, t
 
 This script handles: GhosttyKit build, xcodebuild, Sparkle key injection, codesigning, notarization (app + DMG), appcast generation, GitHub release upload, homebrew cask update, and cleanup.
 
-If the script fails, run `say "cmux release failed"`.
+If the script fails, run `say "zerocmux release failed"`.
 
 ### 7. Verify homebrew cask
 

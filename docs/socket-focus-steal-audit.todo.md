@@ -1,7 +1,7 @@
 # Socket/CLI No-Focus-Steal Todo
 
 ## Goal
-Ensure commands run through the cmux Unix socket/CLI do not steal user focus from the current UI workflow.
+Ensure commands run through the zerocmux Unix socket/CLI do not steal user focus from the current UI workflow.
 
 Policy target:
 - App activation/window raising from socket commands: **never**.

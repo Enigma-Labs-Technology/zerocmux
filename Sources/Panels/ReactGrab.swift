@@ -363,7 +363,7 @@ extension BrowserPanel {
                 refreshSessionToken();
                 var lastActive;
                 api.registerPlugin({
-                    name: 'cmux-bridge',
+                    name: 'zerocmux-bridge',
                     hooks: {
                         onStateChange: function(state) {
                             if (state.isActive === lastActive) return;

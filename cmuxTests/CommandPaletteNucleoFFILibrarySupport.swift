@@ -115,7 +115,7 @@ final class NucleoLibrary {
         let crateTarget = sourceRoot.appendingPathComponent("Native/CommandPaletteNucleoFFI/target")
         paths.append(
             crateTarget
-                .appendingPathComponent("cmux-nucleo-ffi")
+                .appendingPathComponent("zerocmux-nucleo-ffi")
                 .appendingPathComponent(libraryFileName)
                 .path
         )

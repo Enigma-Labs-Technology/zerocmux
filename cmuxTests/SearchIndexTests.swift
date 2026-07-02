@@ -380,7 +380,7 @@ final class SearchIndexTests: XCTestCase {
 
     private func makeFixture() throws -> (directoryURL: URL, databaseURL: URL) {
         let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-search-index-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-search-index-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         return (directoryURL, directoryURL.appendingPathComponent("search.db", isDirectory: false))
     }

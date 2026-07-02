@@ -10,15 +10,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-Usage: cmux-diagnostics [--include-context]
+Usage: zerocmux-diagnostics [--include-context]
 
-Print a read-only, support-safe cmux diagnostics report. By default this avoids
+Print a read-only, support-safe zerocmux diagnostics report. By default this avoids
 workspace names, cwd paths, hook contents, session JSON, and secrets.
 EOF
       exit 0
       ;;
     *)
-      printf 'cmux-diagnostics: unknown option: %s\n' "$1" >&2
+      printf 'zerocmux-diagnostics: unknown option: %s\n' "$1" >&2
       exit 1
       ;;
   esac
@@ -83,14 +83,14 @@ marker_summary() {
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 skill_dir="$(cd -- "$script_dir/.." >/dev/null 2>&1 && pwd)"
 skills_root="$(cd -- "$skill_dir/.." >/dev/null 2>&1 && pwd)"
-settings_helper="$skills_root/cmux-settings/scripts/cmux-settings"
-if [[ ! -x "$settings_helper" && -x "$HOME/.agents/skills/cmux-settings/scripts/cmux-settings" ]]; then
-  settings_helper="$HOME/.agents/skills/cmux-settings/scripts/cmux-settings"
-elif [[ ! -x "$settings_helper" && -x "$HOME/.codex/skills/cmux-settings/scripts/cmux-settings" ]]; then
-  settings_helper="$HOME/.codex/skills/cmux-settings/scripts/cmux-settings"
+settings_helper="$skills_root/zerocmux-settings/scripts/zerocmux-settings"
+if [[ ! -x "$settings_helper" && -x "$HOME/.agents/skills/zerocmux-settings/scripts/zerocmux-settings" ]]; then
+  settings_helper="$HOME/.agents/skills/zerocmux-settings/scripts/zerocmux-settings"
+elif [[ ! -x "$settings_helper" && -x "$HOME/.codex/skills/zerocmux-settings/scripts/zerocmux-settings" ]]; then
+  settings_helper="$HOME/.codex/skills/zerocmux-settings/scripts/zerocmux-settings"
 fi
 
-section "cmux diagnostics"
+section "zerocmux diagnostics"
 printf 'date: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 printf 'shell: %s\n' "${SHELL:-unknown}"
 printf 'inside_cmux: '
@@ -111,18 +111,18 @@ fi
 printf 'cmux_socket_password_set: %s\n' "$([[ -n "${CMUX_SOCKET_PASSWORD:-}" ]] && printf yes || printf no)"
 
 section "cli"
-if command -v cmux >/dev/null 2>&1; then
-  printf 'cmux_path: %s\n' "$(safe_path "$(command -v cmux)")"
-  if cmux --version >/dev/null 2>&1; then
-    printf 'cmux_version: %s\n' "$(cmux --version 2>/dev/null | head -n 1)"
+if command -v zerocmux >/dev/null 2>&1; then
+  printf 'cmux_path: %s\n' "$(safe_path "$(command -v zerocmux)")"
+  if zerocmux --version >/dev/null 2>&1; then
+    printf 'cmux_version: %s\n' "$(zerocmux --version 2>/dev/null | head -n 1)"
   else
     printf 'cmux_version: unavailable\n'
   fi
-  run_status "cmux_ping" cmux ping
-  run_status "cmux_capabilities" cmux capabilities --json
+  run_status "cmux_ping" zerocmux ping
+  run_status "cmux_capabilities" zerocmux capabilities --json
   if [[ "$include_context" -eq 1 ]]; then
     printf 'identify_json:\n'
-    cmux identify --json 2>/dev/null || printf '  unavailable\n'
+    zerocmux identify --json 2>/dev/null || printf '  unavailable\n'
   fi
 else
   printf 'cmux_path: missing\n'
@@ -143,20 +143,20 @@ fi
 
 section "hook configs"
 declare -a hook_checks=(
-  "codex:$HOME/.codex/hooks.json:cmux hooks codex"
+  "codex:$HOME/.codex/hooks.json:zerocmux hooks codex"
   "codex-config:$HOME/.codex/config.toml:codex_hooks"
-  "opencode-session:$HOME/.config/opencode/plugins/cmux-session.js:cmux hooks opencode"
-  "opencode-feed:$HOME/.config/opencode/plugins/cmux-feed.js:cmux hooks feed --source opencode"
-  "pi:$HOME/.pi/agent/extensions/cmux-session.ts:cmux hooks pi"
-  "amp:$HOME/.config/amp/plugins/cmux-session.ts:cmux hooks amp"
-  "cursor:$HOME/.cursor/hooks.json:cmux hooks cursor"
-  "gemini:$HOME/.gemini/settings.json:cmux hooks gemini"
-  "rovodev:$HOME/.rovodev/rovodev.yml:cmux hooks rovodev"
-  "hermes-agent:$HOME/.hermes/config.yaml:cmux hooks hermes-agent"
-  "copilot:$HOME/.copilot/settings.json:cmux hooks copilot"
-  "codebuddy:$HOME/.codebuddy/settings.json:cmux hooks codebuddy"
-  "factory:$HOME/.factory/settings.json:cmux hooks factory"
-  "qoder:$HOME/.qoder/settings.json:cmux hooks qoder"
+  "opencode-session:$HOME/.config/opencode/plugins/zerocmux-session.js:zerocmux hooks opencode"
+  "opencode-feed:$HOME/.config/opencode/plugins/zerocmux-feed.js:zerocmux hooks feed --source opencode"
+  "pi:$HOME/.pi/agent/extensions/zerocmux-session.ts:zerocmux hooks pi"
+  "amp:$HOME/.config/amp/plugins/zerocmux-session.ts:zerocmux hooks amp"
+  "cursor:$HOME/.cursor/hooks.json:zerocmux hooks cursor"
+  "gemini:$HOME/.gemini/settings.json:zerocmux hooks gemini"
+  "rovodev:$HOME/.rovodev/rovodev.yml:zerocmux hooks rovodev"
+  "hermes-agent:$HOME/.hermes/config.yaml:zerocmux hooks hermes-agent"
+  "copilot:$HOME/.copilot/settings.json:zerocmux hooks copilot"
+  "codebuddy:$HOME/.codebuddy/settings.json:zerocmux hooks codebuddy"
+  "factory:$HOME/.factory/settings.json:zerocmux hooks factory"
+  "qoder:$HOME/.qoder/settings.json:zerocmux hooks qoder"
 )
 for entry in "${hook_checks[@]}"; do
   IFS=: read -r name path marker <<<"$entry"

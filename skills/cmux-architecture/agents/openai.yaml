@@ -1,0 +1,4 @@
+interface:
+  display_name: "zerocmux Architecture"
+  short_description: "Apply zerocmux package, refactor, file organization, DocC, testability, and concurrency rules."
+  default_prompt: "Use this skill before adding or meaningfully rewriting Swift files, Swift packages, coordinators, services, repositories, package APIs, or Swift concurrency code in zerocmux."

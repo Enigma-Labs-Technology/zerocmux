@@ -17,7 +17,7 @@ final class CmuxConfigNamedColorTests: XCTestCase {
     }
 
     func testDecodeWorkspaceCommandAcceptsNamedColor() throws {
-        let suiteName = "cmux-config-named-color-\(UUID().uuidString)"
+        let suiteName = "zerocmux-config-named-color-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         WorkspaceTabColorSettings.persistPaletteMap(["Indigo": "#283593"], defaults: defaults)
@@ -38,7 +38,7 @@ final class CmuxConfigNamedColorTests: XCTestCase {
     }
 
     func testDecodeWorkspaceCommandRejectsUnknownNamedColor() {
-        let suiteName = "cmux-config-unknown-color-\(UUID().uuidString)"
+        let suiteName = "zerocmux-config-unknown-color-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 

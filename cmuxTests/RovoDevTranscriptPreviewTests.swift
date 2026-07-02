@@ -10,7 +10,7 @@ import XCTest
 final class RovoDevTranscriptPreviewTests: XCTestCase {
     func testReadsSessionContextMessagesObject() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -35,7 +35,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testReadsRovoDevMessageHistoryParts() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -83,7 +83,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testReadsRovoDevRoleBasedMessageHistory() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -114,7 +114,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testSkipsUnknownRovoDevToolWithEmptyInput() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -143,7 +143,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testSkipsUnknownRovoDevToolWithNonEmptyInput() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -176,7 +176,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testSkipsUnknownRovoDevToolNameFieldWithNonEmptyInput() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -209,7 +209,7 @@ final class RovoDevTranscriptPreviewTests: XCTestCase {
 
     func testDoesNotFallBackToSystemPromptParts() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-rovodev-preview-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 

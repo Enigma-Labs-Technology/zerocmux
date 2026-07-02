@@ -1,0 +1,4 @@
+interface:
+  display_name: "zerocmux Keyboard Shortcuts"
+  short_description: "Customize zerocmux shortcuts and preset layouts."
+  default_prompt: "Use this skill to help choose and apply zerocmux keyboard shortcut templates: inspect current bindings, propose layouts, apply selected action paths, validate cmux.json, and report exact revert commands."

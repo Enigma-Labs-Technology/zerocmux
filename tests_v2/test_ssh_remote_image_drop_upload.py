@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression: image drops into cmux ssh terminals upload to the remote host."""
+"""Regression: image drops into zerocmux ssh terminals upload to the remote host."""
 
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from cmux import cmux, cmuxError
+from zerocmux import cmux, cmuxError
 
 
-SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/cmux-debug.sock")
+SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 DEFAULT_CMD_TIMEOUT = float(os.environ.get("CMUX_TEST_CMD_TIMEOUT", "60"))
 SLOW_CMD_TIMEOUT = float(os.environ.get("CMUX_TEST_SLOW_CMD_TIMEOUT", "300"))
 
@@ -58,15 +58,15 @@ def _find_cli_binary() -> str:
     if env_cli and os.path.isfile(env_cli) and os.access(env_cli, os.X_OK):
         return env_cli
 
-    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/cmux-tests-v2/Build/Products/Debug/cmux")
+    fixed = os.path.expanduser("~/Library/Developer/Xcode/DerivedData/zerocmux-tests-v2/Build/Products/Debug/zerocmux")
     if os.path.isfile(fixed) and os.access(fixed, os.X_OK):
         return fixed
 
-    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/cmux"), recursive=True)
-    candidates += glob.glob("/tmp/cmux-*/Build/Products/Debug/cmux")
+    candidates = glob.glob(os.path.expanduser("~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug/zerocmux"), recursive=True)
+    candidates += glob.glob("/tmp/zerocmux-*/Build/Products/Debug/zerocmux")
     candidates = [path for path in candidates if os.path.isfile(path) and os.access(path, os.X_OK)]
     if not candidates:
-        raise cmuxError("Could not locate cmux CLI binary; set CMUXTERM_CLI")
+        raise cmuxError("Could not locate zerocmux CLI binary; set CMUXTERM_CLI")
     candidates.sort(key=lambda path: os.path.getmtime(path), reverse=True)
     return candidates[0]
 
@@ -116,7 +116,7 @@ def _wait_for_ssh(host: str, host_port: int, key_path: Path, timeout: float = 20
     raise cmuxError("Timed out waiting for SSH server in docker fixture")
 
 
-def _wait_remote_ready(client: cmux, workspace_id: str, timeout: float = 45.0) -> None:
+def _wait_remote_ready(client: zerocmux, workspace_id: str, timeout: float = 45.0) -> None:
     deadline = time.time() + timeout
     last_status = {}
     while time.time() < deadline:
@@ -150,16 +150,16 @@ def _run_cli_json(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise cmuxError(f"cmux {' '.join(args)} timed out after {timeout}s") from exc
+        raise cmuxError(f"zerocmux {' '.join(args)} timed out after {timeout}s") from exc
     if proc.returncode != 0:
-        raise cmuxError(f"cmux {' '.join(args)} failed: {(proc.stdout + proc.stderr).strip()}")
+        raise cmuxError(f"zerocmux {' '.join(args)} failed: {(proc.stdout + proc.stderr).strip()}")
     try:
         return json.loads(proc.stdout or "{}")
     except json.JSONDecodeError as exc:
         raise cmuxError(f"Invalid JSON output for {' '.join(args)}: {proc.stdout!r} ({exc})") from exc
 
 
-def _resolve_workspace_id(client: cmux, payload: dict) -> str:
+def _resolve_workspace_id(client: zerocmux, payload: dict) -> str:
     workspace_id = str(payload.get("workspace_id") or "")
     if workspace_id:
         return workspace_id
@@ -176,15 +176,15 @@ def _resolve_workspace_id(client: cmux, payload: dict) -> str:
     raise cmuxError(f"Unable to resolve workspace_id from payload: {payload}")
 
 
-def _focused_surface_id(client: cmux) -> str:
+def _focused_surface_id(client: zerocmux) -> str:
     ident = client.identify()
     surface_id = str((ident.get("focused") or {}).get("surface_id") or "")
     _must(bool(surface_id), f"Missing focused surface in identify payload: {ident}")
     return surface_id
 
 
-def _wait_for_remote_drop_paths(client: cmux, surface_id: str, expected_count: int, timeout: float = 20.0) -> list[str]:
-    pattern = re.compile(r"/tmp/cmux-drop-[0-9a-f-]+\.png")
+def _wait_for_remote_drop_paths(client: zerocmux, surface_id: str, expected_count: int, timeout: float = 20.0) -> list[str]:
+    pattern = re.compile(r"/tmp/zerocmux-drop-[0-9a-f-]+\.png")
     deadline = time.time() + timeout
     last = ""
     while time.time() < deadline:
@@ -236,7 +236,7 @@ def main() -> int:
         host = "root@127.0.0.1"
         _wait_for_ssh(host, host_ssh_port, key_path)
 
-        with cmux(SOCKET_PATH) as client:
+        with zerocmux(SOCKET_PATH) as client:
             payload = _run_cli_json(
                 cli,
                 [

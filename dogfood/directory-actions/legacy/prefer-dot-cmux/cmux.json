@@ -3,7 +3,7 @@
     "cmux.newTerminal": {
       "type": "command",
       "title": "Losing cmux.json",
-      "subtitle": "You should not see this in prefer-dot-cmux",
+      "subtitle": "You should not see this in prefer-dot-zerocmux",
       "command": "echo 'LOSING CMUX.JSON'; echo 'THIS SHOULD NOT WIN'; pwd",
       "target": "newTabInCurrentPane",
       "icon": { "type": "emoji", "value": "❌" }

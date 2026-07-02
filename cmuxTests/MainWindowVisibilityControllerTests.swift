@@ -290,7 +290,7 @@ final class MainWindowVisibilityControllerTests: XCTestCase {
         XCTAssertEqual(
             activationCount,
             0,
-            "Ordering a visible cmux window without transferring key focus must not make cmux the Launch Services frontmost app."
+            "Ordering a visible zerocmux window without transferring key focus must not make zerocmux the Launch Services frontmost app."
         )
         XCTAssertTrue(orderedRegardlessWindows.contains { $0 === window })
         XCTAssertTrue(madeKeyWindows.isEmpty)
@@ -333,7 +333,7 @@ final class MainWindowVisibilityControllerTests: XCTestCase {
 
         XCTAssertNil(
             revealedWindow,
-            "A passive reveal must not unminiaturize a background cmux window because AppKit can mark the app frontmost."
+            "A passive reveal must not unminiaturize a background zerocmux window because AppKit can mark the app frontmost."
         )
         XCTAssertEqual(activationCount, 0)
         XCTAssertTrue(deminiaturizedWindows.isEmpty)

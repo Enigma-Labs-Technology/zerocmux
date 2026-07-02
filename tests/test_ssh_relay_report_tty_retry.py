@@ -80,7 +80,7 @@ def main() -> int:
         state_path = tmp / "relay.state"
 
         _write_executable(
-            bin_dir / "cmux",
+            bin_dir / "zerocmux",
             """#!/bin/sh
 count=0
 if [ -r "$CMUX_TEST_STATE" ]; then
@@ -101,13 +101,13 @@ fi
             (
                 "zsh",
                 ["-f", "-c"],
-                SHELL_DIR / "cmux-zsh-integration.zsh",
+                SHELL_DIR / "zerocmux-zsh-integration.zsh",
                 "ttys777",
             ),
             (
                 "bash",
                 ["--noprofile", "--norc", "-c"],
-                SHELL_DIR / "cmux-bash-integration.bash",
+                SHELL_DIR / "zerocmux-bash-integration.bash",
                 "ttys888",
             ),
         ]

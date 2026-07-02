@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRATE_DIR="${ROOT}/Native/CommandPaletteNucleoFFI"
 LIB_NAME="libcmux_command_palette_nucleo_ffi.dylib"
-BUILD_OUTPUT_DIR="${TARGET_BUILD_DIR:-${CRATE_DIR}/target}/cmux-nucleo-ffi"
+BUILD_OUTPUT_DIR="${TARGET_BUILD_DIR:-${CRATE_DIR}/target}/zerocmux-nucleo-ffi"
 
 if ! command -v cargo >/dev/null 2>&1; then
   case "${CMUX_NUCLEO_FFI_REQUIRE_CARGO:-${CI:-0}}" in
@@ -102,6 +102,8 @@ if [ "${#libs[@]}" -eq 1 ]; then
 else
   lipo -create -output "${SOURCE_LIB}" "${libs[@]}"
 fi
+
+/usr/bin/install_name_tool -id "@rpath/${LIB_NAME}" "${SOURCE_LIB}"
 
 if [ -z "${TARGET_BUILD_DIR:-}" ]; then
   echo "built ${SOURCE_LIB}"

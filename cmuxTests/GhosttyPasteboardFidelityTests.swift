@@ -1,4 +1,5 @@
 import XCTest
+import CmuxTerminal
 import AppKit
 
 #if canImport(cmux_DEV)
@@ -25,7 +26,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         plainText: String,
         html: String
     ) throws -> NSPasteboard {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-\(namePrefix)-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-\(namePrefix)-\(UUID().uuidString)"))
         pasteboard.clearContents()
 
         pasteboard.declareTypes([.html, .png, .string], owner: nil)
@@ -40,7 +41,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         namePrefix: String,
         html: String
     ) throws -> NSPasteboard {
-        let pasteboard = NSPasteboard(name: .init("cmux-test-\(namePrefix)-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: .init("zerocmux-test-\(namePrefix)-\(UUID().uuidString)"))
         pasteboard.clearContents()
 
         pasteboard.declareTypes([.html, .png], owner: nil)
@@ -52,7 +53,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
 
     /// Regression test for issue #3069.
     /// Some apps advertise both a valid UTF-8 plain-text payload and a lossy
-    /// rich-text/image representation of the same selection. cmux should prefer
+    /// rich-text/image representation of the same selection. zerocmux should prefer
     /// the UTF-8 plain text for terminal paste instead of reconstructing text
     /// from the lossy HTML/RTF path and turning CJK into literal question marks.
     func testPrefersUTF8PlainTextOverLossyRichTextWhenImagePayloadAlsoExists() throws {
@@ -64,7 +65,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             koreanText
         )
     }
@@ -78,7 +79,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             koreanText
         )
     }
@@ -92,7 +93,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             koreanText
         )
     }
@@ -106,7 +107,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             koreanText
         )
     }
@@ -120,7 +121,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             richText
         )
     }
@@ -133,7 +134,7 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            cmuxPasteboardStringContentsForTesting(pasteboard),
+            GhosttyApp.terminalPasteboard.stringContents(from: pasteboard),
             "test?"
         )
     }
@@ -154,9 +155,9 @@ final class GhosttyPasteboardFidelityTests: XCTestCase {
             """
         )
 
-        XCTAssertNil(cmuxPasteboardStringContentsForTesting(pasteboard))
+        XCTAssertNil(GhosttyApp.terminalPasteboard.stringContents(from: pasteboard))
 
-        let imagePath = try XCTUnwrap(cmuxPasteboardImagePathForTesting(pasteboard))
+        let imagePath = try XCTUnwrap(GhosttyApp.terminalPasteboard.saveClipboardImageIfNeeded(from: pasteboard))
         defer { try? FileManager.default.removeItem(atPath: imagePath) }
 
         XCTAssertTrue(imagePath.hasSuffix(".png"))

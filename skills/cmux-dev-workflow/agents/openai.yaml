@@ -1,0 +1,4 @@
+interface:
+  display_name: "zerocmux Dev Workflow"
+  short_description: "Follow zerocmux setup, Xcode, and tagged ExtensionKit development rules."
+  default_prompt: "Use this skill when setting up zerocmux, touching Xcode project files, working with tagged debug builds, or adding sidebar extensions that must coexist with other dev builds."

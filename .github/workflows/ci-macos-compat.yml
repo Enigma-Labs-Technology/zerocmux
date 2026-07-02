@@ -9,11 +9,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: ${{ vars.MACOS_RUNNER_15 || 'macos-latest' }}
             timeout: 30
             startup_smoke: true
             virtual_display: true
             skip_zig: false
+          - os: ${{ vars.MACOS_RUNNER_26 || 'macos-latest' }}
+            timeout: 30
+            startup_smoke: true
+            virtual_display: false
+            skip_zig: true  # zig 0.15.2 MachO linker can't resolve libSystem on macOS 26
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
@@ -26,8 +31,14 @@ jobs:
         run: |
           set -euo pipefail
           # Pick the latest Xcode installed on the runner. GitHub-hosted macos-14
-          # defaults to Xcode 15.4, but the project needs Xcode 16+.
-          XCODE_APP="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort | tail -n 1)"
+          # defaults to Xcode 15.4, but the project needs Xcode 16+ (Swift tools
+          # version 6.0 required by SwiftPM dependencies).
+          XCODE_APP="$(
+            find /Applications -maxdepth 1 -name 'Xcode*.app' -print 2>/dev/null \
+              | sort \
+              | tail -n 1 \
+              || true
+          )"
           if [ -z "$XCODE_APP" ]; then
             XCODE_APP="/Applications/Xcode.app"
           fi
@@ -46,12 +57,17 @@ jobs:
           xcrun --sdk macosx --show-sdk-path
           sw_vers
 
+      - name: Capture Ghostty revision
+        id: ghostty-revision
+        run: |
+          echo "sha=$(git -C ghostty rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Cache GhosttyKit.xcframework
         id: cache-ghosttykit
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: GhosttyKit.xcframework
-          key: ghosttykit-${{ hashFiles('.gitmodules', 'ghostty') }}
+          key: ghosttykit-${{ steps.ghostty-revision.outputs.sha }}
 
       - name: Prepare GhosttyKit.xcframework
         if: steps.cache-ghosttykit.outputs.cache-hit != 'true'
@@ -66,11 +82,8 @@ jobs:
       - name: Cache DerivedData
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
-          path: ~/Library/Developer/Xcode/DerivedData/GhosttyTabs-*
-          key: deriveddata-${{ matrix.os }}-${{ env.XCODE_VER }}-${{ hashFiles('cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ hashFiles('cmux.xcodeproj/project.pbxproj') }}
-          restore-keys: |
-            deriveddata-${{ matrix.os }}-${{ env.XCODE_VER }}-${{ hashFiles('cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
-            deriveddata-${{ matrix.os }}-${{ env.XCODE_VER }}-
+          path: ~/Library/Developer/Xcode/DerivedData/cmux-*
+          key: deriveddata-${{ matrix.os }}-${{ env.XCODE_VER }}-${{ hashFiles('cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ hashFiles('cmux.xcodeproj/project.pbxproj') }}-${{ steps.ghostty-revision.outputs.sha }}
 
       - name: Cache Swift packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -78,6 +91,9 @@ jobs:
           path: .ci-source-packages
           key: spm-${{ matrix.os }}-${{ hashFiles('cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ matrix.os }}-
+
+      - name: Sanitize Swift package cache
+        run: python3 scripts/ci/sanitize-xcode-source-packages-cache.py .ci-source-packages
 
       - name: Resolve Swift packages
         run: |
@@ -106,11 +122,11 @@ jobs:
           set -euo pipefail
           SOURCE_PACKAGES_DIR="$PWD/.ci-source-packages"
           run_unit_tests() {
-            xcodebuild -project cmux.xcodeproj -scheme zerocmux-unit -configuration Debug \
+            scripts/ci/xcodebuild_noninteractive.py \
+              xcodebuild -project cmux.xcodeproj -scheme zerocmux-unit -configuration Debug \
               -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
               -disableAutomaticPackageResolution \
               -destination "platform=macOS" \
-              -skip-testing:cmuxTests/AppDelegateShortcutRoutingTests/testCmdWClosesWindowWhenClosingLastSurfaceInLastWorkspace \
               test 2>&1
           }
 

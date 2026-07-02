@@ -7,7 +7,7 @@ final class JumpToUnreadUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        dataPath = "/tmp/cmux-ui-test-jump-unread-\(UUID().uuidString).json"
+        dataPath = "/tmp/zerocmux-ui-test-jump-unread-\(UUID().uuidString).json"
         try? FileManager.default.removeItem(atPath: dataPath)
     }
 

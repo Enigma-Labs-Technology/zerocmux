@@ -110,7 +110,7 @@ final class CmuxEventSubscription: @unchecked Sendable {
 // Sendable safety: event state is protected by `lock`; disk appends are delegated to `CmuxEventLogWriter`.
 final class CmuxEventBus: @unchecked Sendable {
     static let shared = CmuxEventBus(eventLogURL: defaultEventLogURL())
-    static let protocolName = "cmux-events"
+    static let protocolName = "zerocmux-events"
     static let protocolVersion = 1
     static let defaultHeartbeatIntervalSeconds: TimeInterval = 15
     static let defaultRetainedEventLimit = 4_096
@@ -239,7 +239,7 @@ final class CmuxEventBus: @unchecked Sendable {
                 return "requested sequence is older than the retained in-memory event log"
             }
             if after > latestSequence {
-                return "requested sequence is newer than this cmux process; cmux probably restarted"
+                return "requested sequence is newer than this zerocmux process; zerocmux probably restarted"
             }
             return nil
         }

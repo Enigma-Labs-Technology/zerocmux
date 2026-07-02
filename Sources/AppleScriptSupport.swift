@@ -1,4 +1,5 @@
 import AppKit
+import CmuxPanes
 
 private enum AppleScriptStrings {
     static let disabled = String(
@@ -81,7 +82,7 @@ private extension Workspace {
 @MainActor
 extension NSApplication {
     var isAppleScriptEnabled: Bool {
-        // cmux always enables AppleScript — the underlying Ghostty fork
+        // zerocmux always enables AppleScript — the underlying Ghostty fork
         // doesn't have the macos-applescript config key yet (added in
         // upstream ghostty commit 25fa58143, 2026-03-06), so
         // appleScriptAutomationEnabled() always returns false.

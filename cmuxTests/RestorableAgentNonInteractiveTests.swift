@@ -10,10 +10,10 @@ final class RestorableAgentNonInteractiveTests: XCTestCase {
     func testHookStoreDirectoryCanBeOverriddenForTests() {
         let url = RestorableAgentKind.codex.hookStoreFileURL(
             homeDirectory: "/Users/example",
-            environment: ["CMUX_AGENT_HOOK_STATE_DIR": "/tmp/cmux hook state"]
+            environment: ["CMUX_AGENT_HOOK_STATE_DIR": "/tmp/zerocmux hook state"]
         )
 
-        XCTAssertEqual(url.path, "/tmp/cmux hook state/codex-hook-sessions.json")
+        XCTAssertEqual(url.path, "/tmp/zerocmux hook state/codex-hook-sessions.json")
     }
 
     func testNonInteractiveAgentLaunchesAreNotAutoRestored() {
@@ -95,6 +95,20 @@ final class RestorableAgentNonInteractiveTests: XCTestCase {
                 launcher: "gemini",
                 executablePath: "gemini",
                 arguments: ["gemini", "--prompt", "fix this"],
+                workingDirectory: nil,
+                environment: nil,
+                capturedAt: nil,
+                source: nil
+            )
+        )
+        let grokSingle = SessionRestorableAgentSnapshot(
+            kind: .grok,
+            sessionId: "grok-session-123",
+            workingDirectory: nil,
+            launchCommand: AgentLaunchCommandSnapshot(
+                launcher: "grok",
+                executablePath: "grok",
+                arguments: ["grok", "--single", "fix this"],
                 workingDirectory: nil,
                 environment: nil,
                 capturedAt: nil,
@@ -206,6 +220,7 @@ final class RestorableAgentNonInteractiveTests: XCTestCase {
         XCTAssertNil(opencodeRun.resumeCommand)
         XCTAssertNil(opencodePR.resumeCommand)
         XCTAssertNil(geminiPrompt.resumeCommand)
+        XCTAssertNil(grokSingle.resumeCommand)
         XCTAssertNil(rovoDevAuth.resumeCommand)
         XCTAssertNil(hermesOneShot.resumeCommand)
         XCTAssertNil(cursorPrint.resumeCommand)

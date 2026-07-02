@@ -1,7 +1,7 @@
 import Foundation
 
 enum SessionRestoredTerminalCommandStore {
-    private static let directoryName = "cmux-session-terminal-command"
+    private static let directoryName = "zerocmux-session-terminal-command"
 
     static func writeLauncherScript(
         command: String,
@@ -26,7 +26,8 @@ enum SessionRestoredTerminalCommandStore {
                 "rm -f -- \"$0\" 2>/dev/null || true"
             ]
             if let workingDirectory = normalized(workingDirectory) {
-                lines.append("cd -- \(shellSingleQuoted(workingDirectory)) || exit $?")
+                let quotedDirectory = shellSingleQuoted(workingDirectory)
+                lines.append("{ cd -- \(quotedDirectory) 2>/dev/null || [ ! -d \(quotedDirectory) ]; } || exit $?")
             }
             lines.append("exec \"${SHELL:-/bin/zsh}\" -lc \(shellSingleQuoted(trimmedCommand))")
 

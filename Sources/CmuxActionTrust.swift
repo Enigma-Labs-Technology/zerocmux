@@ -35,7 +35,7 @@ final class CmuxActionTrust {
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!.appendingPathComponent("cmux")
+        ).first!.appendingPathComponent("zerocmux")
         storePath = appSupport.appendingPathComponent("trusted-actions.json").path
 
         let fm = FileManager.default

@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRATE_DIR="${ROOT}/Native/CommandPaletteNucleoFFI"
-DERIVED_DATA="${CMUX_NUCLEO_FFI_DERIVED_DATA:-/tmp/cmux-nucleo-ffi-unit}"
-LOG_PATH="${CMUX_NUCLEO_FFI_LOG:-/tmp/cmux-nucleo-ffi-tests.log}"
+DERIVED_DATA="${CMUX_NUCLEO_FFI_DERIVED_DATA:-/tmp/zerocmux-nucleo-ffi-unit}"
+LOG_PATH="${CMUX_NUCLEO_FFI_LOG:-/tmp/zerocmux-nucleo-ffi-tests.log}"
 
 cargo build --manifest-path "${CRATE_DIR}/Cargo.toml" --release
 
@@ -20,7 +20,7 @@ fi
 NSUnbufferedIO=YES CMUX_NUCLEO_FFI_LIB="${LIB_PATH}" \
   xcodebuild \
     -project "${ROOT}/cmux.xcodeproj" \
-    -scheme cmux-unit \
+    -scheme zerocmux-unit \
     -configuration Debug \
     -destination 'platform=macOS' \
     -derivedDataPath "${DERIVED_DATA}" \

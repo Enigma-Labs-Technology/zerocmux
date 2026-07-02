@@ -26,7 +26,7 @@ final class WorkspaceDescriptionUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        dataPath = "/tmp/cmux-ui-test-workspace-description-\(UUID().uuidString).json"
+        dataPath = "/tmp/zerocmux-ui-test-workspace-description-\(UUID().uuidString).json"
         launchTag = "ui-tests-workspace-description-\(UUID().uuidString.lowercased())"
         try? FileManager.default.removeItem(atPath: dataPath)
     }

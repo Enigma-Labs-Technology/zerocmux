@@ -13,7 +13,7 @@ from pathlib import Path
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    integration_script = root / "Resources" / "shell-integration" / "cmux-zsh-integration.zsh"
+    integration_script = root / "Resources" / "shell-integration" / "zerocmux-zsh-integration.zsh"
     if not integration_script.exists():
         print(f"SKIP: missing zsh integration script at {integration_script}")
         return 0

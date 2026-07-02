@@ -113,6 +113,20 @@ extension CMUXCLI {
                 "python3 -m json.tool .cmux/dock.json",
             ]
         ),
+        DocsReference(
+            topic: "sidebars",
+            aliases: ["sidebar", "custom-sidebar", "custom-sidebars", "vibe-sidebar"],
+            summary: "Vibe-code a custom sidebar: a runtime-interpreted SwiftUI-style file in ~/.config/cmux/sidebars/ (beta).",
+            webURL: "https://cmux.com/docs/custom-sidebars",
+            rawResources: [
+                DocsResource(label: "custom sidebar authoring guide", url: "https://raw.githubusercontent.com/kernelalex/zerocmux/main/docs/custom-sidebars.md"),
+            ],
+            commands: [
+                "mkdir -p ~/.config/cmux/sidebars",
+                "cat > ~/.config/cmux/sidebars/mine.swift   # write a SwiftUI-style view, then right-click the sidebar button to pick it",
+                "zerocmux docs api   # discover zerocmux() action methods/params",
+            ]
+        ),
     ]
 
     func runDocsCommand(commandArgs: [String], jsonOutput: Bool) throws {
@@ -344,9 +358,10 @@ extension CMUXCLI {
           docs                Print the same output as `zerocmux docs settings`.
 
         Targets:
-          account, app, terminal, sidebar-appearance, automation, browser,
-          browser-import, global-hotkey, keyboard-shortcuts, shortcuts,
-          workspace-colors, cmux-json, json, reset
+          account, app, terminal, sidebar-appearance, custom-sidebars,
+          automation, browser, browser-import, global-hotkey,
+          keyboard-shortcuts, shortcuts, workspace-colors, cmux-json,
+          json, reset
 
         Config file:
           \(Self.primarySettingsDisplayPath)
@@ -376,6 +391,8 @@ extension CMUXCLI {
             return "terminal"
         case "sidebar", "sidebar-appearance", "sidebarappearance":
             return "sidebarAppearance"
+        case "custom-sidebars", "customsidebars":
+            return "customSidebars"
         case "automation":
             return "automation"
         case "browser":

@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """Inspect and edit ~/.config/cmux/cmux.json.
 
-cmux watches the file and auto-reloads on save, so writes take effect
+zerocmux watches the file and auto-reloads on save, so writes take effect
 immediately. The file is JSONC (JSON with // and /* */ comments); this
 script writes comment-free formatting (2-space indent, trailing newline)
 and only writes when the parsed value actually changes.
 
 Usage:
-  cmux-settings path                    print the config path
-  cmux-settings dump [--no-comments]    print current settings (raw or stripped)
-  cmux-settings get <dotted.path>       print value at path (JSON)
-  cmux-settings set <dotted.path> <v>   set value (v parsed as JSON, falls back to string)
-  cmux-settings unset <dotted.path>     remove value at path
-  cmux-settings list-supported          print every settings path the schema recognizes
-  cmux-settings validate                check JSON parses and all set keys are recognized
-  cmux-settings open                    open the file in $EDITOR (or VS Code, then TextEdit)
+  zerocmux-settings path                    print the config path
+  zerocmux-settings dump [--no-comments]    print current settings (raw or stripped)
+  zerocmux-settings get <dotted.path>       print value at path (JSON)
+  zerocmux-settings set <dotted.path> <v>   set value (v parsed as JSON, falls back to string)
+  zerocmux-settings unset <dotted.path>     remove value at path
+  zerocmux-settings list-supported          print every settings path the schema recognizes
+  zerocmux-settings validate                check JSON parses and all set keys are recognized
+  zerocmux-settings open                    open the file in $EDITOR (or VS Code, then TextEdit)
 
 Examples:
-  cmux-settings set app.appearance dark
-  cmux-settings set notifications.dockBadge false
-  cmux-settings set shortcuts.bindings.toggleSidebar '"cmd+b"'
-  cmux-settings set shortcuts.bindings.newTab '["ctrl+b","c"]'
-  cmux-settings unset app.appearance
+  zerocmux-settings set app.appearance dark
+  zerocmux-settings set notifications.dockBadge false
+  zerocmux-settings set shortcuts.bindings.toggleSidebar '"cmd+b"'
+  zerocmux-settings set shortcuts.bindings.newTab '["ctrl+b","c"]'
+  zerocmux-settings unset app.appearance
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-DEFAULT_PATH = Path.home() / ".config" / "cmux" / "cmux.json"
+DEFAULT_PATH = Path.home() / ".config" / "zerocmux" / "cmux.json"
 SCHEMA_URL = (
-    "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json"
+    "https://raw.githubusercontent.com/kernelalex/zerocmux/main/web/data/cmux.schema.json"
 )
 
 
@@ -254,7 +254,7 @@ def find_source_file() -> Path | None:
 def find_skill_root() -> Path | None:
     here = Path(__file__).resolve()
     for parent in here.parents:
-        if parent.name == "cmux-settings" and (parent / "SKILL.md").exists():
+        if parent.name == "zerocmux-settings" and (parent / "SKILL.md").exists():
             return parent
         if (parent / "references" / "all-keys.md").exists():
             return parent
@@ -324,7 +324,7 @@ def cmd_list_supported(args: argparse.Namespace) -> int:
     if not paths:
         print(
             "error: could not load the supported-paths list; "
-            "run from a cmux checkout or reinstall the cmux-settings skill",
+            "run from a zerocmux checkout or reinstall the zerocmux-settings skill",
             file=sys.stderr,
         )
         return 1

@@ -29,7 +29,7 @@ final class ShortcutUnbindingRoutingTests: XCTestCase {
         }
 
         let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-shortcut-unbinding-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-shortcut-unbinding-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
 
@@ -236,7 +236,7 @@ final class ShortcutRecorderEventRoutingTests: XCTestCase {
 final class ShortcutUnbindingParsingTests: XCTestCase {
     func testSettingsFileStoreParsesEmptyShortcutBindingAsUnbound() throws {
         let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-shortcut-unbinding-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-shortcut-unbinding-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
 
@@ -277,7 +277,7 @@ final class ShortcutUnbindingParsingTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: currentAction.defaultsKey)
         UserDefaults.standard.removeObject(forKey: conflictingAction.defaultsKey)
         let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-managed-shortcut-swap-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-managed-shortcut-swap-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
 
@@ -321,7 +321,7 @@ final class ShortcutUnbindingParsingTests: XCTestCase {
         }
 
         let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cmux-managed-global-hotkey-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("zerocmux-managed-global-hotkey-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
 

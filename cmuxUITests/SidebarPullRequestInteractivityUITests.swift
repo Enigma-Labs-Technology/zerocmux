@@ -2,17 +2,17 @@ import XCTest
 
 final class SidebarPullRequestInteractivityUITests: XCTestCase {
     private var socketPath = ""
-    private let defaultsDomain = "com.cmuxterm.app.debug"
+    private let defaultsDomain = "com.kernelalex.zerocmux.debug"
     private let launchTag = "ui-tests-sidebar-pr-interactivity"
     private let pullRequestNumber = 123
     private var pullRequestURL: String {
-        "https://github.com/manaflow-ai/cmux/pull/\(pullRequestNumber)"
+        "https://github.com/kernelalex/zerocmux/pull/\(pullRequestNumber)"
     }
 
     override func setUp() {
         super.setUp()
         continueAfterFailure = false
-        socketPath = "/tmp/cmux-ui-test-sidebar-pr-\(UUID().uuidString).sock"
+        socketPath = "/tmp/zerocmux-ui-test-sidebar-pr-\(UUID().uuidString).sock"
         try? FileManager.default.removeItem(atPath: socketPath)
         deleteSidebarClickabilityDefault()
     }
@@ -171,8 +171,8 @@ final class SidebarPullRequestInteractivityUITests: XCTestCase {
     }
 
     private func waitForSocketPong(timeout: TimeInterval) -> Bool {
-        pollUntil(timeout: timeout) {
-            socketCommand("ping") == "PONG"
+        waitForControlSocketReady(socketPath: socketPath, pingTimeout: timeout) {
+            self.socketCommand("ping") == "PONG"
         }
     }
 

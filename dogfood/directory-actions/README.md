@@ -2,12 +2,12 @@
 
 This tree is for dogfooding per-directory `cmux.json` resolution.
 
-Use a terminal pane in cmux and `cd` into these directories:
+Use a terminal pane in zerocmux and `cd` into these directories:
 
 - `dogfood/directory-actions/alpha`
 - `dogfood/directory-actions/alpha/nested`
 - `dogfood/directory-actions/legacy`
-- `dogfood/directory-actions/legacy/prefer-dot-cmux`
+- `dogfood/directory-actions/legacy/prefer-dot-zerocmux`
 - `dogfood/directory-actions/many-tab-actions`
 
 What each one demonstrates:
@@ -23,7 +23,7 @@ What each one demonstrates:
 - `legacy`
   - Uses fallback `./cmux.json`
   - Demonstrates backward-compatible local config loading
-- `legacy/prefer-dot-cmux`
+- `legacy/prefer-dot-zerocmux`
   - Contains both `./cmux.json` and `./.cmux/cmux.json`
   - The `./.cmux/cmux.json` file should win
 - `many-tab-actions`
