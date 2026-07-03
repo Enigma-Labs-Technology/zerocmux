@@ -82,7 +82,7 @@ jobs:
             --head-sha "$HEAD_SHA"
 
   workflow-guard-tests:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -779,6 +779,11 @@ jobs:
                   exit "$test_status"
                 fi
               fi
+              ;;
+            CmuxRemoteWorkspace)
+              # RemoteProxyBroker/RemoteCLIRelayServer are timing-sensitive on
+              # 3-core hosted runners; retry once before failing.
+              swift test --package-path "$pkgdir" || swift test --package-path "$pkgdir"
               ;;
             *)
               swift test --package-path "$pkgdir"

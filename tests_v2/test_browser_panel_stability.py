@@ -18,7 +18,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 # Use an inline data: URL so the webview loads a real page without depending on
 # live external network reachability. The stability assertions below only check

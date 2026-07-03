@@ -18,7 +18,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from zerocmux import cmux
+from cmux import cmux
 
 
 def _bundle_id(app_path: Path) -> str:

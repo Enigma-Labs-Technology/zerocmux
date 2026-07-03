@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 from pane_resize_test_support import (
     focused_pane_id as _focused_pane_id,
     pane_extent as _pane_extent,

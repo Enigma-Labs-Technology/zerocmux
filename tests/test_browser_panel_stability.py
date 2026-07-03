@@ -17,7 +17,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 def wait_for_socket(path: str, timeout_s: float = 5.0) -> None:

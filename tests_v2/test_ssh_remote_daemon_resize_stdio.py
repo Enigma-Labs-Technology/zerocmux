@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from zerocmux import cmuxError
+from cmux import cmuxError
 
 
 def _must(cond: bool, msg: str) -> None:

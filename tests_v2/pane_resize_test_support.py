@@ -4,7 +4,7 @@ import re
 import secrets
 import time
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")

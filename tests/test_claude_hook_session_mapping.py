@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 def resolve_cmux_cli() -> str:

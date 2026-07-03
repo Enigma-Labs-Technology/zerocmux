@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 NEW_WORKSPACES = int(os.environ.get("CMUX_LAG_NEW_WORKSPACES", "20"))
 SWITCH_PASSES = int(os.environ.get("CMUX_LAG_SWITCH_PASSES", "1"))

@@ -356,7 +356,7 @@ def python_client_default_bundle_id(extra_env: dict[str, str]) -> str:
     env["PYTHONPATH"] = tests_dir if not python_path else f"{tests_dir}{os.pathsep}{python_path}"
 
     proc = subprocess.run(
-        [sys.executable, "-c", "from zerocmux import cmux; print(cmux.default_bundle_id())"],
+        [sys.executable, "-c", "from cmux import cmux; print(cmux.default_bundle_id())"],
         text=True,
         capture_output=True,
         env=env,
@@ -381,7 +381,7 @@ def python_client_default_socket_path(extra_env: dict[str, str]) -> str:
     env["PYTHONPATH"] = tests_dir if not python_path else f"{tests_dir}{os.pathsep}{python_path}"
 
     proc = subprocess.run(
-        [sys.executable, "-c", "from zerocmux import cmux; print(cmux.default_socket_path())"],
+        [sys.executable, "-c", "from cmux import cmux; print(cmux.default_socket_path())"],
         text=True,
         capture_output=True,
         env=env,

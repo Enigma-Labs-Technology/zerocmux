@@ -30,7 +30,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from zerocmux import cmux
+from cmux import cmux
 
 # (launcher, session id, marker tokens). A session counts as resumed when one
 # scrollback line contains every token: the fake-agent prefix proves the fake

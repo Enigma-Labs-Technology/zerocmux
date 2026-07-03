@@ -15,7 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 def focused_pane_id(client: cmux) -> Optional[str]:

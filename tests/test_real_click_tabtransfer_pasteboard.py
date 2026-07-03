@@ -16,7 +16,7 @@ import sys
 import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 from test_real_click_overlay_forwarding import (
     app_name_for_bundle,
     attempt_focus_via_real_clicks,

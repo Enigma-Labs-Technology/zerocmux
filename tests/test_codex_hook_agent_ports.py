@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from claude_teams_test_utils import resolve_cmux_cli
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 _PREFERRED_BIND_HOST = "127.0.0.1"

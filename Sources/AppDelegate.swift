@@ -10819,27 +10819,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         ]
     }
 
-    private func isWebViewFocused(_ panel: BrowserPanel) -> Bool {
-        guard let window = panel.webView.window else { return false }
-        if browserAddressBarFocusedPanelId == panel.id {
-            return false
-        }
-        if panel.preferredFocusIntent == .addressBar && panel.shouldSuppressWebViewFocus() {
-            return false
-        }
-        return gotoSplitUITestResponderChainContains(window.firstResponder, target: panel.webView)
-    }
-
-    private func gotoSplitUITestResponderChainContains(_ start: NSResponder?, target: NSResponder) -> Bool {
-        var current = start
-        var hops = 0
-        while let responder = current, hops < 64 {
-            if responder === target { return true }
-            current = responder.nextResponder
-            hops += 1
-        }
-        return false
-    }
 
     private func paneIdsForGotoSplitUITest(tab: Workspace, browserPanelId: UUID) -> (browser: PaneID, terminal: PaneID)? {
         let paneIds = tab.bonsplitController.allPaneIds
@@ -12298,6 +12277,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         ], at: path)
     }
 #endif
+
+    // Production browser-focus helpers (used by focus-mode shortcut routing in
+    // all configurations; formerly nested in the DEBUG-only goto-split block).
+    private func isWebViewFocused(_ panel: BrowserPanel) -> Bool {
+        guard let window = panel.webView.window else { return false }
+        if browserAddressBarFocusedPanelId == panel.id {
+            return false
+        }
+        if panel.preferredFocusIntent == .addressBar && panel.shouldSuppressWebViewFocus() {
+            return false
+        }
+        return gotoSplitUITestResponderChainContains(window.firstResponder, target: panel.webView)
+    }
+
+    private func gotoSplitUITestResponderChainContains(_ start: NSResponder?, target: NSResponder) -> Bool {
+        var current = start
+        var hops = 0
+        while let responder = current, hops < 64 {
+            if responder === target { return true }
+            current = responder.nextResponder
+            hops += 1
+        }
+        return false
+    }
 
     func attachUpdateAccessory(to window: NSWindow) {
         titlebarAccessoryController.start()

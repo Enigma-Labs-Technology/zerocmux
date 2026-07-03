@@ -19,7 +19,7 @@ from typing import List, Optional, Tuple
 # Add the directory containing cmux.py to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux
+from cmux import cmux
 
 
 class TestResult:

@@ -26,7 +26,7 @@ from typing import List, Optional
 # Allow importing tests/cmux.py when running from repo root.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux
+from cmux import cmux
 
 
 # Maximum acceptable CPU usage during idle (percentage)

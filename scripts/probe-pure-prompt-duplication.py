@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "tests_v2")))
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 def _is_prompt_line(line: str) -> bool:

@@ -81,7 +81,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.getcwd(), "tests"))
-from zerocmux import cmux  # type: ignore
+from cmux import cmux  # type: ignore
 
 deadline = time.time() + 30.0
 last = None

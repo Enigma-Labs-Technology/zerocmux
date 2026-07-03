@@ -5,7 +5,7 @@ cmux Python Client
 A client library for programmatically controlling zerocmux via Unix socket.
 
 Usage:
-    from zerocmux import cmux
+    from cmux import cmux
 
     client = cmux()
     client.connect()

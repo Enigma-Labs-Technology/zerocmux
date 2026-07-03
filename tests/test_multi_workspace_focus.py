@@ -27,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from zerocmux import cmux, cmuxError
+from cmux import cmux, cmuxError
 
 
 MARKER_DIR = Path(tempfile.gettempdir())

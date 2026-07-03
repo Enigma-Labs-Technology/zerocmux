@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Union
 
 sys.path.insert(0, str(Path(__file__).parent))
-from zerocmux import cmux
+from cmux import cmux
 
 SOCKET_PATH = os.environ.get("CMUX_SOCKET_PATH", "/tmp/zerocmux-debug.sock")
 HTML_REPORT = Path(__file__).parent / "visual_report.html"

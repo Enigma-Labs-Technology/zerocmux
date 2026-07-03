@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zerocmux import cmux  # noqa: E402
+from cmux import cmux  # noqa: E402
 
 
 def _parse_sidebar_state(text: str) -> dict[str, str]:
