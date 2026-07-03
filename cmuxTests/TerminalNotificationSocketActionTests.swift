@@ -257,11 +257,8 @@ final class TerminalNotificationSocketActionTests: XCTestCase {
         func cleanup() {
             TerminalController.shared.stop()
             if let windowId {
-                appDelegate.unregisterMainWindowContextForTesting(windowId: windowId, notifyChange: false)
+                appDelegate.unregisterMainWindowContextForTesting(windowId: windowId)
             }
-            window?.makeFirstResponder(nil)
-            window?.contentView = nil
-            window?.orderOut(nil)
             window?.close()
             for workspace in manager.tabs {
                 manager.closeWorkspace(workspace)
@@ -301,21 +298,14 @@ final class TerminalNotificationSocketActionTests: XCTestCase {
         let windowId: UUID?
         let window: NSWindow?
         if includeWindow {
-            let registeredWindowId = UUID()
+            let registeredWindowId = appDelegate.registerMainWindowContextForTesting(tabManager: manager)
             let testWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
                 styleMask: [.titled],
                 backing: .buffered,
                 defer: false
             )
-            testWindow.isReleasedWhenClosed = false
             testWindow.identifier = NSUserInterfaceItemIdentifier("cmux.main.\(registeredWindowId.uuidString)")
-            appDelegate.registerMainWindowContextForTesting(
-                windowId: registeredWindowId,
-                tabManager: manager,
-                window: testWindow,
-                notifyChange: false
-            )
             testWindow.makeKeyAndOrderFront(nil)
             windowId = registeredWindowId
             window = testWindow

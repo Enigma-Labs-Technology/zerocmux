@@ -5,27 +5,28 @@ import SwiftUI
 
 final class FileExplorerState: ObservableObject {
     private static let modeKey = "rightSidebar.mode"
-    private let defaults: UserDefaults
+    private static let customSidebarNameKey = "rightSidebar.customSidebarName"
 
     @Published var isVisible: Bool {
-        didSet { defaults.set(isVisible, forKey: "fileExplorer.isVisible") }
+        didSet { UserDefaults.standard.set(isVisible, forKey: "fileExplorer.isVisible") }
     }
     @Published var width: CGFloat {
-        didSet { defaults.set(Double(width), forKey: "fileExplorer.width") }
+        didSet { UserDefaults.standard.set(Double(width), forKey: "fileExplorer.width") }
     }
 
     /// Proportion of sidebar height allocated to the tab list (0.0-1.0).
     /// The file explorer gets the remaining space below.
     @Published var dividerPosition: CGFloat {
-        didSet { defaults.set(Double(dividerPosition), forKey: "fileExplorer.dividerPosition") }
+        didSet { UserDefaults.standard.set(Double(dividerPosition), forKey: "fileExplorer.dividerPosition") }
     }
 
     /// Whether hidden files (dotfiles) are shown in the tree.
     @Published var showHiddenFiles: Bool {
-        didSet { defaults.set(showHiddenFiles, forKey: "fileExplorer.showHidden") }
+        didSet { UserDefaults.standard.set(showHiddenFiles, forKey: "fileExplorer.showHidden") }
     }
 
     @Published private var storedMode: RightSidebarMode
+    @Published private var storedCustomSidebarName: String?
 
     /// Whether the right sidebar (Files / Find / Dock / …) currently owns
     /// keyboard/input focus in this window. Driven by `MainWindowFocusController`
@@ -41,8 +42,12 @@ final class FileExplorerState: ObservableObject {
         set { setMode(newValue) }
     }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    var customSidebarName: String? {
+        storedCustomSidebarName
+    }
+
+    init() {
+        let defaults = UserDefaults.standard
         self.isVisible = defaults.bool(forKey: "fileExplorer.isVisible")
         let storedWidth = defaults.double(forKey: "fileExplorer.width")
         self.width = storedWidth > 0 ? CGFloat(storedWidth) : 220
@@ -50,13 +55,22 @@ final class FileExplorerState: ObservableObject {
         self.dividerPosition = storedPosition > 0 ? CGFloat(storedPosition) : 0.6
         let storedShowHidden = defaults.object(forKey: "fileExplorer.showHidden")
         self.showHiddenFiles = storedShowHidden == nil ? true : defaults.bool(forKey: "fileExplorer.showHidden")
+        let customSidebarName = defaults.string(forKey: Self.customSidebarNameKey)?.nilIfEmpty
+        self.storedCustomSidebarName = customSidebarName
         let storedMode = RightSidebarMode(rawValue: defaults.string(forKey: Self.modeKey) ?? "") ?? .files
         self.storedMode = Self.availableMode(storedMode, defaults: defaults)
         defaults.set(self.storedMode.rawValue, forKey: Self.modeKey)
     }
 
-    func refreshModeAvailability() {
-        setMode(storedMode)
+    func refreshModeAvailability(defaults: UserDefaults = .standard) {
+        setMode(storedMode, defaults: defaults)
+    }
+
+    func selectCustomSidebar(name rawName: String, defaults: UserDefaults = .standard) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        storedCustomSidebarName = name
+        defaults.set(name, forKey: Self.customSidebarNameKey)
     }
 
     func toggle() {
@@ -85,7 +99,7 @@ final class FileExplorerState: ObservableObject {
         }
     }
 
-    private func setMode(_ mode: RightSidebarMode) {
+    private func setMode(_ mode: RightSidebarMode, defaults: UserDefaults = .standard) {
         let nextMode = Self.availableMode(mode, defaults: defaults)
         guard storedMode != nextMode else {
             if defaults.string(forKey: Self.modeKey) != nextMode.rawValue {
@@ -97,7 +111,13 @@ final class FileExplorerState: ObservableObject {
         defaults.set(nextMode.rawValue, forKey: Self.modeKey)
     }
 
-    private static func availableMode(_ mode: RightSidebarMode, defaults: UserDefaults) -> RightSidebarMode {
-        mode.isAvailable(defaults: defaults) ? mode : .files
+    private static func availableMode(
+        _ mode: RightSidebarMode,
+        defaults: UserDefaults
+    ) -> RightSidebarMode {
+        if mode == .customSidebar {
+            return .files
+        }
+        return mode.isAvailable(defaults: defaults) ? mode : .files
     }
 }
