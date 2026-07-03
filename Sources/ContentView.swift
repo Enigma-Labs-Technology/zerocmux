@@ -13509,7 +13509,7 @@ struct TabItemView: View, Equatable {
         switch tab.remoteConnectionState {
         case .connected:
             return String(localized: "remote.status.connected", defaultValue: "Connected")
-        case .connecting, .reconnecting:
+        case .connecting:
             return String(localized: "remote.status.connecting", defaultValue: "Connecting")
         case .reconnecting:
             return String(localized: "remote.status.reconnecting", defaultValue: "Reconnecting")
@@ -14641,7 +14641,7 @@ struct TabItemView: View, Equatable {
                 locale: .current,
                 target
             )
-        case .connecting, .reconnecting:
+        case .connecting:
             return String(
                 format: String(
                     localized: "sidebar.remote.help.connecting",

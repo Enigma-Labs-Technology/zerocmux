@@ -1184,33 +1184,18 @@ final class TerminalNotificationStore: ObservableObject {
             // replace the banner, and the Mac is not showing one either, so
             // deferring would just leave the stale banner stuck until a later
             // forward. Only the burst throttle is a legitimate defer-and-flush
-            // zerocmux: phone mirroring removed; no replacement forward ever queues.
-            let replacementWillForward = false
-            if replacementWillForward {
-                // The superseded entries already left the store; tombstone them
-                // now so the reconcile sweep stays correct while the dismiss is
-                // deferred.
-                recordDismissTombstones(ids: idsToClear.compactMap { UUID(uuidString: $0) })
-                supersededPhoneDismissBuffer.stash(
-                    ids: idsToClear,
+            // zerocmux: phone mirroring removed; no replacement forward ever
+            // queues, so always emit the dismiss immediately, draining anything
+            // still parked for this key from an earlier throttled supersede.
+            emitNotificationsDismissed(
+                ids: idsToClear,
+                drainedSuperseded: supersededPhoneDismissBuffer.flush(
                     forKey: SupersededPhoneDismissBuffer.key(
                         tabId: notification.tabId,
                         surfaceId: notification.surfaceId
                     )
                 )
-            } else {
-                // Also drain anything still parked for this key from an earlier
-                // throttled supersede; this emit is its last guaranteed ride.
-                emitNotificationsDismissed(
-                    ids: idsToClear,
-                    drainedSuperseded: supersededPhoneDismissBuffer.flush(
-                        forKey: SupersededPhoneDismissBuffer.key(
-                            tabId: notification.tabId,
-                            surfaceId: notification.surfaceId
-                        )
-                    )
-                )
-            }
+            )
         }
         deliverNotificationSideEffects(
             notification,

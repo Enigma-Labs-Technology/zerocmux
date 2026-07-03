@@ -74,7 +74,7 @@ if [[ "$(cat "$sparkle_key_file")" != "sparkle64" ]]; then
   exit 1
 fi
 
-key_file_mode="$(stat -f '%Lp' "$sparkle_key_file" 2>/dev/null || stat -c '%a' "$sparkle_key_file")"
+key_file_mode="$(stat -c '%a' "$sparkle_key_file" 2>/dev/null || stat -f '%Lp' "$sparkle_key_file")"
 if [[ "$key_file_mode" != "600" ]]; then
   echo "FAIL: expected Sparkle private key file mode 600, got $key_file_mode" >&2
   exit 1
