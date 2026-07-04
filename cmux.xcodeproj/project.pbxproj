@@ -240,10 +240,6 @@
 		B900001AA1B2C3D4E5F60719 /* CloseWorkspaceConfirmDialogUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9000019A1B2C3D4E5F60719 /* CloseWorkspaceConfirmDialogUITests.swift */; };
 		B900001BA1B2C3D4E5F60719 /* CloseWorkspacesConfirmDialogUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B900001CA1B2C3D4E5F60719 /* CloseWorkspacesConfirmDialogUITests.swift */; };
 		C10D00010000000000000001 /* CloudVMActionLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10D00020000000000000002 /* CloudVMActionLauncher.swift */; };
-		B900000BA1B2C3D4E5F60719 /* zerocmux in Copy CLI */ = {isa = PBXBuildFile; fileRef = B9000004A1B2C3D4E5F60719 /* zerocmux */; };
-		C1ADE20002A1B2C3D4E5F719 /* zerocmux-claude-wrapper in Copy CLI */ = {isa = PBXBuildFile; fileRef = C1ADE20001A1B2C3D4E5F719 /* zerocmux-claude-wrapper */; };
-		C1ADE30002A1B2C3D4E5F719 /* zerocmux-codex-wrapper in Copy CLI */ = {isa = PBXBuildFile; fileRef = C1ADE30001A1B2C3D4E5F719 /* zerocmux-codex-wrapper */; };
-		A5001623 /* zerocmux.sdef in Resources */ = {isa = PBXBuildFile; fileRef = A5001622 /* zerocmux.sdef */; };
 		B9000002A1B2C3D4E5F60719 /* cmux.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9000001A1B2C3D4E5F60719 /* cmux.swift */; };
 		B9000034A1B2C3D4E5F60719 /* cmux_open.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9000030A1B2C3D4E5F60719 /* cmux_open.swift */; };
 		A5001654 /* CmuxActionTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001655 /* CmuxActionTrust.swift */; };
@@ -431,12 +427,12 @@
 		C57B00010000000000000001 /* CustomSidebarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57B00010000000000000002 /* CustomSidebarPanel.swift */; };
 		C57B00090000000000000001 /* CustomSidebarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57B00090000000000000002 /* CustomSidebarPanelView.swift */; };
 		A500D010A1B2C3D4E5F60718 /* DebugLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A500D011A1B2C3D4E5F60718 /* DebugLogging.swift */; };
-		D1A6F00002A1B2C3D4E5F601 /* DiagnosticsReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A6F00001A1B2C3D4E5F601 /* DiagnosticsReporting.swift */; };
 		A5001F000000000000000001 /* DetachedFolderDragIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001F000000000000000002 /* DetachedFolderDragIcon.swift */; };
 		B05553C10000000000000001 /* DetachedFolderPathLookupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05553C10000000000000002 /* DetachedFolderPathLookupCache.swift */; };
 		B0555303B0555303B0555303 /* DetachedFolderPathLookupCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0555304B0555304B0555304 /* DetachedFolderPathLookupCacheTests.swift */; };
 		DE000A020000000000000001 /* DevWindowDisplayDebugWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000A020000000000000002 /* DevWindowDisplayDebugWindow.swift */; };
 		DE000A010000000000000001 /* DevWindowDisplayDefault.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE000A010000000000000002 /* DevWindowDisplayDefault.swift */; };
+		D1A6F00002A1B2C3D4E5F601 /* DiagnosticsReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A6F00001A1B2C3D4E5F601 /* DiagnosticsReporting.swift */; };
 		D1FFC0DE000000000000B002 /* DiffCommentsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC0DE000000000000B001 /* DiffCommentsBridge.swift */; };
 		D1FFC0DE000000000000A002 /* DiffCommentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC0DE000000000000A001 /* DiffCommentStore.swift */; };
 		D1FFC0DE000000000000C002 /* DiffCommentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FFC0DE000000000000C001 /* DiffCommentStoreTests.swift */; };
@@ -1162,6 +1158,10 @@
 		440AC5D24915463C9670F510 /* WorkspaceTitleProvenanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E241BE1D74A7459C8D9C16BC /* WorkspaceTitleProvenanceTests.swift */; };
 		6B524A0BA34FD46A771335AB /* WorkspaceUnitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F8ED91A4B55D34BE6A0668 /* WorkspaceUnitTests.swift */; };
 		84E00D47E4584162AE53BC8D /* xterm-ghostty in Resources */ = {isa = PBXBuildFile; fileRef = B2E7294509CC42FE9191870E /* xterm-ghostty */; };
+		B900000BA1B2C3D4E5F60719 /* zerocmux in Copy CLI */ = {isa = PBXBuildFile; fileRef = B9000004A1B2C3D4E5F60719 /* zerocmux */; };
+		C1ADE20002A1B2C3D4E5F719 /* zerocmux-claude-wrapper in Copy CLI */ = {isa = PBXBuildFile; fileRef = C1ADE20001A1B2C3D4E5F719 /* zerocmux-claude-wrapper */; };
+		C1ADE30002A1B2C3D4E5F719 /* zerocmux-codex-wrapper in Copy CLI */ = {isa = PBXBuildFile; fileRef = C1ADE30001A1B2C3D4E5F719 /* zerocmux-codex-wrapper */; };
+		A5001623 /* zerocmux.sdef in Resources */ = {isa = PBXBuildFile; fileRef = A5001622 /* zerocmux.sdef */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1212,12 +1212,12 @@
 			dstPath = bin;
 			dstSubfolderSpec = 7;
 			files = (
-				B900000BA1B2C3D4E5F60719 /* zerocmux in Copy CLI */,
-				C1ADE20002A1B2C3D4E5F719 /* zerocmux-claude-wrapper in Copy CLI */,
-				C1ADE30002A1B2C3D4E5F719 /* zerocmux-codex-wrapper in Copy CLI */,
 				C1ADE10002A1B2C3D4E5F719 /* grok in Copy CLI */,
 					D1BEF00002A1B2C3D4E5F719 /* open in Copy CLI */,
 					C0DE70500000000000000002 /* start-zerocmux-profiling in Copy CLI */,
+				B900000BA1B2C3D4E5F60719 /* zerocmux in Copy CLI */,
+				C1ADE20002A1B2C3D4E5F719 /* zerocmux-claude-wrapper in Copy CLI */,
+				C1ADE30002A1B2C3D4E5F719 /* zerocmux-codex-wrapper in Copy CLI */,
 				);
 			name = "Copy CLI";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1467,12 +1467,7 @@
 		B9000019A1B2C3D4E5F60719 /* CloseWorkspaceConfirmDialogUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseWorkspaceConfirmDialogUITests.swift; sourceTree = "<group>"; };
 		B900001CA1B2C3D4E5F60719 /* CloseWorkspacesConfirmDialogUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseWorkspacesConfirmDialogUITests.swift; sourceTree = "<group>"; };
 		C10D00020000000000000002 /* CloudVMActionLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVMActionLauncher.swift; sourceTree = "<group>"; };
-		B9000004A1B2C3D4E5F60719 /* zerocmux */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = zerocmux; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5001018 /* cmux-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "cmux-Bridging-Header.h"; sourceTree = "<group>"; };
-		C1ADE20001A1B2C3D4E5F719 /* zerocmux-claude-wrapper */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "Resources/bin/zerocmux-claude-wrapper"; sourceTree = SOURCE_ROOT; };
-		C1ADE30001A1B2C3D4E5F719 /* zerocmux-codex-wrapper */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "Resources/bin/zerocmux-codex-wrapper"; sourceTree = SOURCE_ROOT; };
-		A5001000 /* zerocmux.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = zerocmux.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A5001622 /* zerocmux.sdef */ = {isa = PBXFileReference; lastKnownFileType = text.sdef; path = Resources/zerocmux.sdef; sourceTree = SOURCE_ROOT; };
 		B9000001A1B2C3D4E5F60719 /* cmux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cmux.swift; sourceTree = "<group>"; };
 		B9000030A1B2C3D4E5F60719 /* cmux_open.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cmux_open.swift; sourceTree = "<group>"; };
 		A5001655 /* CmuxActionTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxActionTrust.swift; sourceTree = "<group>"; };
@@ -1612,12 +1607,12 @@
 		C57B00010000000000000002 /* CustomSidebarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/CustomSidebarPanel.swift; sourceTree = "<group>"; };
 		C57B00090000000000000002 /* CustomSidebarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/CustomSidebarPanelView.swift; sourceTree = "<group>"; };
 		A500D011A1B2C3D4E5F60718 /* DebugLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/DebugLogging.swift; sourceTree = "<group>"; };
-		D1A6F00001A1B2C3D4E5F601 /* DiagnosticsReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporting.swift; sourceTree = "<group>"; };
 		A5001F000000000000000002 /* DetachedFolderDragIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedFolderDragIcon.swift; sourceTree = "<group>"; };
 		B05553C10000000000000002 /* DetachedFolderPathLookupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedFolderPathLookupCache.swift; sourceTree = "<group>"; };
 		B0555304B0555304B0555304 /* DetachedFolderPathLookupCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedFolderPathLookupCacheTests.swift; sourceTree = "<group>"; };
 		DE000A020000000000000002 /* DevWindowDisplayDebugWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevWindowDisplayDebugWindow.swift; sourceTree = "<group>"; };
 		DE000A010000000000000002 /* DevWindowDisplayDefault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevWindowDisplayDefault.swift; sourceTree = "<group>"; };
+		D1A6F00001A1B2C3D4E5F601 /* DiagnosticsReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporting.swift; sourceTree = "<group>"; };
 		D1FFC0DE000000000000B001 /* DiffCommentsBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/DiffCommentsBridge.swift; sourceTree = "<group>"; };
 		D1FFC0DE000000000000A001 /* DiffCommentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffCommentStore.swift; sourceTree = "<group>"; };
 		D1FFC0DE000000000000C001 /* DiffCommentStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffCommentStoreTests.swift; sourceTree = "<group>"; };
@@ -2335,6 +2330,11 @@
 		E241BE1D74A7459C8D9C16BC /* WorkspaceTitleProvenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTitleProvenanceTests.swift; sourceTree = "<group>"; };
 		71F8ED91A4B55D34BE6A0668 /* WorkspaceUnitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceUnitTests.swift; sourceTree = "<group>"; };
 		B2E7294509CC42FE9191870E /* xterm-ghostty */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ghostty/terminfo/78/xterm-ghostty"; sourceTree = "<group>"; };
+		B9000004A1B2C3D4E5F60719 /* zerocmux */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = zerocmux; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1ADE20001A1B2C3D4E5F719 /* zerocmux-claude-wrapper */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "Resources/bin/zerocmux-claude-wrapper"; sourceTree = SOURCE_ROOT; };
+		C1ADE30001A1B2C3D4E5F719 /* zerocmux-codex-wrapper */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "Resources/bin/zerocmux-codex-wrapper"; sourceTree = SOURCE_ROOT; };
+		A5001000 /* zerocmux.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = zerocmux.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5001622 /* zerocmux.sdef */ = {isa = PBXFileReference; lastKnownFileType = text.sdef; path = Resources/zerocmux.sdef; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -3889,7 +3889,6 @@
 				A9E020000000000000000006 /* agent-session-react in Resources */,
 				A9E020000000000000000007 /* agent-session-solid in Resources */,
 				A5001100 /* Assets.xcassets in Resources */,
-				A5001623 /* zerocmux.sdef in Resources */,
 				FEED0A00000000000000F007 /* feed-tui in Resources */,
 				DA7A10CA710E000000000004 /* InfoPlist.xcstrings in Resources */,
 				DA7A10CA710E000000000003 /* Localizable.xcstrings in Resources */,
@@ -3897,6 +3896,7 @@
 				FEED0000000000000000F007 /* opencode-plugin.js in Resources */,
 				A5002000 /* THIRD_PARTY_LICENSES.md in Resources */,
 				84E00D47E4584162AE53BC8D /* xterm-ghostty in Resources */,
+				A5001623 /* zerocmux.sdef in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4244,10 +4244,10 @@
 				C57B00090000000000000001 /* CustomSidebarPanelView.swift in Sources */,
 				A500D010A1B2C3D4E5F60718 /* DebugLogging.swift in Sources */,
 				A5001F000000000000000001 /* DetachedFolderDragIcon.swift in Sources */,
-				D1A6F00002A1B2C3D4E5F601 /* DiagnosticsReporting.swift in Sources */,
 				B05553C10000000000000001 /* DetachedFolderPathLookupCache.swift in Sources */,
 				DE000A020000000000000001 /* DevWindowDisplayDebugWindow.swift in Sources */,
 				DE000A010000000000000001 /* DevWindowDisplayDefault.swift in Sources */,
+				D1A6F00002A1B2C3D4E5F601 /* DiagnosticsReporting.swift in Sources */,
 				D1FFC0DE000000000000B002 /* DiffCommentsBridge.swift in Sources */,
 				D1FFC0DE000000000000A002 /* DiffCommentStore.swift in Sources */,
 				D1FFC0DE000000000000D002 /* DiffCommentSubmissionPool.swift in Sources */,

@@ -432,8 +432,6 @@ the expected text without connecting to a zerocmux socket.
 - `zerocmux capabilities --help` -> `Usage: zerocmux capabilities`
 - `zerocmux events --help` -> `Usage: zerocmux events [options]`
 - `zerocmux auth --help` -> `Usage: zerocmux auth <status|login|logout>`
-- `zerocmux vm --help` -> `Usage: zerocmux vm <new|ls|rm|exec|shell|attach|ssh|ssh-info> [args...]`
-- `zerocmux cloud --help` -> `Usage: zerocmux cloud <new|ls|rm|exec|shell|attach|ssh|ssh-info> [args...]`
 - `zerocmux rpc --help` -> `Usage: zerocmux rpc <method> [json-params]`
 - `zerocmux help --help` -> `Usage: zerocmux help`
 - `zerocmux docs --help` -> `Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]`
