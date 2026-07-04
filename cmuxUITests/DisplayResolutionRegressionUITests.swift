@@ -2,7 +2,7 @@ import XCTest
 import Foundation
 
 final class DisplayResolutionRegressionUITests: XCTestCase {
-    private let defaultDisplayHarnessManifestPath = "/tmp/cmux-ui-test-display-harness.json"
+    private let defaultDisplayHarnessManifestPath = "/tmp/zerocmux-ui-test-display-harness.json"
     private var launchTag = ""
     private var diagnosticsPath = ""
     private var displayReadyPath = ""
@@ -45,7 +45,7 @@ final class DisplayResolutionRegressionUITests: XCTestCase {
         super.tearDown()
     }
 
-    private let prelaunchManifestPath = "/tmp/cmux-ui-test-prelaunch.json"
+    private let prelaunchManifestPath = "/tmp/zerocmux-ui-test-prelaunch.json"
 
     func testRapidDisplayResolutionChangesKeepTerminalResponsive() throws {
         // On CI, the app is pre-launched from the shell (outside the XCTest
