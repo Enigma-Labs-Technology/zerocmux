@@ -24,8 +24,8 @@ START_MARKER = "<!-- cli-contract-help-probes:start -->"
 END_MARKER = "<!-- cli-contract-help-probes:end -->"
 NEGATIVE_START_MARKER = "<!-- cli-contract-negative-help-probes:start -->"
 NEGATIVE_END_MARKER = "<!-- cli-contract-negative-help-probes:end -->"
-PROBE_RE = re.compile(r"^- `(?P<command>cmux(?: [^`]+)?)` -> `(?P<needle>[^`]+)`$")
-NEGATIVE_PROBE_RE = re.compile(r"^- `(?P<command>cmux(?: [^`]+)?)` !> `(?P<needle>[^`]+)`$")
+PROBE_RE = re.compile(r"^- `(?P<command>zerocmux(?: [^`]+)?)` -> `(?P<needle>[^`]+)`$")
+NEGATIVE_PROBE_RE = re.compile(r"^- `(?P<command>zerocmux(?: [^`]+)?)` !> `(?P<needle>[^`]+)`$")
 
 
 @dataclass(frozen=True)
