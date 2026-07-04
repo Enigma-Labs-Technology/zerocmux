@@ -232,7 +232,7 @@ _cmux_path_prepend_unique_directory() {
 _cmux_install_cli_command_shim() {
     local command_name="$1"
     local wrapper_path="$2"
-    local shim_root="${TMPDIR:-/tmp}/cmux-cli-shims/${CMUX_SURFACE_ID:-$$}"
+    local shim_root="${TMPDIR:-/tmp}/zerocmux-cli-shims/${CMUX_SURFACE_ID:-$$}"
     local shim_path="$shim_root/$command_name"
     local escaped_wrapper="$wrapper_path"
 
@@ -247,7 +247,7 @@ _cmux_install_cli_command_shim() {
         if [[ "$command_name" == "claude" ]]; then
             printf 'cmux_wrapper="%s"\n' "$escaped_wrapper"
             printf '%s\n' 'if [[ ! -x "$cmux_wrapper" && -n "${CMUX_BUNDLED_CLI_PATH:-}" ]]; then'
-            printf '%s\n' '    cmux_candidate="$(dirname "$CMUX_BUNDLED_CLI_PATH")/cmux-claude-wrapper"'
+            printf '%s\n' '    cmux_candidate="$(dirname "$CMUX_BUNDLED_CLI_PATH")/zerocmux-claude-wrapper"'
             printf '%s\n' '    if [[ -x "$cmux_candidate" ]]; then'
             printf '%s\n' '        cmux_wrapper="$cmux_candidate"'
             printf '%s\n' '    fi'
@@ -255,7 +255,7 @@ _cmux_install_cli_command_shim() {
             printf '%s\n' 'if [[ ! -x "$cmux_wrapper" ]]; then'
             printf '%s\n' '    cmux_cli="$(command -v cmux 2>/dev/null || true)"'
             printf '%s\n' '    if [[ -n "$cmux_cli" ]]; then'
-            printf '%s\n' '        cmux_candidate="$(dirname "$cmux_cli")/cmux-claude-wrapper"'
+            printf '%s\n' '        cmux_candidate="$(dirname "$cmux_cli")/zerocmux-claude-wrapper"'
             printf '%s\n' '        if [[ -x "$cmux_candidate" ]]; then'
             printf '%s\n' '            cmux_wrapper="$cmux_candidate"'
             printf '%s\n' '        fi'
@@ -338,7 +338,7 @@ _cmux_install_cli_wrapper() {
         eval "$command_name() { \"\${$wrapper_variable}\" \"\$@\"; }"
     fi
 }
-_cmux_install_cli_wrapper claude _CMUX_CLAUDE_WRAPPER cmux-claude-wrapper
+_cmux_install_cli_wrapper claude _CMUX_CLAUDE_WRAPPER zerocmux-claude-wrapper
 _cmux_install_cli_wrapper grok _CMUX_GROK_WRAPPER
 _cmux_now() {
     printf '%s\n' "${EPOCHSECONDS:-$SECONDS}"

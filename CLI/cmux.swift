@@ -23185,6 +23185,13 @@ struct CMUXCLI {
             }
             print("OK")
 
+        case "cron-create-guard":
+            telemetry.breadcrumb("claude-hook.cron-create-guard")
+            let guardResponse = claudeCronCreateGuardResponse(parsedInput.rawObject)
+            didSendFeedTelemetry = guardResponse == "{}"
+            print(guardResponse)
+            fflush(stdout)
+
         case "pre-tool-use":
             telemetry.breadcrumb("claude-hook.pre-tool-use")
             // Clears "Needs input" status and notification when Claude resumes work
@@ -23509,6 +23516,42 @@ struct CMUXCLI {
             return false
         }
         return source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "clear"
+    }
+
+
+    private func claudeCronCreateGuardResponse(_ object: [String: Any]?) -> String {
+        guard let object,
+              object["tool_name"] as? String == "CronCreate",
+              let input = object["tool_input"] as? [String: Any],
+              claudeCronCreateDurableRequested(input["durable"]) else {
+            return "{}"
+        }
+
+        return jsonString([
+            "hookSpecificOutput": [
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "zerocmux does not support durable Claude Code cron jobs. CronCreate durable:true would be silently downgraded to session-only in this environment, so zerocmux denied the tool call instead. Re-run with durable:false for a session-only job, or use an external scheduler or state-file resume path for persistence."
+            ]
+        ])
+    }
+
+    private func claudeCronCreateDurableRequested(_ value: Any?) -> Bool {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        if let value = value as? String {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "1", "true", "yes":
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private func socketPanelOption(_ surfaceId: String?) -> String {
@@ -30870,7 +30913,7 @@ export default CMUXSessionRestore;
         switch sub {
         case "session-start", "active": return "SessionStart"
         case "prompt-submit": return "UserPromptSubmit"
-        case "pre-tool-use": return "PreToolUse"
+        case "pre-tool-use", "cron-create-guard": return "PreToolUse"
         case "post-tool-use": return "PostToolUse"
         case "stop", "idle": return "Stop"
         case "session-end": return "SessionEnd"

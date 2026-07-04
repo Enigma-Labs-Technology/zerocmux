@@ -134,7 +134,7 @@ fs.writeFileSync(
         )
 
         make_executable(
-            wrapper_dir / "cmux",
+            wrapper_dir / "zerocmux",
             """#!/usr/bin/env bash
 set -euo pipefail
 printf '%s timeout=%s\\n' "$*" "${CMUXTERM_CLI_RESPONSE_TIMEOUT_SEC-__UNSET__}" >> "$FAKE_CMUX_LOG"
@@ -150,7 +150,7 @@ fi
 exit 0
 """,
         )
-        bundled_cli_path = bundled_dir / "cmux"
+        bundled_cli_path = bundled_dir / "zerocmux"
         make_executable(
             bundled_cli_path,
             """#!/usr/bin/env bash
@@ -248,8 +248,8 @@ def run_wrapper_terminal_env_probe(
         args_log = tmp / "real-args.log"
         socket_path = str(tmp / "cmux.sock")
         fingerprint_env = {
-            "CMUX_BUNDLE_ID": "com.cmuxterm.app.debug.envprobe",
-            "CMUX_BUNDLED_CLI_PATH": str(wrapper_dir / "cmux"),
+            "CMUX_BUNDLE_ID": "com.kernelalex.zerocmux.debug.envprobe",
+            "CMUX_BUNDLED_CLI_PATH": str(wrapper_dir / "zerocmux"),
             "CMUX_LOAD_GHOSTTY_ZSH_INTEGRATION": "1",
             "CMUX_PANEL_ID": "panel:test",
             "CMUX_PORT": "9170",
@@ -290,7 +290,7 @@ done
         )
 
         make_executable(
-            wrapper_dir / "cmux",
+            wrapper_dir / "zerocmux",
             """#!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "--socket" ]]; then
@@ -401,7 +401,7 @@ done
         )
 
         make_executable(
-            wrapper_dir / "cmux",
+            wrapper_dir / "zerocmux",
             """#!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "--socket" ]]; then
@@ -508,7 +508,7 @@ def test_live_socket_injects_supported_hooks_without_unlocking_bypass(failures: 
     )
     expect(runtime_node_options == "__UNSET__", f"live socket: expected runtime NODE_OPTIONS restored, got {runtime_node_options!r}", failures)
     expect(child_node_options == "__UNSET__", f"live socket: expected child NODE_OPTIONS restored, got {child_node_options!r}", failures)
-    expect(hook_cmux_bin.endswith("/bundled cli/cmux"), f"live socket: expected bundled zerocmux pin, got {hook_cmux_bin!r}", failures)
+    expect(hook_cmux_bin.endswith("/bundled cli/zerocmux"), f"live socket: expected bundled zerocmux pin, got {hook_cmux_bin!r}", failures)
 
     settings = parse_settings_arg(real_argv)
     expect(
@@ -528,7 +528,7 @@ def test_live_socket_injects_supported_hooks_without_unlocking_bypass(failures: 
     }.items():
         hook_command = hooks.get(hook_name, [{}])[0].get("hooks", [{}])[0].get("command", "")
         expect(
-            hook_command == f'"${{CMUX_CLAUDE_HOOK_CMUX_BIN:-cmux}}" hooks claude {expected_subcommand}',
+            hook_command == f'"${{CMUX_CLAUDE_HOOK_CMUX_BIN:-zerocmux}}" hooks claude {expected_subcommand}',
             f"{hook_name} hook should pin bundled cmux, got {hook_command!r}",
             failures,
         )
@@ -539,7 +539,7 @@ def test_live_socket_injects_supported_hooks_without_unlocking_bypass(failures: 
         cron_guard_hooks = cron_guard_groups[0].get("hooks", [])
         expect(
             any(
-                h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-cmux}" hooks claude cron-create-guard'
+                h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-zerocmux}" hooks claude cron-create-guard'
                 and h.get("async") is not True
                 for h in cron_guard_hooks
             ),
@@ -561,7 +561,7 @@ def test_live_socket_injects_supported_hooks_without_unlocking_bypass(failures: 
     )
     permission_request_hooks = hooks.get("PermissionRequest", [{}])[0].get("hooks", [{}])
     expect(
-        any(h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-cmux}" hooks feed --source claude' for h in permission_request_hooks),
+        any(h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-zerocmux}" hooks feed --source claude' for h in permission_request_hooks),
         f"PermissionRequest hook should call hooks feed, got {permission_request_hooks}",
         failures,
     )

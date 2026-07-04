@@ -10,72 +10,12 @@
    <Group
       location = "container:Packages/Shared"
       name = "Packages (Shared)">
-      <FileRef
-         location = "group:CmuxAgentChat">
-      </FileRef>
-      <FileRef
-         location = "group:CMUXAuthCore">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxAuthRuntime">
-      </FileRef>
-      <FileRef
-         location = "group:CMUXMobileCore">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxSyncStore">
-      </FileRef>
    </Group>
    <Group
       location = "container:Packages/iOS"
       name = "Packages (iOS)">
       <FileRef
          location = "container:ios/cmuxPackage">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxAgentChatUI">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileAnalytics">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileBrowser">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileCamera">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileDiagnostics">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobilePairedMac">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileRPC">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileShell">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileShellModel">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileShellUI">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileSupport">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileTerminal">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileTerminalKit">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileTransport">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxMobileWorkspace">
       </FileRef>
    </Group>
    <Group
@@ -110,9 +50,6 @@
       </FileRef>
       <FileRef
          location = "group:CmuxExtensionKit">
-      </FileRef>
-      <FileRef
-         location = "group:CmuxFeedback">
       </FileRef>
       <FileRef
          location = "group:CmuxFoundation">
