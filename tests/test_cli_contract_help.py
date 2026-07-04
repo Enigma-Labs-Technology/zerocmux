@@ -106,8 +106,8 @@ def load_probes(start_marker: str, end_marker: str, pattern: re.Pattern[str]) ->
 
 def run_probe(cli_path: str, probe: HelpProbe) -> ProbeResult:
     tokens = shlex.split(probe.command)
-    if not tokens or tokens[0] != "cmux":
-        raise RuntimeError(f"Probe must start with cmux: {probe.command}")
+    if not tokens or tokens[0] != "zerocmux":
+        raise RuntimeError(f"Probe must start with zerocmux: {probe.command}")
 
     return run_cli_args(cli_path, tokens[1:])
 

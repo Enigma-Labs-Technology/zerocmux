@@ -45,11 +45,16 @@ if grep -R "resolve-aws-cli.sh" "$ROOT_DIR/.github/workflows/nightly.yml" "$ROOT
   exit 1
 fi
 
-if ! grep -Fq "scripts/ci/upload-r2-object.py" "$ROOT_DIR/.github/workflows/nightly.yml"; then
+# zerocmux: the fork publishes its nightly appcast via GitHub releases, not
+# Cloudflare R2. The uploader stays validated above; require the nightly to
+# either use it or avoid R2 entirely.
+if grep -qiE "r2\.cloudflarestorage|cloudflare" "$ROOT_DIR/.github/workflows/nightly.yml" \
+  && ! grep -Fq "scripts/ci/upload-r2-object.py" "$ROOT_DIR/.github/workflows/nightly.yml"; then
   echo "FAIL: nightly workflow must use the Python R2 uploader"
   exit 1
 fi
-if ! grep -Fq "scripts/ci/upload-r2-object.py" "$ROOT_DIR/.github/workflows/release.yml"; then
+if grep -qiE "r2\.cloudflarestorage|cloudflare" "$ROOT_DIR/.github/workflows/release.yml" \
+  && ! grep -Fq "scripts/ci/upload-r2-object.py" "$ROOT_DIR/.github/workflows/release.yml"; then
   echo "FAIL: release workflow must use the Python R2 uploader"
   exit 1
 fi
