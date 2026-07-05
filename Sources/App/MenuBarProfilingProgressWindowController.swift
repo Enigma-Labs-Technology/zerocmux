@@ -1,8 +1,7 @@
 import AppKit
 import Foundation
 
-/// zerocmux: local stand-in for the removed CmuxFeedback package. Profiling
-/// captures stay on disk; there is no hosted submission endpoint.
+/// zerocmux: local stand-in for the removed CmuxFeedback package (captures stay on disk).
 struct FeedbackComposerSettings {
     let storedEmailKey = "sidebarHelpFeedbackEmail"
 }

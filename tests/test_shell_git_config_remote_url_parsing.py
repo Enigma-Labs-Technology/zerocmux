@@ -41,7 +41,7 @@ def _run_case(
     remote_config = textwrap.dedent(
         """\
         [remote "origin"] ; manually annotated main remote
-            url = "https://github.com/manaflow-ai/cmux.git" # canonical repo
+            url = "https://github.com/kernelalex/zerocmux.git" # canonical repo
             fetch = +refs/heads/*:refs/remotes/origin/*
         """
     )
@@ -59,7 +59,7 @@ def _run_case(
                 """\
                 [remote "origin"]
                     url = https://github.com/example/stale.git
-                    url = https://github.com/manaflow-ai/cmux.git
+                    url = https://github.com/kernelalex/zerocmux.git
                 """
             ),
             encoding="utf-8",

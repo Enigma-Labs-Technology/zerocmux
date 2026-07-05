@@ -683,7 +683,6 @@ class TabManager: ObservableObject {
         pullRequestProbing.workspacePullRequestTrackedPanelIds(workspaceId: workspaceId)
     }
 
-
     private func sweepStaleAgentPIDs() {
         for tab in tabs {
             var keysToRemove: [String] = []
