@@ -700,7 +700,10 @@ done
 """,
         )
 
-        socket_path = str(root / "zerocmux.sock")
+        # AF_UNIX paths are capped (~104 bytes on macOS); TemporaryDirectory
+        # under a deep TMPDIR overflows it, so bind in a short-lived /tmp dir.
+        _socket_dir = tempfile.mkdtemp(prefix="zcm-", dir="/tmp")
+        socket_path = str(Path(_socket_dir) / "zerocmux.sock")
         test_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             test_socket.bind(socket_path)
@@ -722,6 +725,7 @@ done
             )
         finally:
             test_socket.close()
+            shutil.rmtree(_socket_dir, ignore_errors=True)
 
         combined_output = result.stdout + result.stderr
         if result.returncode != 0:
@@ -805,7 +809,10 @@ done
 """,
         )
 
-        socket_path = str(root / "zerocmux.sock")
+        # AF_UNIX paths are capped (~104 bytes on macOS); TemporaryDirectory
+        # under a deep TMPDIR overflows it, so bind in a short-lived /tmp dir.
+        _socket_dir = tempfile.mkdtemp(prefix="zcm-", dir="/tmp")
+        socket_path = str(Path(_socket_dir) / "zerocmux.sock")
         test_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             test_socket.bind(socket_path)
@@ -827,6 +834,7 @@ done
             )
         finally:
             test_socket.close()
+            shutil.rmtree(_socket_dir, ignore_errors=True)
 
         combined_output = result.stdout + result.stderr
         if result.returncode != 0:
