@@ -22,12 +22,12 @@ import Testing
 
     @Test func prioritizesUpstreamThenOriginAndDeduplicates() {
         let output = """
-        origin https://github.com/austinwang/cmux.git (fetch)
-        origin https://github.com/austinwang/cmux.git (push)
-        upstream git@github.com:manaflow-ai/cmux.git (fetch)
-        upstream git@github.com:manaflow-ai/cmux.git (push)
-        backup ssh://git@github.com/manaflow-ai/cmux.git (fetch)
-        mirror https://gitlab.com/manaflow-ai/cmux.git (fetch)
+        origin https://github.com/austinwang/zerocmux.git (fetch)
+        origin https://github.com/austinwang/zerocmux.git (push)
+        upstream git@github.com:kernelalex/zerocmux.git (fetch)
+        upstream git@github.com:kernelalex/zerocmux.git (push)
+        backup ssh://git@github.com/kernelalex/zerocmux.git (fetch)
+        mirror https://gitlab.com/kernelalex/zerocmux.git (fetch)
         """
         #expect(
             GitMetadataService.githubRepositorySlugs(fromGitRemoteVOutput: output)
@@ -38,10 +38,10 @@ import Testing
     @Test func ignoresInlineComments() {
         let config = """
         [remote "origin"] ; user's main fork
-            url = git@github.com:austinwang/cmux.git # main origin
+            url = git@github.com:austinwang/zerocmux.git # main origin
             fetch = +refs/heads/*:refs/remotes/origin/*
         [remote "upstream"] # canonical repo
-            url = https://github.com/manaflow-ai/cmux.git ; upstream source
+            url = https://github.com/kernelalex/zerocmux.git ; upstream source
             fetch = +refs/heads/*:refs/remotes/upstream/*
         """
         #expect(slugs(fromConfig: config) == ["kernelalex/zerocmux", "austinwang/zerocmux"])
@@ -50,10 +50,10 @@ import Testing
     @Test func unquotesUrlValues() {
         let config = """
         [remote "origin"] ; user's main fork
-            url = "git@github.com:austinwang/cmux.git" # main origin
+            url = "git@github.com:austinwang/zerocmux.git" # main origin
             fetch = +refs/heads/*:refs/remotes/origin/*
         [remote "upstream"] # canonical repo
-            url = "https://github.com/manaflow-ai/cmux.git" ; upstream source
+            url = "https://github.com/kernelalex/zerocmux.git" ; upstream source
             fetch = +refs/heads/*:refs/remotes/upstream/*
         """
         #expect(slugs(fromConfig: config) == ["kernelalex/zerocmux", "austinwang/zerocmux"])
@@ -63,7 +63,7 @@ import Testing
         let config = """
         [remote "origin"]
             url = https://github.com/old-owner/old-repo.git
-            url = https://github.com/manaflow-ai/cmux.git
+            url = https://github.com/kernelalex/zerocmux.git
         """
         #expect(slugs(fromConfig: config) == ["kernelalex/zerocmux"])
     }
@@ -79,11 +79,11 @@ import Testing
         """)
         try """
         [remote "origin"]
-            url = "git@github.com:austinwang/cmux.git" # user's main fork
+            url = "git@github.com:austinwang/zerocmux.git" # user's main fork
         """.write(to: fixture.gitDirectory.appendingPathComponent("remotes.inc"), atomically: true, encoding: .utf8)
         try """
         [remote "upstream"]
-            url = https://github.com/manaflow-ai/cmux.git ; canonical repo
+            url = https://github.com/kernelalex/zerocmux.git ; canonical repo
         """.write(to: fixture.gitDirectory.appendingPathComponent("conditional-remotes.inc"), atomically: true, encoding: .utf8)
 
         #expect(slugs(forDirectory: fixture.root.path) == ["kernelalex/zerocmux", "austinwang/zerocmux"])
@@ -96,7 +96,7 @@ import Testing
         [include]
             path = remotes.inc
         [remote "origin"]
-            url = https://github.com/manaflow-ai/cmux.git
+            url = https://github.com/kernelalex/zerocmux.git
         """)
         try """
         [remote "origin"]
@@ -124,7 +124,7 @@ import Testing
         """.write(to: gitDir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         try """
         [remote "upstream"]
-            url = https://github.com/manaflow-ai/cmux.git
+            url = https://github.com/kernelalex/zerocmux.git
         """.write(to: gitDir.appendingPathComponent("recursive-remotes.inc"), atomically: true, encoding: .utf8)
 
         #expect(slugs(forDirectory: repoRoot.path) == ["kernelalex/zerocmux"])

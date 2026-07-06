@@ -4,11 +4,11 @@ import Testing
 
 @Suite struct GitSlugAndConfigTests {
     @Test(arguments: [
-        "git@github.com:manaflow-ai/cmux.git",
-        "ssh://git@github.com/manaflow-ai/cmux.git",
-        "https://github.com/manaflow-ai/cmux.git",
+        "git@github.com:kernelalex/zerocmux.git",
+        "ssh://git@github.com/kernelalex/zerocmux.git",
+        "https://github.com/kernelalex/zerocmux.git",
         "http://github.com/kernelalex/zerocmux",
-        "git://github.com/manaflow-ai/cmux.git",
+        "git://github.com/kernelalex/zerocmux.git",
         "https://github.com/kernelalex/zerocmux",
     ])
     func parsesGitHubRemoteForms(url: String) {
@@ -108,7 +108,7 @@ import Testing
     @Test func configSectionAndKeyNamesAreCaseInsensitive() {
         let config = """
         [Remote "origin"]
-            URL = https://github.com/manaflow-ai/cmux.git
+            URL = https://github.com/kernelalex/zerocmux.git
         """
         #expect(slugs(fromConfig: config) == ["kernelalex/zerocmux"])
     }
@@ -122,7 +122,7 @@ import Testing
         """)
         try """
         [remote "MixedCase"]
-            url = https://github.com/manaflow-ai/cmux.git
+            url = https://github.com/kernelalex/zerocmux.git
         """.write(to: fixture.gitDirectory.appendingPathComponent("remotes.inc"), atomically: true, encoding: .utf8)
         #expect(slugs(forDirectory: fixture.root.path) == ["kernelalex/zerocmux"])
     }

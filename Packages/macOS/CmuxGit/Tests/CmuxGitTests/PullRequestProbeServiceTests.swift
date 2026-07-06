@@ -159,7 +159,7 @@ import Testing
             PullRequestProbeService.branchEndpoint(repoSlug: "kernelalex/zerocmux", branch: "feat/x")
         )
         #expect(endpoint.hasPrefix("repos/kernelalex/zerocmux/pulls?"))
-        #expect(endpoint.contains("head=manaflow-ai:feat/x") || endpoint.contains("head=manaflow-ai%3Afeat/x") || endpoint.contains("head=manaflow-ai:feat%2Fx"))
+        #expect(endpoint.contains("head=kernelalex:feat/x") || endpoint.contains("head=kernelalex%3Afeat/x") || endpoint.contains("head=kernelalex:feat%2Fx"))
         #expect(PullRequestProbeService.branchEndpoint(repoSlug: "no-slash", branch: "b") == nil)
         #expect(PullRequestProbeService.branchEndpoint(repoSlug: "/missing-owner", branch: "b") == nil)
     }
