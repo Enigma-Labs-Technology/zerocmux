@@ -659,7 +659,8 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.macos == 'true' }}
     runs-on: macos-15
-    timeout-minutes: 20
+    # A hung Remote* suite costs one 5-minute alarm + retry; leave headroom.
+    timeout-minutes: 35
     steps:
       - name: Clear stale git locks (self-hosted reused workspace)
         shell: bash
@@ -796,9 +797,9 @@ jobs:
               # perl alarm = portable timeout (GNU timeout is absent on the
               # hosted macOS images).
               bounded() { perl -e 'alarm shift @ARGV; exec @ARGV' "$@"; }
-              bounded 600 swift test --package-path "$pkgdir" \
+              bounded 300 swift test --package-path "$pkgdir" \
                 --skip RemoteProxyBroker --skip RemoteCLIRelayServer \
-              || bounded 600 swift test --package-path "$pkgdir" \
+              || bounded 300 swift test --package-path "$pkgdir" \
                 --skip RemoteProxyBroker --skip RemoteCLIRelayServer \
                 --skip RemoteSessionProcessRunner
               ;;
