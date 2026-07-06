@@ -14,11 +14,9 @@ struct UserDefaultsSettingsStoreTests {
         _ expectedCount: Int,
         in recorder: UserDefaultsSettingsEventRecorder<Value>
     ) async {
-        // Yield-count spinning exhausts in well under a second on busy CI
-        // runners before KVO delivers; bound by wall-clock time instead.
+        // Wall-clock bound: yield-count spins exhaust before KVO delivers on CI.
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while await recorder.count() < expectedCount, ContinuousClock.now < deadline {
-            await Task.yield()
             try? await Task.sleep(for: .milliseconds(1))
         }
     }
