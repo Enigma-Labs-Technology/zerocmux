@@ -1,6 +1,47 @@
 # Changelog
 
-All notable changes to cmux are documented here.
+All notable changes to zerocmux are documented here.
+
+## [1.1.0] - 2026-07-06
+
+This release syncs zerocmux with two months of upstream cmux development
+(about 2,700 commits), while preserving the zerocmux guarantee: no telemetry,
+no analytics, no crash reporting, and no automatic network traffic other than
+Sparkle update checks against zerocmux's own GitHub releases.
+
+### Added
+- SSH remote workspaces: open a workspace on your own server over SSH, with a
+  remote daemon providing persistent sessions and tmux compatibility
+- In-app diff viewer and richer agent-session panes (new embedded webviews)
+- Canvas panes for freeform layout alongside terminals and browsers
+- Much faster, smarter command palette search (Nucleo fuzzy matching engine)
+- Workstreams: track long-running agent work items from the sidebar
+- Sleepy Mode: a built-in keep-awake screensaver/lock screen with themes
+- Keyboard shortcut chords, plus new shortcuts for sidebar toggles
+- Markdown viewer upgrades with live reload and richer rendering
+
+### Changed
+- Settings rebuilt as a dedicated window with search, curated entries, and
+  per-row cmux.json references
+- Terminal engine updated to a newer libghostty (built with crash reporting
+  compiled out; crash logs stay on your Mac)
+- Sidebar, notifications, and pull-request tracking refined throughout
+- App version numbering moves to 1.1.0 with Sparkle-safe build numbering
+
+### Fixed
+- Hundreds of upstream stability and rendering fixes across terminal focus,
+  session restore, browser panes, and window management
+
+### Privacy
+- All upstream telemetry reintroductions were stripped during the sync:
+  PostHog analytics, Sentry crash reporting (app, CLI, and terminal engine),
+  hosted account/auth flows, phone pairing and presence beacons, and the
+  hosted feedback/profiling uploaders are not part of zerocmux
+- The anonymous-telemetry setting was removed entirely rather than defaulted off
+
+### Thanks
+- This release builds on the work of the upstream
+  [cmux](https://github.com/manaflow-ai/cmux) team and contributors
 
 ## [0.64.6] - 2026-05-14
 
