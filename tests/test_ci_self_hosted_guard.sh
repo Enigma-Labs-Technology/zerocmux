@@ -42,5 +42,6 @@ check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-15' "GitHub-h
 # ci-macos-compat.yml uses matrix.os.
 check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-15' "GitHub-hosted macos-15"
 
-# release.yml signing job
+# release.yml jobs
+check_runner "$RELEASE_FILE" "build-ghostty-cli-helper" 'runs-on: macos-15' "GitHub-hosted macos-15"
 check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: macos-26' "GitHub-hosted macos-26"

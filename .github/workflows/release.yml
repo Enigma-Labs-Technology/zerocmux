@@ -14,7 +14,55 @@ env:
   CREATE_DMG_VERSION: 8.0.0
 
 jobs:
+  # zig 0.15.2 cannot link on macOS 26 runners, so the Ghostty CLI helper is
+  # built on macOS 15 and installed into the app as a prebuilt artifact
+  # (mirrors the green release-build lane in ci.yml).
+  build-ghostty-cli-helper:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+
+      - name: Install zig
+        run: ./scripts/install-zig-ci.sh
+
+      - name: Cache Zig packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/zig
+          key: zig-packages-${{ hashFiles('ghostty/build.zig.zon', 'ghostty/build.zig.zon.json') }}
+          restore-keys: zig-packages-
+
+      - name: Build universal Ghostty CLI helper
+        run: |
+          set -euo pipefail
+          mkdir -p ghostty-cli-helper
+          ./scripts/build-ghostty-cli-helper.sh --universal --output ghostty-cli-helper/ghostty
+          lipo ghostty-cli-helper/ghostty -verify_arch arm64 x86_64
+
+      - name: Upload universal Ghostty CLI helper
+        id: upload-ghostty-cli-helper
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zerocmux-ghostty-cli-helper-release
+          path: ghostty-cli-helper/ghostty
+          if-no-files-found: error
+
+      - name: Retry universal Ghostty CLI helper upload
+        if: steps.upload-ghostty-cli-helper.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zerocmux-ghostty-cli-helper-release
+          path: ghostty-cli-helper/ghostty
+          if-no-files-found: error
+          overwrite: true
+
   build-sign-notarize:
+    needs: build-ghostty-cli-helper
     runs-on: macos-26
     environment: release
     timeout-minutes: 45
@@ -124,7 +172,6 @@ jobs:
             rustup default stable
           fi
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          ./scripts/install-zig-ci.sh
           npm install --global "create-dmg@${CREATE_DMG_VERSION}"
 
       - name: Download pre-built GhosttyKit.xcframework
@@ -153,13 +200,28 @@ jobs:
           APPLE_RELEASE_BUNDLE_ID: ${{ secrets.APPLE_RELEASE_BUNDLE_ID }}
         run: |
           APPLE_RELEASE_BUNDLE_ID="${APPLE_RELEASE_BUNDLE_ID:-com.kernelalex.zerocmux}"
-          xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
+          CMUX_SKIP_ZIG_BUILD=1 xcodebuild -scheme zerocmux -configuration Release -derivedDataPath build-universal \
             -destination 'generic/platform=macOS' \
             -clonedSourcePackagesDirPath .spm-cache \
             ARCHS="arm64 x86_64" \
             ONLY_ACTIVE_ARCH=NO \
             PRODUCT_BUNDLE_IDENTIFIER="$APPLE_RELEASE_BUNDLE_ID" \
             CODE_SIGNING_ALLOWED=NO build
+
+      - name: Download universal Ghostty CLI helper
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: zerocmux-ghostty-cli-helper-release
+          path: ghostty-cli-helper
+
+      - name: Install universal Ghostty CLI helper
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          ./scripts/install-prebuilt-ghostty-cli-helper.sh \
+            ghostty-cli-helper/ghostty \
+            build-universal/Build/Products/Release/zerocmux.app
 
       - name: Verify binary architectures
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -177,6 +239,9 @@ jobs:
           [[ "$APP_ARCHS" == *arm64* && "$APP_ARCHS" == *x86_64* ]]
           [[ "$CLI_ARCHS" == *arm64* && "$CLI_ARCHS" == *x86_64* ]]
           [[ "$HELPER_ARCHS" == *arm64* && "$HELPER_ARCHS" == *x86_64* ]]
+          SDK_VERSION="$(otool -l "$APP_BINARY" | awk '/LC_BUILD_VERSION/ { in_version=1; next } in_version && /sdk / { print $2; exit }')"
+          echo "App SDK version: $SDK_VERSION"
+          [[ "$SDK_VERSION" == 26.* ]]
 
       - name: Build remote daemon release assets and inject manifest
         if: steps.guard_release_assets.outputs.skip_all != 'true'
