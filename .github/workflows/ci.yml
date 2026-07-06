@@ -793,11 +793,12 @@ jobs:
               # deterministically and CmuxRemoteSession's process-runner suite
               # can hang the job. All pass on real hardware. Bound the run and
               # retry once with the subprocess suite skipped.
-              T="$(command -v timeout || command -v gtimeout || true)"
-              [ -n "$T" ] || T="env"
-              "$T" 600 swift test --package-path "$pkgdir" \
+              # perl alarm = portable timeout (GNU timeout is absent on the
+              # hosted macOS images).
+              bounded() { perl -e 'alarm shift @ARGV; exec @ARGV' "$@"; }
+              bounded 600 swift test --package-path "$pkgdir" \
                 --skip RemoteProxyBroker --skip RemoteCLIRelayServer \
-              || "$T" 600 swift test --package-path "$pkgdir" \
+              || bounded 600 swift test --package-path "$pkgdir" \
                 --skip RemoteProxyBroker --skip RemoteCLIRelayServer \
                 --skip RemoteSessionProcessRunner
               ;;
