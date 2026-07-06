@@ -14,10 +14,12 @@ struct UserDefaultsSettingsStoreTests {
         _ expectedCount: Int,
         in recorder: UserDefaultsSettingsEventRecorder<Value>
     ) async {
-        var spins = 0
-        while await recorder.count() < expectedCount, spins < 100_000 {
+        // Yield-count spinning exhausts in well under a second on busy CI
+        // runners before KVO delivers; bound by wall-clock time instead.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while await recorder.count() < expectedCount, ContinuousClock.now < deadline {
             await Task.yield()
-            spins += 1
+            try? await Task.sleep(for: .milliseconds(1))
         }
     }
 
