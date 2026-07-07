@@ -2,6 +2,19 @@
 
 All notable changes to zerocmux are documented here.
 
+## [1.2.1] - 2026-07-07
+
+### Fixed
+- Fixed a crash introduced in 1.2.0: recording a submitted prompt or an
+  assistant reply (workspace message previews and iMessage-mode ordering)
+  entered infinite recursion and crashed the app shortly after launch
+- CI can no longer report a crashed unit-test run as passing; the workspace
+  message-recording suite now runs as a dedicated non-tolerant regression gate
+
+### Changed
+- Release workflow: the build-sign-notarize job timeout was raised to
+  120 minutes so full universal builds no longer get cancelled mid-run
+
 ## [1.2.0] - 2026-07-06
 
 This release syncs zerocmux with two months of upstream cmux development
