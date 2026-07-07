@@ -2,7 +2,7 @@
 
 All notable changes to zerocmux are documented here.
 
-## [1.1.0] - 2026-07-06
+## [1.2.0] - 2026-07-06
 
 This release syncs zerocmux with two months of upstream cmux development
 (about 2,700 commits), while preserving the zerocmux guarantee: no telemetry,
@@ -26,7 +26,7 @@ Sparkle update checks against zerocmux's own GitHub releases.
 - Terminal engine updated to a newer libghostty (built with crash reporting
   compiled out; crash logs stay on your Mac)
 - Sidebar, notifications, and pull-request tracking refined throughout
-- App version numbering moves to 1.1.0 with Sparkle-safe build numbering
+- App version numbering moves to 1.2.0 with Sparkle-safe build numbering
 
 ### Fixed
 - Hundreds of upstream stability and rendering fixes across terminal focus,
