@@ -5445,7 +5445,10 @@ final class Workspace: Identifiable, ObservableObject {
 
     @discardableResult
     func recordConversationMessage(_ message: String?) -> Bool {
-        recordSubmittedMessage(message)
+        guard let preview = Self.conversationMessagePreview(from: message) else { return false }
+        guard latestConversationMessage != preview else { return false }
+        latestConversationMessage = preview
+        return true
     }
 
     @discardableResult
