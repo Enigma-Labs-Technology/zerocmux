@@ -65,7 +65,7 @@ jobs:
     needs: build-ghostty-cli-helper
     runs-on: blacksmith-6vcpu-macos-26
     environment: release
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
