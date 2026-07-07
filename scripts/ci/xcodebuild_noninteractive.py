@@ -18,6 +18,13 @@ TIMEOUT_EXIT_CODE = 124
 POST_TEST_FAILED_EXIT_CODE = 125
 SELECTED_TESTS_DONE_RE = re.compile(rb"Test Suite 'Selected tests' (passed|failed) at ")
 SUCCESS_MARKER = b"** TEST SUCCEEDED **"
+# An app-host crash restarts the run and can leave a stale "Selected tests
+# passed ... Executed 0 tests" summary before xcodebuild hangs; that summary
+# must not convert a crashed run into a post-test-timeout success.
+CRASH_MARKERS = (
+    b"Restarting after unexpected exit, crash, or test timeout",
+    b"*** Program crashed:",
+)
 
 
 def child_exit_code(status: int) -> int:
@@ -132,6 +139,7 @@ def main() -> int:
     post_test_deadline: float | None = None
     selected_tests_result: str | None = None
     saw_passing_terminal_summary = False
+    saw_crash = False
     log_path = os.environ.get("CMUX_XCODEBUILD_NONINTERACTIVE_LOG_PATH")
     log_file: BinaryIO | None = None
     if log_path:
@@ -209,6 +217,8 @@ def main() -> int:
             post_test_deadline = time.monotonic() + post_test_timeout
         if SUCCESS_MARKER in prompt_window:
             saw_passing_terminal_summary = True
+        if any(marker in prompt_window for marker in CRASH_MARKERS):
+            saw_crash = True
         if SWIFT_CRASH_PROMPT in prompt_window:
             # The Swift crash backtracer asks for one key. Send q to choose the
             # noninteractive quit path and let xcodebuild continue reporting.
@@ -237,6 +247,13 @@ def main() -> int:
             log_file.write(f"{message}\n".encode())
             log_file.close()
         terminate_child(pid)
+        if saw_crash and not saw_passing_terminal_summary:
+            print(
+                "App-host crash detected before the hang; treating post-test "
+                "timeout as failure",
+                file=sys.stderr,
+            )
+            return POST_TEST_FAILED_EXIT_CODE
         if selected_tests_result == "passed" or saw_passing_terminal_summary:
             return 0
         if selected_tests_result == "failed":

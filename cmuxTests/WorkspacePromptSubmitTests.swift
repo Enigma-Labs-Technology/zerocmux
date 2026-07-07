@@ -261,6 +261,26 @@ struct WorkspacePromptSubmitTests {
         #expect(event.assistantFinalMessage == nil)
     }
 
+    @Test func testRecordConversationMessageStoresPreviewAndDeduplicates() {
+        let workspace = Workspace()
+
+        #expect(workspace.recordConversationMessage("assistant reply"))
+        #expect(workspace.latestConversationMessage == "assistant reply")
+        #expect(workspace.latestSubmittedMessage == nil)
+        #expect(!workspace.recordConversationMessage("assistant reply"))
+        #expect(workspace.recordConversationMessage("second reply"))
+        #expect(workspace.latestConversationMessage == "second reply")
+    }
+
+    @Test func testRecordSubmittedMessageUpdatesConversationAndSubmissionState() {
+        let workspace = Workspace()
+
+        #expect(workspace.recordSubmittedMessage("run the tests"))
+        #expect(workspace.latestSubmittedMessage == "run the tests")
+        #expect(workspace.latestConversationMessage == "run the tests")
+        #expect(workspace.latestSubmittedAt != nil)
+    }
+
     @Test func testBlankSubmittedMessageDoesNotClearRecordedPreview() {
         let workspace = Workspace()
 

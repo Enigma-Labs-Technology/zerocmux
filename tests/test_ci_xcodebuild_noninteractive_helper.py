@@ -183,6 +183,38 @@ def main() -> int:
         )
         return 1
 
+    crashed_post_test_child = textwrap.dedent(
+        """
+        import time
+
+        print(
+            "Restarting after unexpected exit, crash, or test timeout; "
+            "summary will include totals from previous launches.",
+            flush=True,
+        )
+        print("Test Suite 'Selected tests' passed at now", flush=True)
+        print("\\t Executed 0 tests, with 0 failures (0 unexpected) in 0.001 seconds", flush=True)
+        time.sleep(10)
+        """
+    )
+    crashed_post_test_result = subprocess.run(
+        [sys.executable, str(HELPER), sys.executable, "-c", crashed_post_test_child],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=5,
+        env=post_test_env,
+    )
+    if crashed_post_test_result.returncode != 125:
+        print(crashed_post_test_result.stdout, end="")
+        print(crashed_post_test_result.stderr, end="", file=sys.stderr)
+        print(
+            "FAIL: expected post-test timeout after a crash-restart marker to exit 125 "
+            f"even with a passing Selected tests summary, got {crashed_post_test_result.returncode}"
+        )
+        return 1
+
     direct_output_child = "import sys; sys.stdout.write('x' * 262144); sys.stdout.flush()"
     direct_output_result = subprocess.run(
         [sys.executable, str(HELPER), sys.executable, "-c", direct_output_child],
