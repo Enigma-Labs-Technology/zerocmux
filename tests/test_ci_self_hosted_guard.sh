@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Ensures expensive macOS jobs and release signing stay on GitHub-hosted
-# runners rather than third-party or self-hosted macOS runners.
+# Pins the expensive macOS jobs and the release signing lanes to the sanctioned
+# Blacksmith macOS runners. This keeps those lanes from silently drifting back
+# to GitHub-hosted macos-* runners or onto other third-party/self-hosted
+# providers (warp-/depot-) that the project does not run always-on CI on.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,23 +27,23 @@ check_runner() {
   echo "PASS: $job uses $description"
 }
 
-if grep -R -n -E 'runs-on:.*(warp-macos|blacksmith-|depot-)|os: (warp-macos|blacksmith-|depot-)' "$WORKFLOW_DIR"; then
-  echo "FAIL: workflows must not use third-party macOS runner labels"
+if grep -R -n -E 'runs-on:.*(warp-macos|depot-)|os: (warp-macos|depot-)' "$WORKFLOW_DIR"; then
+  echo "FAIL: always-on workflows must not hardcode warp-/depot- runner labels (use Blacksmith or GitHub-hosted runners)"
   exit 1
 fi
 
 # ci.yml jobs
-check_runner "$CI_FILE" "app-host-unit-tests" 'runs-on: macos-15' "GitHub-hosted macos-15"
-check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: macos-15' "GitHub-hosted macos-15"
-check_runner "$CI_FILE" "release-build" 'runs-on: macos-26' "GitHub-hosted macos-26"
-check_runner "$CI_FILE" "ui-regressions" 'runs-on: macos-15' "GitHub-hosted macos-15"
+check_runner "$CI_FILE" "app-host-unit-tests" 'runs-on: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
+check_runner "$CI_FILE" "tests-build-and-lag" 'runs-on: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
+check_runner "$CI_FILE" "release-build" 'runs-on: blacksmith-6vcpu-macos-26' "Blacksmith macos-26"
+check_runner "$CI_FILE" "ui-regressions" 'runs-on: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
 
 # build-ghosttykit.yml
-check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: macos-15' "GitHub-hosted macos-15"
+check_runner "$GHOSTTYKIT_FILE" "build-ghosttykit" 'runs-on: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
 
 # ci-macos-compat.yml uses matrix.os.
-check_runner "$COMPAT_FILE" "compat-tests" 'os: macos-15' "GitHub-hosted macos-15"
+check_runner "$COMPAT_FILE" "compat-tests" 'os: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
 
 # release.yml jobs
-check_runner "$RELEASE_FILE" "build-ghostty-cli-helper" 'runs-on: macos-15' "GitHub-hosted macos-15"
-check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: macos-26' "GitHub-hosted macos-26"
+check_runner "$RELEASE_FILE" "build-ghostty-cli-helper" 'runs-on: blacksmith-6vcpu-macos-15' "Blacksmith macos-15"
+check_runner "$RELEASE_FILE" "build-sign-notarize" 'runs-on: blacksmith-6vcpu-macos-26' "Blacksmith macos-26"
