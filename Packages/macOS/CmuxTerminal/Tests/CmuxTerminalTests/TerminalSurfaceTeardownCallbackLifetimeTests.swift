@@ -18,7 +18,7 @@ import Testing
         let recorder = TeardownOrderRecorder()
         let surface = makeSurface()
         surface.installRuntimeSurfaceForTesting(fakeRuntimeSurface())
-        surface.mobileByteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
+        surface.byteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
         TerminalSurface.runtimeSurfaceFreeOverrideForTesting = { _ in
             recorder.record(.nativeFree)
         }
@@ -41,7 +41,7 @@ import Testing
         let recorder = TeardownOrderRecorder()
         let surface = makeSurface()
         surface.installRuntimeSurfaceForTesting(fakeRuntimeSurface())
-        surface.mobileByteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
+        surface.byteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
         TerminalSurface.runtimeSurfaceFreeOverrideForTesting = { _ in
             recorder.record(.nativeFree)
         }
@@ -62,7 +62,7 @@ import Testing
         let recorder = TeardownOrderRecorder()
         var surface: TerminalSurface? = makeSurface()
         surface?.installRuntimeSurfaceForTesting(fakeRuntimeSurface())
-        surface?.mobileByteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
+        surface?.byteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
         TerminalSurface.runtimeSurfaceFreeOverrideForTesting = { _ in
             recorder.record(.nativeFree)
         }
@@ -87,7 +87,7 @@ import Testing
         let recorder = TeardownOrderRecorder()
         let surface = makeSurface()
         surface.installRuntimeSurfaceForTesting(fakeRuntimeSurface())
-        surface.mobileByteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
+        surface.byteTeeLease = RecordingTerminalByteTeeLease(recorder: recorder)
         weak var weakBox: TerminalManualIOWriteBox?
         // Immediately-executed closure so the only remaining strong reference
         // is the retained Unmanaged context handed to the surface.
