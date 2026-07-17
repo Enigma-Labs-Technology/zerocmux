@@ -340,6 +340,24 @@ class Client:
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             os.environ["TERM"] = "xterm-256color"
+            # pty.fork() starts the pty with a 0x0 winsize; the parent's
+            # TIOCSWINSZ below races the exec. A client that reads 0x0 first
+            # asserts a degenerate 1x1 surface and then renegotiates, which on
+            # slow runners trips the runtime's client-size settlement into a
+            # redraw loop that strands typed input. Wait for the parent to
+            # size the pty before exec so the client always starts at the real
+            # geometry (deterministic, no assertions weakened).
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                try:
+                    winsize = struct.unpack(
+                        "HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8)
+                    )
+                    if winsize[0] > 0 and winsize[1] > 0:
+                        break
+                except OSError:
+                    pass
+                time.sleep(0.01)
             os.execv(BIN, [BIN, "attach", "--session", SESSION, "--socket", SOCK])
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         os.kill(self.pid, signal.SIGWINCH)
@@ -369,7 +387,10 @@ class Client:
                     return
             elif time.time() >= quiet_deadline:
                 return
-        raise AssertionError("client output did not quiesce")
+        raise AssertionError(
+            "client output did not quiesce; last output: "
+            f"{self.output[-1000:]!r}"
+        )
 
     def wait_output(self, needle, seconds):
         deadline = time.time() + seconds
@@ -422,9 +443,10 @@ def wait_shell_ready(seconds=20):
     while time.time() < deadline:
         try:
             surfaces = active_surfaces()
-        except StopIteration:
+        except (StopIteration, KeyError):
             # The headless server registers its first workspace asynchronously;
-            # until then list-workspaces has no active entry. Keep polling.
+            # until then list-workspaces has no active entry (or a partial
+            # payload). Keep polling.
             surfaces = []
         if surfaces:
             screen = rpc({"id": 2100, "cmd": "read-screen", "surface": surfaces[0]})
