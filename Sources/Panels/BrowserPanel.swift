@@ -4198,7 +4198,9 @@ final class BrowserPanel: Panel, ObservableObject {
         installDetachedDeveloperToolsWindowCloseObserver()
         installHiddenWebViewDiscardPolicyObserver()
         applyBrowserThemeModeIfNeeded()
-        ReactGrabScriptLoader.prefetch()
+        // zerocmux: no automatic ReactGrab script prefetch here. Constructing a
+        // browser panel (including session restore) must not reach unpkg.com;
+        // the Cmd+Shift+G gesture path fetches the script on demand.
         insecureHTTPAlertWindowProvider = { [weak self] in
             if let self, let window = browserInteractiveModalHostWindow(for: self.webView) {
                 return window
