@@ -429,43 +429,12 @@ server = subprocess.Popen(
 )
 SOCK = wait_for_control_socket(server)
 
-
-def wait_shell_ready(seconds=20):
-    """Wait until the server-side shell has rendered something (its prompt).
-
-    Typing into a freshly attached client before the pane shell exists and
-    before the attach/resize handshake settles can strand the keystrokes;
-    slower runners (Blacksmith VMs vs the hosted runners this script was
-    tuned on) hit that window with a fixed drain. Gate on observed server
-    state instead.
-    """
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        try:
-            surfaces = active_surfaces()
-        except (StopIteration, KeyError):
-            # The headless server registers its first workspace asynchronously;
-            # until then list-workspaces has no active entry (or a partial
-            # payload). Keep polling.
-            surfaces = []
-        if surfaces:
-            screen = rpc({"id": 2100, "cmd": "read-screen", "surface": surfaces[0]})
-            if screen["data"]["text"].strip():
-                return
-        time.sleep(0.2)
-    raise AssertionError("server shell never rendered a prompt")
-
-
 try:
-    # First attach: type a marker into the shell. Gate the first keystroke on
-    # the server shell being up and the client's initial render having
-    # quiesced (replay + sizing settled), matching the drain_until_quiet
-    # pattern the later steps already use; generous deadline for slow runners.
+    # First attach: type a marker into the shell.
     c1 = Client()
-    wait_shell_ready()
-    c1.drain_until_quiet()
+    c1.drain(1.5)
     c1.send(f"printf '{MARKER}\\n'\r".encode())
-    assert c1.wait_output(MARKER, 30), "marker never rendered on first attach"
+    assert c1.wait_output(MARKER, 15), "marker never rendered on first attach"
     status = c1.detach()
     print("first attach + detach ok, status", status)
 
@@ -481,12 +450,9 @@ try:
     # Reattach: the marker must be rendered from the VT replay alone.
     c2 = Client()
     assert c2.wait_output(MARKER, 15), "marker not rendered after reattach"
-    # Live path still works after replay: type another command. Let the
-    # reattach replay and resize claims quiesce before typing so the
-    # keystrokes are not stranded behind a pending mutation on slow runners.
-    c2.drain_until_quiet()
+    # Live path still works after replay: type another command.
     c2.send(b"printf '\\033[3J\\033[H\\033[2J'; printf 'live-after-reattach\\n'\r")
-    assert c2.wait_output("live-after-reattach", 30), "live stream broken after reattach"
+    assert c2.wait_output("live-after-reattach", 15), "live stream broken after reattach"
     live_screen = rpc({"id": 3, "cmd": "read-screen", "surface": surface_id})
     assert "live-after-reattach" in live_screen["data"]["text"], live_screen["data"]["text"]
 
