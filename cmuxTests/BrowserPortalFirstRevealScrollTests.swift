@@ -197,7 +197,7 @@ struct BrowserPortalFirstRevealScrollTests {
         let webView = RecordingWebView(frame: .zero, configuration: WKWebViewConfiguration())
         defer { BrowserWindowPortalRegistry.detach(webView: webView) }
 
-        webView.browserPortalPrepareForHiddenHostAdoption()
+        webView.browserPortalNotifyHidden(reason: "unitTestHiddenHostPortalReveal")
         #expect(webView.browserPortalNeedsFirstSizedRevealNudge)
 
         BrowserWindowPortalRegistry.bind(webView: webView, to: fixture.anchor, visibleInUI: true)
@@ -231,7 +231,7 @@ struct BrowserPortalFirstRevealScrollTests {
         host.layoutSubtreeIfNeeded()
 
         let webView = RecordingWebView(frame: .zero, configuration: WKWebViewConfiguration())
-        webView.browserPortalPrepareForHiddenHostAdoption()
+        webView.browserPortalNotifyHidden(reason: "unitTestHiddenHostLocalInlineReveal")
         #expect(webView.browserPortalRequiresRenderingStateReattach)
         slot.addSubview(webView)
         host.pinHostedWebView(webView, in: slot)
@@ -264,7 +264,7 @@ struct BrowserPortalFirstRevealScrollTests {
         host.layoutSubtreeIfNeeded()
 
         let webView = RecordingWebView(frame: .zero, configuration: WKWebViewConfiguration())
-        webView.browserPortalPrepareForHiddenHostAdoption()
+        webView.browserPortalNotifyHidden(reason: "unitTestLocalInlineDeferredReveal")
         slot.addSubview(webView)
         host.pinHostedWebView(webView, in: slot)
         webView.frameSizeCalls.removeAll()

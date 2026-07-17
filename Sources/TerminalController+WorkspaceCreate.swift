@@ -4,7 +4,6 @@ import Foundation
 extension TerminalController {
     // Shared workspace-create implementation: the workspace.create command moved
     // to ControlCommandCoordinator.
-    // this body for the mobile data-plane create path.
     func v2WorkspaceCreate(
         params: [String: Any],
         tabManager resolvedTabManager: TabManager? = nil
