@@ -563,7 +563,7 @@ def test_live_socket_injects_supported_hooks_without_unlocking_bypass(failures: 
         push_hooks = push_notification_groups[0].get("hooks", [])
         expect(
             any(
-                h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-cmux}" hooks claude push-notification'
+                h.get("command") == '"${CMUX_CLAUDE_HOOK_CMUX_BIN:-zerocmux}" hooks claude push-notification'
                 and h.get("async") is True
                 for h in push_hooks
             ),

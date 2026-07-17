@@ -46,9 +46,9 @@ struct ShellIntegrationSendTransportTests {
     private static func deliverViaIntegration(shimmed: Bool) throws -> DeliveryResult {
         let script = try #require(
             RemoteInteractiveShellBootstrapBuilder.bundledShellIntegrationScript(
-                named: "cmux-zsh-integration.zsh"
+                named: "zerocmux-zsh-integration.zsh"
             ),
-            "cmux-zsh-integration.zsh must ship in the app bundle"
+            "zerocmux-zsh-integration.zsh must ship in the app bundle"
         )
         // Deliberately short root: unix socket paths must fit
         // sockaddr_un.sun_path (104 bytes on Darwin), and the default

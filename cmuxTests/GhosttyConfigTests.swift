@@ -5937,7 +5937,7 @@ final class ZshShellIntegrationHandoffTests: XCTestCase {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let integrationPath = repoRoot.appendingPathComponent("Resources/shell-integration/cmux-bash-integration.bash")
+        let integrationPath = repoRoot.appendingPathComponent("Resources/shell-integration/zerocmux-bash-integration.bash")
         let rcfilePath = root.appendingPathComponent(".bashrc")
         let rcfileContents: String = {
             guard cmuxLoadShellIntegration else { return ":\n" }

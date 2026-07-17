@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regression test: the generated OMP extension is importable and emits zerocmux hook calls with complete payloads.
+Regression test: the generated OMP extension is importable and emits cmux hook calls with complete payloads.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ def verify_hook_persistence(cli_path: str, root: Path, base_env: dict[str, str])
     workspace_id = "11111111-1111-1111-1111-111111111111"
     surface_id = "22222222-2222-2222-2222-222222222222"
     session_id = "omp-hook-session-123"
-    socket_path = Path("/tmp") / f"zerocmux-omp-hook-{os.getpid()}-{time.monotonic_ns()}.sock"
+    socket_path = Path("/tmp") / f"cmux-omp-hook-{os.getpid()}-{time.monotonic_ns()}.sock"
     launch_argv = [
         "/Users/example/.bun/bin/omp",
         "--resume",
@@ -293,7 +293,7 @@ def main() -> int:
         print(f"FAIL: {exc}")
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="zerocmux-omp-extension-") as td:
+    with tempfile.TemporaryDirectory(prefix="cmux-omp-extension-") as td:
         root = Path(td)
         home = root / "home"
         home.mkdir()
@@ -330,7 +330,7 @@ def main() -> int:
             return 1
         extension_text = extension_path.read_text(encoding="utf-8")
         if "zerocmux-omp-session-extension-marker" not in extension_text:
-            print(f"FAIL: expected zerocmux marker in {extension_path}")
+            print(f"FAIL: expected cmux marker in {extension_path}")
             return 1
         if shared_pi_extension.read_text(encoding="utf-8") != "// zerocmux-pi-session-extension-marker v1\n":
             print("FAIL: OMP install modified the Pi extension in PI_CODING_AGENT_DIR")
@@ -351,10 +351,10 @@ def main() -> int:
             print(f"stderr={reinstall.stderr.strip()}")
             return 1
 
-        fake_cmux = root / "fake-zerocmux"
-        fake_args_log = root / "fake-zerocmux-args.log"
-        fake_stdin_log = root / "fake-zerocmux-stdin.log"
-        fake_env_log = root / "fake-zerocmux-env.log"
+        fake_cmux = root / "fake-cmux"
+        fake_args_log = root / "fake-cmux-args.log"
+        fake_stdin_log = root / "fake-cmux-stdin.log"
+        fake_env_log = root / "fake-cmux-env.log"
         make_executable(
             fake_cmux,
             """#!/usr/bin/env bash
@@ -517,7 +517,7 @@ if (elapsed > 2000) throw new Error(`handlers blocked for ${elapsed}ms`);
             timeout=20,
         )
         if uninstall_foreign.returncode != 0 or not foreign_path.exists() or "Refusing to remove" not in uninstall_foreign.stdout:
-            print("FAIL: omp extension uninstall did not preserve non-zerocmux file")
+            print("FAIL: omp extension uninstall did not preserve non-cmux file")
             print(f"exit={uninstall_foreign.returncode}")
             print(f"stdout={uninstall_foreign.stdout.strip()}")
             print(f"stderr={uninstall_foreign.stderr.strip()}")
@@ -540,7 +540,7 @@ if (elapsed > 2000) throw new Error(`handlers blocked for ${elapsed}ms`);
             print(f"stderr={install_invalid.stderr.strip()}")
             return 1
         install_invalid_output = install_invalid.stdout + install_invalid.stderr
-        if "Failed to read" not in install_invalid_output or "not a zerocmux extension" in install_invalid_output:
+        if "Failed to read" not in install_invalid_output or "not a cmux extension" in install_invalid_output:
             print("FAIL: omp extension install did not report unreadable file distinctly")
             print(f"stdout={install_invalid.stdout.strip()}")
             print(f"stderr={install_invalid.stderr.strip()}")
@@ -560,7 +560,7 @@ if (elapsed > 2000) throw new Error(`handlers blocked for ${elapsed}ms`);
             print(f"stderr={uninstall_invalid.stderr.strip()}")
             return 1
         uninstall_invalid_output = uninstall_invalid.stdout + uninstall_invalid.stderr
-        if "Failed to read" not in uninstall_invalid_output or "not a zerocmux extension" in uninstall_invalid_output:
+        if "Failed to read" not in uninstall_invalid_output or "not a cmux extension" in uninstall_invalid_output:
             print("FAIL: omp extension uninstall did not report unreadable file distinctly")
             print(f"stdout={uninstall_invalid.stdout.strip()}")
             print(f"stderr={uninstall_invalid.stderr.strip()}")
@@ -601,7 +601,7 @@ if (elapsed > 2000) throw new Error(`handlers blocked for ${elapsed}ms`);
             print(f"stdout={config_uninstall.stdout.strip()}")
             print(f"stderr={config_uninstall.stderr.strip()}")
             return 1
-    print("PASS: generated OMP extension installs, emits complete zerocmux hook payloads, and persists hook sessions")
+    print("PASS: generated OMP extension installs, emits complete cmux hook payloads, and persists hook sessions")
     return 0
 
 
