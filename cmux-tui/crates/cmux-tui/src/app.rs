@@ -8146,13 +8146,13 @@ mod tests {
         // registered and the decision reads AlreadyClaimed (valgrind's
         // serialized scheduling stretches that window). Wait out the release;
         // the terminal state must still be NeedsQueue.
-        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             match app.session.surface_resize_decision(88, (100, 30), true) {
                 SurfaceResizeDecision::NeedsQueue(_) => break,
                 SurfaceResizeDecision::AlreadyClaimed => {
                     assert!(
-                        std::time::Instant::now() < deadline,
+                        Instant::now() < deadline,
                         "resize claim for surface 88 was never released after settlement"
                     );
                     std::thread::sleep(Duration::from_millis(10));
