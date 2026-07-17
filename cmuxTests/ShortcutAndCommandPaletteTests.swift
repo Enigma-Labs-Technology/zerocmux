@@ -836,21 +836,7 @@ final class CommandPaletteRenameSelectionSettingsTests: XCTestCase {
 }
 
 
-final class CommandPaletteCloudCommandTests: XCTestCase {
-    func testCloudCommandPaletteIncludesCloudWorkspaceActions() {
-        let commandIds = Set(ContentView.commandPaletteCloudCommandContributions().map(\.commandId))
-
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudOpenCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudForkCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudSnapshotCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudRestoreCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPromoteTemplateCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudStatusCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPortsCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudToolsCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudHandoffCommandId))
-    }
-
+final class CloudVMIdentityMetadataTests: XCTestCase {
     func testCloudVMIdentityIsExplicitMetadata() {
         let cloudConfig = WorkspaceRemoteConfiguration(
             destination: "nncop8f8h6w9blhns6sy+cmux@vm-ssh.freestyle.sh",

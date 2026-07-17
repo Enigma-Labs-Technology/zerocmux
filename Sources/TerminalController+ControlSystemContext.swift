@@ -235,7 +235,7 @@ extension TerminalController: ControlSystemContext {
                 }
             }
 
-            // zerocmux: the feedback composer (CmuxFeedback) was removed; the
+            // zerocmux: the feedback-composer package was removed; the
             // command still routes focus but no composer is presented.
         }
     }

@@ -4,7 +4,6 @@ import Foundation
 import Bonsplit
 import AppKit
 import CmuxAppKitSupportUI
-import CmuxFeedback
 
 /// View that renders the appropriate panel view based on panel type
 struct PanelContentView: View {
@@ -231,17 +230,8 @@ private struct CloudVMLoadingPanelView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
 
-                        Button {
-                            FeedbackComposerBridge().openComposer()
-                        } label: {
-                            Label(
-                                String(localized: "panel.cloudVM.loading.failed.feedback", defaultValue: "Send Feedback"),
-                                systemImage: "bubble.left.and.text.bubble.right"
-                            )
-                            .cmuxFont(size: 12, weight: .semibold)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        // zerocmux: the upstream "Send Feedback" button was removed
+                        // along with the feedback-composer package.
                     }
                     Text(String(format: String(
                         localized: "panel.cloudVM.loading.failed.elapsed",
