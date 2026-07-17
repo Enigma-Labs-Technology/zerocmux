@@ -8839,52 +8839,45 @@ mod tests {
             // bound only pads slow schedulers (the valgrind lane serializes
             // threads).
             //
+            // SessionMutationSettled carries no correlation id (outcome +
+            // routing only), so "our" settlement cannot be matched by id.
             // Handling the previous iteration's MutationTimedOut settlement
-            // invalidates the remote tree and MAY spawn an async refresh whose
-            // IdentityRefresh* settlement lands on this same channel; whether
-            // and when it arrives depends on scheduling (it fired under
-            // valgrind, never on plain runs). Skip it wherever it interleaves
-            // and never wait for it.
+            // MAY schedule recovery work (an async tree refresh, supersede of
+            // a pending refresh) whose settlements land on this same channel
+            // at scheduling-dependent times. In this test only the enqueued
+            // closures produce timeout errors, so the first MutationTimedOut
+            // settlement is necessarily ours: skip and record everything
+            // else, and fail loudly (with the skip log) if it never arrives.
+            let mut skipped: Vec<&'static str> = Vec::new();
             let settled = loop {
-                let event = events.recv_timeout(Duration::from_secs(30)).unwrap();
-                if matches!(
-                    event,
-                    AppEvent::SessionMutationSettled {
-                        outcome: super::SessionMutationOutcome::IdentityRefreshSucceeded { .. }
-                            | super::SessionMutationOutcome::IdentityRefreshFailed { .. },
-                        ..
-                    }
-                ) {
-                    continue;
+                let event = match events.recv_timeout(Duration::from_secs(30)) {
+                    Ok(event) => event,
+                    Err(error) => panic!(
+                        "{label}: no MutationTimedOut settlement arrived ({error}); \
+                         skipped events: {skipped:?}"
+                    ),
+                };
+                let skip_label = match &event {
+                    AppEvent::SessionMutationSettled { outcome, .. } => match outcome {
+                        super::SessionMutationOutcome::MutationTimedOut(_) => None,
+                        super::SessionMutationOutcome::IdentityRefreshSucceeded { .. } => {
+                            Some("SessionMutationSettled(IdentityRefreshSucceeded)")
+                        }
+                        super::SessionMutationOutcome::IdentityRefreshFailed { .. } => {
+                            Some("SessionMutationSettled(IdentityRefreshFailed)")
+                        }
+                        super::SessionMutationOutcome::Failed(_) => {
+                            Some("SessionMutationSettled(Failed)")
+                        }
+                        _ => Some("SessionMutationSettled(other outcome)"),
+                    },
+                    _ => Some("non-settlement AppEvent"),
+                };
+                match skip_label {
+                    None => break event,
+                    Some(skip_label) => skipped.push(skip_label),
                 }
-                break event;
             };
-            let event_label = match &settled {
-                AppEvent::SessionMutationSettled { outcome, .. } => match outcome {
-                    super::SessionMutationOutcome::IdentityRefreshSucceeded { .. } => {
-                        "SessionMutationSettled(IdentityRefreshSucceeded)"
-                    }
-                    super::SessionMutationOutcome::IdentityRefreshFailed { .. } => {
-                        "SessionMutationSettled(IdentityRefreshFailed)"
-                    }
-                    super::SessionMutationOutcome::Failed(_) => "SessionMutationSettled(Failed)",
-                    super::SessionMutationOutcome::MutationTimedOut(_) => {
-                        "SessionMutationSettled(MutationTimedOut)"
-                    }
-                    _ => "SessionMutationSettled(other outcome)",
-                },
-                _ => "non-settlement AppEvent",
-            };
-            assert!(
-                matches!(
-                    settled,
-                    AppEvent::SessionMutationSettled {
-                        outcome: super::SessionMutationOutcome::MutationTimedOut(_),
-                        ..
-                    }
-                ),
-                "{label}: expected a MutationTimedOut settlement, got {event_label}"
-            );
             app.handle(settled).unwrap();
             assert_eq!(app.deferred_input.len(), 1);
         }
