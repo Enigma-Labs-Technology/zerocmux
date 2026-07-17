@@ -8812,21 +8812,58 @@ mod tests {
             app.session.enqueue_coalescing_session_mutation(label, key, |_| {
                 Err(crate::session::test_remote_timeout_error())
             });
-            // Generous bound: the settlement is delivered by a background
-            // worker, and under valgrind's serialized scheduling (the CI
-            // leak-check lane runs this binary) the 1s budget flaked;
-            // recv_timeout returns as soon as the event arrives, so a healthy
-            // run pays nothing.
+            // recv_timeout returns as soon as the event arrives; the generous
+            // bound only pads slow schedulers (the valgrind lane serializes
+            // threads).
             let settled = events.recv_timeout(Duration::from_secs(30)).unwrap();
-            assert!(matches!(
-                settled,
-                AppEvent::SessionMutationSettled {
-                    outcome: super::SessionMutationOutcome::MutationTimedOut(_),
-                    ..
-                }
-            ));
+            let event_label = match &settled {
+                AppEvent::SessionMutationSettled { outcome, .. } => match outcome {
+                    super::SessionMutationOutcome::IdentityRefreshSucceeded { .. } => {
+                        "SessionMutationSettled(IdentityRefreshSucceeded)"
+                    }
+                    super::SessionMutationOutcome::IdentityRefreshFailed { .. } => {
+                        "SessionMutationSettled(IdentityRefreshFailed)"
+                    }
+                    super::SessionMutationOutcome::Failed(_) => "SessionMutationSettled(Failed)",
+                    super::SessionMutationOutcome::MutationTimedOut(_) => {
+                        "SessionMutationSettled(MutationTimedOut)"
+                    }
+                    _ => "SessionMutationSettled(other outcome)",
+                },
+                _ => "non-settlement AppEvent",
+            };
+            assert!(
+                matches!(
+                    settled,
+                    AppEvent::SessionMutationSettled {
+                        outcome: super::SessionMutationOutcome::MutationTimedOut(_),
+                        ..
+                    }
+                ),
+                "{label}: expected a MutationTimedOut settlement, got {event_label}"
+            );
             app.handle(settled).unwrap();
             assert_eq!(app.deferred_input.len(), 1);
+            // Handling MutationTimedOut invalidates the remote tree and spawns
+            // an async refresh whose IdentityRefresh* settlement lands on this
+            // same channel. Left unconsumed, it races the next iteration's
+            // timeout settlement and the assert above receives the wrong
+            // settlement (observed on the valgrind lane, and on upstream's
+            // linux runner without valgrind). Drain it before enqueueing the
+            // next mutation so every iteration asserts its own settlement.
+            loop {
+                let follow_up = events.recv_timeout(Duration::from_secs(30)).unwrap();
+                if matches!(
+                    follow_up,
+                    AppEvent::SessionMutationSettled {
+                        outcome: super::SessionMutationOutcome::IdentityRefreshSucceeded { .. }
+                            | super::SessionMutationOutcome::IdentityRefreshFailed { .. },
+                        ..
+                    }
+                ) {
+                    break;
+                }
+            }
         }
     }
 
