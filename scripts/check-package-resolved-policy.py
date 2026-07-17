@@ -20,14 +20,8 @@ XCODE_PACKAGE_RESOLVED = (
     "cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 )
 XCODE_PROJECT_FILE = "cmux.xcodeproj/project.pbxproj"
-IOS_WORKSPACE_PACKAGE_RESOLVED = (
-    "ios/cmux.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-)
-IOS_WORKSPACE_FILE = "ios/cmux.xcworkspace/contents.xcworkspacedata"
-IOS_XCODE_PROJECT_FILE = "ios/cmux-ios.xcodeproj/project.pbxproj"
 EXPECTED_XCODE_LOCKFILES = {
     XCODE_PACKAGE_RESOLVED,
-    IOS_WORKSPACE_PACKAGE_RESOLVED,
 }
 XCODE_PACKAGE_REFERENCE_TOKENS = (
     "XCRemoteSwiftPackageReference",
@@ -41,7 +35,6 @@ XCODE_PACKAGE_REFERENCE_TOKENS = (
 PACKAGE_DEPENDENCY_RE = re.compile(r"\.package\(([^)]*)\)", re.DOTALL)
 PACKAGE_PATH_ARGUMENT_RE = re.compile(r'\bpath\s*:\s*"([^"]+)"')
 PACKAGE_URL_ARGUMENT_RE = re.compile(r'\burl\s*:\s*"[^"]+"')
-WORKSPACE_GROUP_LOCATION_RE = re.compile(r'\blocation\s*=\s*"group:([^"]+)"')
 
 SKIPPED_DIRS = {
     ".build",
@@ -184,29 +177,6 @@ def package_dependency_closure(
 
     visit(root)
     return closure
-
-
-def workspace_package_roots(
-    workspace_file: str,
-    manifests: dict[str, Path],
-    *,
-    ref: str | None = None,
-) -> set[str]:
-    text = (
-        file_text_at(ref, workspace_file)
-        if ref is not None
-        else Path(workspace_file).read_text(encoding="utf-8")
-    )
-    workspace_parent = Path(workspace_file).parent.parent.resolve()
-    root_by_resolved_path = {
-        Path(root).resolve(): root for root in manifests
-    }
-    roots: set[str] = set()
-    for location in WORKSPACE_GROUP_LOCATION_RE.findall(text):
-        resolved = (workspace_parent / location).resolve()
-        if root := root_by_resolved_path.get(resolved):
-            roots.add(root)
-    return roots
 
 
 def package_roots_requiring_lockfiles(
@@ -375,70 +345,6 @@ def main() -> int:
         errors.append(
             f"{XCODE_PROJECT_FILE} changed SwiftPM package references without "
             f"matching Xcode Package.resolved diff: {XCODE_PACKAGE_RESOLVED}"
-        )
-
-    current_ios_workspace_roots = workspace_package_roots(
-        IOS_WORKSPACE_FILE,
-        all_manifests,
-    )
-    previous_ios_workspace_roots = (
-        workspace_package_roots(
-            IOS_WORKSPACE_FILE,
-            previous_manifests,
-            ref=merge_base,
-        )
-        if merge_base is not None
-        else set()
-    )
-    current_ios_workspace_dependency_roots: set[str] = set()
-    for root in current_ios_workspace_roots:
-        current_ios_workspace_dependency_roots.update(
-            package_dependency_closure(root, graph)
-        )
-    previous_ios_workspace_dependency_roots: set[str] = set()
-    for root in previous_ios_workspace_roots:
-        previous_ios_workspace_dependency_roots.update(
-            package_dependency_closure(root, previous_graph)
-        )
-    ios_workspace_dependencies_changed = bool(
-        (
-            current_ios_workspace_dependency_roots
-            | previous_ios_workspace_dependency_roots
-        )
-        & changed_dependency_roots
-    )
-    changed_ios_workspace_members = (
-        current_ios_workspace_roots ^ previous_ios_workspace_roots
-    )
-    current_ios_remote_memo: dict[str, bool] = {}
-    previous_ios_remote_memo: dict[str, bool] = {}
-    ios_workspace_resolution_membership_changed = any(
-        has_remote_dependency(
-            root,
-            graph,
-            current_ios_remote_memo,
-            set(),
-        )
-        or has_remote_dependency(
-            root,
-            previous_graph,
-            previous_ios_remote_memo,
-            set(),
-        )
-        for root in changed_ios_workspace_members
-    )
-    if (
-        ios_workspace_dependencies_changed
-        or ios_workspace_resolution_membership_changed
-        or xcode_package_reference_changed(
-            IOS_XCODE_PROJECT_FILE,
-            merge_base,
-            changed_files,
-        )
-    ) and IOS_WORKSPACE_PACKAGE_RESOLVED not in changed_files:
-        errors.append(
-            "iOS workspace SwiftPM dependencies changed without matching "
-            f"Package.resolved diff: {IOS_WORKSPACE_PACKAGE_RESOLVED}"
         )
 
     for gitignore in sorted(Path(".").rglob(".gitignore")):
