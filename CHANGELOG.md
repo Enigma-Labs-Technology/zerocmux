@@ -2,6 +2,23 @@
 
 All notable changes to zerocmux are documented here.
 
+## [Unreleased]
+
+### Changed
+- Synced with upstream cmux through manaflow-ai/cmux@a5a70ff906 (1,140
+  commits), merged under the zero-telemetry policy: no analytics, no crash
+  reporting, and no automatic network traffic beyond Sparkle update checks
+  against zerocmux's own GitHub releases
+- Adopted from upstream: cmux-tui (a local Rust TUI multiplexer), the
+  agent-chat loopback sidecar (with its remote model catalog removed —
+  models come from built-in lists plus installed agent CLIs), the Rust
+  diff-viewer sidecar, and GPL corresponding-source bundling
+- Excluded from upstream: the Iroh relay transport and relay-minter
+  service, cmux Vault cloud sync, iOS/TestFlight growth surfaces, the
+  native Pro/pricing/billing UI, and the PostHog feature-flags window
+- Agent-chat entry points are available without a remote feature flag
+- The sidebar agent spinner now follows its settings row
+
 ## [1.2.1] - 2026-07-07
 
 ### Fixed

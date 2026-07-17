@@ -21,6 +21,12 @@ have product-level details; this file is the operational guide for agents.
   `CMUXWorkstream`. Move reusable, UI-independent logic here.
 - `CLI/` — the `zerocmux` CLI that talks to the running app over a unix
   socket (`/tmp/zerocmux.sock`, or `/tmp/zerocmux-debug-<tag>.sock` for tagged builds).
+- `cmux-tui/` — local Rust TUI multiplexer (adopted from upstream) with a
+  JSON-lines local control socket; its CI lane is
+  `.github/workflows/cmux-tui.yml`.
+- `agent-chat/` — loopback-only, token-protected agent-chat sidecar. There is
+  no remote model catalog; models come from built-in lists plus installed
+  agent CLIs.
 - `cmuxTests/` — Swift unit tests (scheme `zerocmux-unit`).
 - `cmuxUITests/` — XCUITest UI tests (run on the cmux-vm via CI).
 - `tests/` and `tests_v2/` — Python regression suites that drive the app
@@ -169,6 +175,9 @@ Before launching a new tagged run, clean up any older tags you started in this s
 zerocmux does not ship the upstream Next.js web app or hosted Cloud VM backend.
 Do not add Vercel, Stack Auth, Cloud VM provider, or `web/` workflow changes
 unless a future architecture decision explicitly restores that surface.
+Upstream's top-level `vault/` (cmux Vault cloud sync) is excluded as well —
+the fork's `CMUXAgentVault` package and `VaultAgentRegistry` are unrelated
+local features.
 
 ## Debug event log
 

@@ -17,9 +17,12 @@ Current zerocmux pinned fork head: `bb30526cd`. It advances the previous zerocmu
 updates, then preserves authoritative sprite-font shaping runs. The commit is
 reachable from fork `main` through the merged
 https://github.com/manaflow-ai/ghostty/pull/120.
-The corresponding universal ReleaseFast GhosttyKit archive is published at
-https://github.com/manaflow-ai/ghostty/releases/tag/xcframework-bb30526cdab8f5fb08ae43e404e3aacc40d3ffc3-crashsubdir-zerocmux-crash-v1
-and pinned in `scripts/ghosttykit-checksums.txt`.
+The corresponding universal ReleaseFast GhosttyKit archive is built by the
+fork's `build-ghosttykit.yml` workflow and will be published at
+https://github.com/kernelalex/zerocmux/releases/tag/xcframework-bb30526cdab8f5fb08ae43e404e3aacc40d3ffc3-sentry-off-crashsubdir-zerocmux-crash-v1
+once that workflow run completes; the matching checksum pin in
+`scripts/ghosttykit-checksums.txt` lands as a follow-up after the sync PR
+opens.
 
 ### Authoritative sprite-font shaping runs
 
