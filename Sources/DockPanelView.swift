@@ -4,9 +4,10 @@ import CmuxAppKitSupportUI
 import CmuxTerminal
 import SwiftUI
 
-/// Right-sidebar Dock. Renders the global Dock `BonsplitController` tree
+/// Right-sidebar Dock. Renders the window's own Dock `BonsplitController` tree
 /// (terminals + browsers) using the same split machinery as the main content
-/// area, just constrained to the sidebar width.
+/// area, just constrained to the sidebar width. Every window mounts its own
+/// store, so multiple windows can each show a live Dock simultaneously.
 struct DockPanelView: View {
     let store: DockSplitStore
     let isSidebarVisible: Bool
@@ -52,6 +53,9 @@ struct DockPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .ghosttyConfigDidReload)) { _ in
             refreshAppearance(reason: "ghosttyConfigDidReload")
         }
+        .onReceive(NotificationCenter.default.publisher(for: PaneChromeSettings.didChangeNotification)) { _ in
+            refreshAppearance(reason: "paneChromeSettingsDidChange")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .ghosttyDefaultBackgroundDidChange)) { _ in
             refreshAppearance(reason: "ghosttyDefaultBackgroundDidChange")
         }
@@ -71,8 +75,6 @@ struct DockPanelView: View {
             }
         } else if let error = store.errorMessage {
             DockErrorView(message: error)
-        } else if store.renderHostId != visibilityHostId {
-            DockInactiveHostView()
         } else {
             DockSplitContentView(
                 store: store,
@@ -130,6 +132,10 @@ private struct DockSplitContentView: View {
                 hasUnreadNotification: false,
                 terminalAgentContext: "",
                 paneOwnershipOverride: isVisibleInUI,
+                terminalPaneOwnershipResolver: {
+                    guard store.paneId(forPanelId: panel.id)?.id == paneId.id else { return false }
+                    return store.panelIsSelectedInVisibleDockPane(panel.id)
+                },
                 onFocus: {
                     store.bonsplitController.focusPane(paneId)
                     store.noteKeyboardFocusIntent(window: NSApp.keyWindow ?? NSApp.mainWindow)

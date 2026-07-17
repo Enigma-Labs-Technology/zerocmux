@@ -74,6 +74,12 @@ extension TerminalController: ControlDebugContext {
 
     func controlDebugActivateApp() -> String { activateApp() }
 
+    func controlDebugRequestWorkspaceTodoChecklistAddField() -> UUID? {
+        guard let workspace = tabManager?.selectedWorkspace else { return nil }
+        WorkspaceTodoActions.requestChecklistAddField(workspaceId: workspace.id)
+        return workspace.id
+    }
+
     func controlDebugIsTerminalFocused(surfaceArgument: String) -> String {
         isTerminalFocused(surfaceArgument)
     }
@@ -215,8 +221,8 @@ extension TerminalController: ControlDebugContext {
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
         }
-        let state = textView.debugInteract(action: action)
-        // `debugInteract` emits String/Bool/Int leaves only, so the bridge
+        let state = textView.performControlInteraction(action: action)
+        // `performControlInteraction` emits String/Bool/Int leaves only, so the bridge
         // cannot fail; the empty-object fallback keeps the conversion total.
         return ControlDebugTextBoxInteraction(
             surfaceID: panel.id,
@@ -426,6 +432,10 @@ extension TerminalController: ControlDebugContext {
 
     func controlDebugPortalStats() -> JSONValue? {
         JSONValue(foundationObject: TerminalWindowPortalRegistry.debugPortalStats())
+    }
+
+    func controlDebugRemoteTmuxSizingSettled() -> JSONValue? {
+        JSONValue(foundationObject: remoteTmuxSizingSettlementPayload())
     }
 #endif
 }

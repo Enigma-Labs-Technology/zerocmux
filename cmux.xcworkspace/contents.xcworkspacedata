@@ -4,20 +4,6 @@
    <FileRef
       location = "group:cmux.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:ios/zerocmux-ios.xcodeproj">
-   </FileRef>
-   <Group
-      location = "container:Packages/Shared"
-      name = "Packages (Shared)">
-   </Group>
-   <Group
-      location = "container:Packages/iOS"
-      name = "Packages (iOS)">
-      <FileRef
-         location = "container:ios/cmuxPackage">
-      </FileRef>
-   </Group>
    <Group
       location = "container:Packages/macOS"
       name = "Packages (macOS)">

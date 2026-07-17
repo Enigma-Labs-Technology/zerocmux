@@ -178,6 +178,7 @@ public final class PullRequestPollService: PullRequestProbing {
             let branchPanelIds = host.panelGitBranchPanelIds(in: workspaceId)
             let badgePanelIds = host.panelPullRequestPanelIds(in: workspaceId)
             for panelId in branchPanelIds.union(badgePanelIds) {
+                guard !host.shouldSkipLocalGitMetadata(workspaceId: workspaceId, panelId: panelId) else { continue }
                 let key = WorkspaceGitProbeKey(workspaceId: workspaceId, panelId: panelId)
                 validKeys.insert(key)
                 let branch = GitMetadataService.normalizedBranchName(
@@ -254,7 +255,7 @@ public final class PullRequestPollService: PullRequestProbing {
                 gitMetadata: gitMetadataService
             )
             guard !Task.isCancelled else { return }
-            let repoResults = await probeService.fetchRepoResults(
+            let repoFetch = await probeService.fetchRepoResults(
                 repoDirectoriesBySlug: candidateResolution.repoDirectoriesBySlug,
                 candidateBranchesByRepo: candidateResolution.candidateBranchesByRepo,
                 cacheBySlug: cacheBySlug,
@@ -263,7 +264,7 @@ public final class PullRequestPollService: PullRequestProbing {
             )
             let results = PullRequestProbeService.resolveRefreshResults(
                 candidates: candidateResolution.candidates,
-                repoResults: repoResults
+                repoResults: repoFetch.repoResults
             )
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
@@ -272,10 +273,11 @@ public final class PullRequestPollService: PullRequestProbing {
                 self.workspacePullRequestRefreshTask = nil
                 self.applyWorkspacePullRequestRefreshResults(
                     results,
-                    repoResults: repoResults,
+                    repoResults: repoFetch.repoResults,
                     requestedKeys: keys,
                     now: Date(),
-                    reason: reason
+                    reason: reason,
+                    rateLimitRetryDate: repoFetch.rateLimitRetryDate
                 )
             }
         }

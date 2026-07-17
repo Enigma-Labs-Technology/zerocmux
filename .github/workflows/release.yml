@@ -159,19 +159,7 @@ jobs:
       - name: Install build deps
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          if ! command -v rustup >/dev/null 2>&1; then
-            export HOMEBREW_NO_AUTO_UPDATE=1
-            export HOMEBREW_NO_INSTALL_CLEANUP=1
-            export HOMEBREW_NO_ENV_HINTS=1
-            brew install rustup-init
-            rustup-init -y --profile minimal --default-toolchain stable
-          fi
-          if ! rustup show active-toolchain >/dev/null 2>&1; then
-            rustup default stable
-          fi
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          ./scripts/install-rust-ci.sh
           npm install --global "create-dmg@${CREATE_DMG_VERSION}"
 
       - name: Download pre-built GhosttyKit.xcframework
@@ -230,6 +218,7 @@ jobs:
           APP_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/MacOS/zerocmux"
           CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
           HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
+          DIFF_SIDECAR="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/cmux-diff-sidecar"
           APP_ARCHS="$(lipo -archs "$APP_BINARY")"
           CLI_ARCHS="$(lipo -archs "$CLI_BINARY")"
           HELPER_ARCHS="$(lipo -archs "$HELPER_BINARY")"
@@ -239,6 +228,7 @@ jobs:
           [[ "$APP_ARCHS" == *arm64* && "$APP_ARCHS" == *x86_64* ]]
           [[ "$CLI_ARCHS" == *arm64* && "$CLI_ARCHS" == *x86_64* ]]
           [[ "$HELPER_ARCHS" == *arm64* && "$HELPER_ARCHS" == *x86_64* ]]
+          ./scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR"
           SDK_VERSION="$(otool -l "$APP_BINARY" | awk '/LC_BUILD_VERSION/ { in_version=1; next } in_version && /sdk / { print $2; exit }')"
           echo "App SDK version: $SDK_VERSION"
           [[ "$SDK_VERSION" == 26.* ]]
@@ -490,6 +480,7 @@ jobs:
           xcrun stapler staple "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
           spctl -a -vv --type execute "$APP_PATH"
+          ./scripts/verify-app-bundle-licenses.sh "$APP_PATH"
           rm -f "$ZIP_SUBMIT"
           # create-dmg generates a styled drag-to-install DMG
           create-dmg \

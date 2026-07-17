@@ -1,4 +1,5 @@
 import AppKit
+import Bonsplit
 import CmuxPanes
 
 /// Routes "create a surface" keyboard shortcuts (New Browser, New Terminal,
@@ -8,8 +9,8 @@ import CmuxPanes
 /// so pressing e.g. Cmd+Shift+L while a Dock pane is focused spawned a browser in
 /// the main split tree instead of the Dock. Mirrors the existing focus-gated
 /// routing in `closeFocusedDockPanelForCommand` (`Workspace+DockBrowserLookup.swift`):
-/// the gate is `activeRightSidebarMode == .dock`, and the right-sidebar Dock is the
-/// app-wide Global Dock (`RightSidebarPanelView` always renders `app.globalDock`).
+/// the gate is `activeRightSidebarMode == .dock`, and the right-sidebar Dock is
+/// that window's own Dock (`RightSidebarPanelView` renders the per-window store).
 extension AppDelegate {
     /// The Dock store that should receive a creation/split shortcut when the Dock
     /// owns keyboard focus in `preferredWindow`, else `nil` (caller falls through
@@ -21,10 +22,11 @@ extension AppDelegate {
         guard context.keyboardFocusCoordinator.activeRightSidebarMode == .dock else {
             return nil
         }
-        if let globalDock = existingGlobalDock {
-            return globalDock
-        }
-        return context.tabManager.selectedWorkspace?.dockSplit
+        // Dock mode showing means the right sidebar rendered this window's own
+        // Dock (which created it), so this resolves the store already on screen.
+        // No workspace-Dock fallback: the sidebar never renders one, so routing
+        // a creation shortcut there would target an invisible tree.
+        return windowDock(forWindowId: context.windowId)
     }
 
     /// Creates a New Terminal / New Browser surface in the focused Dock pane.
@@ -73,5 +75,56 @@ extension AppDelegate {
             sourcePanelId: store.focusedPanelId,
             focus: true
         ) != nil
+    }
+
+    /// Executes a semantic surface/focus command when the Dock owns keyboard
+    /// focus. Callers invoke this from the command's existing dispatcher
+    /// position so configured and compatibility shortcuts keep the same
+    /// conflict precedence as the main area.
+    func performFocusedDockShortcut(_ command: DockShortcutCommand, event: NSEvent) -> Bool {
+        guard let store = focusedDockStoreForShortcut(preferredWindow: event.window) else {
+            return false
+        }
+        if !store.performShortcutCommand(command) { NSSound.beep() }
+        return true
+    }
+
+    func matchesLegacyNextSurfaceShortcut(event: NSEvent) -> Bool {
+        matchTabShortcut(
+            event: event,
+            shortcut: StoredShortcut(key: "\t", command: false, shift: false, option: false, control: true)
+        )
+    }
+
+    func matchesLegacyPreviousSurfaceShortcut(event: NSEvent) -> Bool {
+        matchTabShortcut(
+            event: event,
+            shortcut: StoredShortcut(key: "\t", command: false, shift: true, option: false, control: true)
+        )
+    }
+
+    func ghosttyGotoSplitShortcut(for direction: NavigationDirection) -> StoredShortcut? {
+        switch direction {
+        case .left: ghosttyGotoSplitLeftShortcut
+        case .right: ghosttyGotoSplitRightShortcut
+        case .up: ghosttyGotoSplitUpShortcut
+        case .down: ghosttyGotoSplitDownShortcut
+        }
+    }
+
+    func matchesGhosttyGotoSplitShortcut(event: NSEvent, direction: NavigationDirection) -> Bool {
+        guard let shortcut = ghosttyGotoSplitShortcut(for: direction) else { return false }
+        let route: (glyph: String, keyCode: UInt16) = switch direction {
+        case .left: ("←", 123)
+        case .right: ("→", 124)
+        case .up: ("↑", 126)
+        case .down: ("↓", 125)
+        }
+        return matchDirectionalShortcut(
+            event: event,
+            shortcut: shortcut,
+            arrowGlyph: route.glyph,
+            arrowKeyCode: route.keyCode
+        )
     }
 }

@@ -37,6 +37,13 @@ extension AppDelegate {
         return nil
     }
 
+    /// Whether a live surface can leave its current owner and be driven from
+    /// `destinationDock`.
+    func canMoveSurfaceIntoDock(sourceTabId: UUID, destinationDock _: DockSplitStore) -> Bool {
+        guard let source = locateContainerSurface(tabId: sourceTabId) else { return false }
+        return canMoveSurfaceIntoDock(source)
+    }
+
     /// Whether the right sidebar (Files / Find / Dock) currently owns input
     /// focus in `workspace`'s window. Lets the workspace's imperative terminal
     /// portal active-state reconcile honor the same focus-exclusivity gate the
@@ -50,12 +57,12 @@ extension AppDelegate {
         return context.fileExplorerState?.rightSidebarOwnsInputFocus ?? false
     }
 
-    /// Finds the Dock (global or any workspace's local Dock) that owns a pane.
-    /// Used by the portal drop target to route a tab dropped on a Dock pane to
-    /// the Dock's own controller instead of the workspace's.
+    /// Finds the Dock (any window's Dock or any workspace's local Dock) that
+    /// owns a pane. Used by the portal drop target to route a tab dropped on a
+    /// Dock pane to the Dock's own controller instead of the workspace's.
     func dockForPane(_ paneId: PaneID) -> DockSplitStore? {
-        if let globalDock = existingGlobalDock, globalDock.containsPane(paneId.id) {
-            return globalDock
+        if let windowDock = windowDockContainingPane(paneId.id) {
+            return windowDock
         }
         for context in mainWindowContexts.values {
             for workspace in context.tabManager.tabs {
@@ -71,10 +78,12 @@ extension AppDelegate {
     /// Used by `moveBonsplitTab` to route a Dock→main-area drop.
     func locateDockSurface(tabId: UUID) -> (dock: DockSplitStore, panelId: UUID)? {
         let bonsplitTabId = TabID(uuid: tabId)
-        // The app-wide Global Dock first (it has no owning workspace), then each
+        // Per-window Docks first (they have no owning workspace), then each
         // workspace's local Dock.
-        if let globalDock = existingGlobalDock, let panel = globalDock.panel(for: bonsplitTabId) {
-            return (globalDock, panel.id)
+        for windowDock in existingWindowDocks {
+            if let panel = windowDock.panel(for: bonsplitTabId) {
+                return (windowDock, panel.id)
+            }
         }
         for context in mainWindowContexts.values {
             for workspace in context.tabManager.tabs {
@@ -95,49 +104,39 @@ extension AppDelegate {
         destination: BonsplitController.ExternalTabDropRequest.Destination
     ) -> Bool {
         guard let source = locateContainerSurface(tabId: sourceTabId) else { return false }
-
-        // Reject moving a workspace's LAST main panel into its OWN Dock. It would
-        // empty the workspace's main area, and every alternative is unsafe: closing
-        // the now-empty workspace tears down that same Dock and destroys the just-
-        // moved surface, while seeding a replacement terminal issues a remote
-        // `tmux new-window` for a remote tmux mirror. The surface stays put — move
-        // it after adding another main terminal, or into a different/Global Dock.
-        if case .workspace(_, let workspace, _, _) = source,
-           workspace.panels.count == 1,
-           destinationDock.scope == .workspace,
-           destinationDock.workspaceId == workspace.id {
-            return false
-        }
+        guard canMoveSurfaceIntoDock(source) else { return false }
+        let shouldPreserveSourceWorkspace = shouldPreserveSourceWorkspaceAfterDockMove(
+            source,
+            destinationDock: destinationDock
+        )
 
         let target = resolveDockDropDestination(destination)
         guard destinationDock.containsPane(target.pane.id) else { return false }
 
         guard let detached = detachSurfaceFromContainer(source) else { return false }
 
-        guard destinationDock.attachDetachedSurface(
-            detached,
-            inPane: target.pane,
-            atIndex: target.index,
-            focus: true
-        ) != nil else {
+        let attachedPanelId: UUID?
+        if let split = target.split {
+            attachedPanelId = destinationDock.attachDetachedSurface(
+                detached,
+                bySplitting: target.pane,
+                orientation: split.orientation,
+                insertFirst: split.insertFirst,
+                focus: true
+            )
+        } else {
+            attachedPanelId = destinationDock.attachDetachedSurface(
+                detached,
+                inPane: target.pane,
+                atIndex: target.index,
+                focus: true
+            )
+        }
+        guard attachedPanelId != nil else {
             reattachSurfaceToContainer(detached, source)
             return false
         }
-
-        if let split = target.split,
-           let movedTabId = destinationDock.surfaceId(forPanelId: detached.panelId) {
-            // Not wrapped in `withProgrammaticDockSplit`: this moves the just-attached
-            // tab out of `target.pane` to form the split, which can leave `target.pane`
-            // holding only Bonsplit's placeholder "Empty" tab (when it was empty before
-            // the drop). Letting `didSplitPane` run repairs that placeholder-only pane
-            // into a real terminal (and is a no-op when the pane still has a surface).
-            _ = destinationDock.bonsplitController.splitPane(
-                target.pane,
-                orientation: split.orientation,
-                movingTab: movedTabId,
-                insertFirst: split.insertFirst
-            )
-        }
+        destinationDock.scheduleDockPortalReconcile(reason: "dock.moveSurfaceIntoDock")
 
         // The surface was attached into the Dock with focus, so record Dock focus
         // ownership. Without this, `rightSidebarOwnsInputFocus` stays false and the
@@ -153,11 +152,10 @@ extension AppDelegate {
             window: destinationDockWindow ?? NSApp.keyWindow ?? NSApp.mainWindow
         )
 
-        // A move into the source workspace's own Dock that would empty it was
-        // already rejected above, so any now-empty source workspace here moved its
-        // surface into a DIFFERENT container (another Dock or the Global Dock) and
-        // should be cleaned up as usual (the surface survives at the destination).
-        cleanupEmptyContainerAfterMove(source)
+        cleanupEmptyContainerAfterMove(
+            source,
+            preserveSourceWorkspace: shouldPreserveSourceWorkspace
+        )
         return true
     }
 
@@ -212,6 +210,11 @@ extension AppDelegate {
                 insertFirst: splitTarget.insertFirst
             )
         }
+        destinationWorkspace.scheduleTerminalGeometryReconcile()
+        destinationWorkspace.reconcileBrowserPortalVisibilityForCurrentRenderedLayout(
+            reason: "dock.moveSurfaceToWorkspace"
+        )
+        sourceDock.scheduleDockPortalReconcile(reason: "dock.moveSurfaceToWorkspace.source")
 
         if focus {
             if focusWindow, let destinationWindowId = windowId(for: destinationManager) {
@@ -232,14 +235,14 @@ extension AppDelegate {
         focus: Bool = true,
         focusWindow: Bool = false
     ) -> Bool {
-        // The Global Dock has no owning workspace/window, so resolve the target
-        // window from the active main window instead of the dock's owner id.
+        // A window Dock resolves its owning window; a Workspace Dock resolves
+        // that workspace's window (see `dockReferenceTabManager`).
         guard let manager = dockReferenceTabManager(for: sourceDock) else { return false }
         let sourcePane = sourceDock.paneId(forPanelId: panelId)
         guard let detached = sourceDock.detachSurface(panelId: panelId) else { return false }
         (detached.panel as? TerminalPanel)?.surface.setFocusPlacement(.workspace)
 
-        guard manager.addWorkspace(fromDetachedSurface: detached, select: focus) != nil else {
+        guard let destinationWorkspace = manager.addWorkspace(fromDetachedSurface: detached, select: focus) else {
             // Creation failed — roll the panel back into the Dock unchanged.
             (detached.panel as? TerminalPanel)?.surface.setFocusPlacement(.rightSidebarDock)
             if let rollbackPane = sourcePane ?? sourceDock.bonsplitController.allPaneIds.first {
@@ -247,6 +250,11 @@ extension AppDelegate {
             }
             return false
         }
+        destinationWorkspace.scheduleTerminalGeometryReconcile()
+        destinationWorkspace.reconcileBrowserPortalVisibilityForCurrentRenderedLayout(
+            reason: "dock.moveSurfaceToNewWorkspace"
+        )
+        sourceDock.scheduleDockPortalReconcile(reason: "dock.moveSurfaceToNewWorkspace.source")
 
         if focus, focusWindow, let destinationWindowId = windowId(for: manager) {
             _ = focusMainWindow(windowId: destinationWindowId)
@@ -262,6 +270,34 @@ extension AppDelegate {
             return (pane, index, nil)
         case .split(let pane, let orientation, let insertFirst):
             return (pane, nil, (orientation, insertFirst))
+        }
+    }
+
+    private func canMoveSurfaceIntoDock(_ source: ContainerSurfaceLocation) -> Bool {
+        if case .workspace(_, let workspace, _, _) = source,
+           workspace.isRemoteTmuxMirror {
+            // Remote tmux mirror panes are manually driven by the mirror
+            // workspace. Dock has no mirror-owned I/O routing yet, so moving one
+            // would leave the Dock panel detached from its remote owner.
+            return false
+        }
+        return true
+    }
+
+    private func shouldPreserveSourceWorkspaceAfterDockMove(
+        _ source: ContainerSurfaceLocation,
+        destinationDock: DockSplitStore
+    ) -> Bool {
+        guard case .workspace(let sourceWindowId, let workspace, _, let manager) = source,
+              workspace.panels.count == 1 else {
+            return false
+        }
+
+        switch destinationDock.scope {
+        case .workspace:
+            return destinationDock.workspaceId == workspace.id
+        case .global:
+            return destinationDock.workspaceId == sourceWindowId && manager.tabs.count == 1
         }
     }
 
@@ -295,18 +331,32 @@ extension AppDelegate {
         }
     }
 
-    private func cleanupEmptyContainerAfterMove(_ source: ContainerSurfaceLocation) {
+    private func cleanupEmptyContainerAfterMove(
+        _ source: ContainerSurfaceLocation,
+        preserveSourceWorkspace: Bool = false
+    ) {
         switch source {
         case .workspace(let windowId, let workspace, _, let manager):
-            cleanupEmptySourceWorkspaceAfterSurfaceMove(
-                sourceWorkspace: workspace,
-                sourceManager: manager,
-                sourceWindowId: windowId
-            )
+            if preserveSourceWorkspace {
+                preserveEmptySourceWorkspaceAfterSurfaceMove(sourceWorkspace: workspace)
+            } else {
+                cleanupEmptySourceWorkspaceAfterSurfaceMove(
+                    sourceWorkspace: workspace,
+                    sourceManager: manager,
+                    sourceWindowId: windowId
+                )
+            }
         case .dock:
             // The Dock auto-closes emptied panes (autoCloseEmptyPanes) and keeps
             // an empty root pane, so there is nothing to tear down.
             break
         }
+    }
+
+    private func preserveEmptySourceWorkspaceAfterSurfaceMove(sourceWorkspace: Workspace) {
+        guard sourceWorkspace.panels.isEmpty else { return }
+        sourceWorkspace.detachRemoteTmuxMirrorKeptOpenLocallyIfNeeded()
+        _ = sourceWorkspace.createReplacementTerminalPanel()
+        sourceWorkspace.scheduleTerminalGeometryReconcile()
     }
 }

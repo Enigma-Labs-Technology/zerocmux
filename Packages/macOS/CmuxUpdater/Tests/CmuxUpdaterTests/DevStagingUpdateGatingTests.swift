@@ -62,7 +62,7 @@ import Testing
     /// offer the public release for install — it short-circuits to "No Updates Available" before
     /// starting Sparkle. (Manual checks are the path that survived the passive-pill gating.)
     @Test func devLikeBundleManualCheckIsSuppressed() throws {
-        let suiteName = "com.cmuxterm.updatertests.\(UUID().uuidString)"
+        let suiteName = "com.kernelalex.zerocmux.updatertests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
@@ -86,7 +86,7 @@ import Testing
     /// public appcast. (The override is also re-asserted before `start()`, so the DEBUG
     /// permission-reset path cannot undo it.)
     @Test func devLikeBundleDisablesAutomaticChecks() throws {
-        let suiteName = "com.cmuxterm.updatertests.\(UUID().uuidString)"
+        let suiteName = "com.kernelalex.zerocmux.updatertests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
@@ -102,7 +102,7 @@ import Testing
 
     /// The public release train keeps automatic checks enabled.
     @Test func publicBundleLeavesAutomaticChecksEnabled() throws {
-        let suiteName = "com.cmuxterm.updatertests.\(UUID().uuidString)"
+        let suiteName = "com.kernelalex.zerocmux.updatertests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 

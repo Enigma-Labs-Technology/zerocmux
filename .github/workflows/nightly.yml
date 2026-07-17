@@ -216,6 +216,7 @@ jobs:
           APP_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/MacOS/zerocmux"
           CLI_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/zerocmux"
           HELPER_BINARY="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/ghostty"
+          DIFF_SIDECAR="build-universal/Build/Products/Release/zerocmux.app/Contents/Resources/bin/cmux-diff-sidecar"
           APP_ARCHS="$(lipo -archs "$APP_BINARY")"
           CLI_ARCHS="$(lipo -archs "$CLI_BINARY")"
           HELPER_ARCHS="$(lipo -archs "$HELPER_BINARY")"
@@ -225,6 +226,7 @@ jobs:
           [[ "$APP_ARCHS" == *arm64* && "$APP_ARCHS" == *x86_64* ]]
           [[ "$CLI_ARCHS" == *arm64* && "$CLI_ARCHS" == *x86_64* ]]
           [[ "$HELPER_ARCHS" == *arm64* && "$HELPER_ARCHS" == *x86_64* ]]
+          ./scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR"
 
       - name: Run CLI version memory guard regression
         if: needs.decide.outputs.should_publish != 'true' || steps.current_head_prebuild.outputs.still_current == 'true'
@@ -497,6 +499,7 @@ jobs:
             xcrun stapler staple "$app_path"
             xcrun stapler validate "$app_path"
             spctl -a -vv --type execute "$app_path"
+            ./scripts/verify-app-bundle-licenses.sh "$app_path"
             rm -f "$zip_submit"
 
             dmg_tmp_dir="$(mktemp -d)"

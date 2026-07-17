@@ -9,6 +9,8 @@ final class WorkspaceSidebarAgentRuntimeObservationModel {
     @ObservationIgnored
     private(set) var agentPIDs: [String: pid_t] = [:]
     @ObservationIgnored
+    private(set) var agentPIDProcessIdentitiesByKey: [String: AgentPIDProcessIdentity] = [:]
+    @ObservationIgnored
     private(set) var agentPIDPanelIdsByKey: [String: UUID] = [:]
     @ObservationIgnored
     private(set) var agentPIDKeysByPanelId: [UUID: Set<String>] = [:]
@@ -18,7 +20,7 @@ final class WorkspaceSidebarAgentRuntimeObservationModel {
     private(set) var changeGeneration: UInt64 = 0
 
     @ObservationIgnored
-    private var changeObservers: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private(set) var changeObservers: [UUID: AsyncStream<Void>.Continuation] = [:]
 
     /// Emits whenever any runtime map changes.
     func changes() -> AsyncStream<Void> {
@@ -34,6 +36,12 @@ final class WorkspaceSidebarAgentRuntimeObservationModel {
     func setAgentPIDs(_ newValue: [String: pid_t]) {
         guard agentPIDs != newValue else { return }
         agentPIDs = newValue
+        notifyChanged()
+    }
+
+    func setAgentPIDProcessIdentitiesByKey(_ newValue: [String: AgentPIDProcessIdentity]) {
+        guard agentPIDProcessIdentitiesByKey != newValue else { return }
+        agentPIDProcessIdentitiesByKey = newValue
         notifyChanged()
     }
 
@@ -57,8 +65,18 @@ final class WorkspaceSidebarAgentRuntimeObservationModel {
 
     private func notifyChanged() {
         changeGeneration &+= 1
-        for continuation in changeObservers.values {
-            continuation.yield(())
+        // Termination cleanup arrives through a separate MainActor task. If
+        // that task is delayed by sidebar work, publication is the
+        // authoritative reconciliation point so dead observers cannot make
+        // every later event progressively more expensive.
+        var terminatedObserverIDs: [UUID] = []
+        for (id, continuation) in changeObservers {
+            if case .terminated = continuation.yield(()) {
+                terminatedObserverIDs.append(id)
+            }
+        }
+        for id in terminatedObserverIDs {
+            changeObservers[id] = nil
         }
     }
 }

@@ -4,6 +4,7 @@ import Combine
 import CmuxAppKitSupportUI
 import CmuxCore
 import CmuxTerminal
+import CmuxWorkspaces
 import Observation
 import SwiftUI
 
@@ -14,25 +15,28 @@ final class DockSplitStore: BonsplitDelegate {
     let bonsplitController: BonsplitController
 
     /// Which Dock this store backs: `.workspace` (per-workspace, seeded from the
-    /// project `.cmux/dock.json`) or `.global` (one app-wide Dock seeded from
-    /// `~/.config/cmux/dock.json` that persists everywhere). Drives config
-    /// resolution and how cross-container moves resolve a reference window.
+    /// project `.cmux/dock.json`) or `.global` (a per-window Dock seeded from
+    /// the global `~/.config/cmux/dock.json`, owner id == window id). Drives
+    /// config resolution and how cross-container moves resolve a reference window.
     let scope: DockScope
 
     private(set) var sourceLabel: String = ""
     private(set) var errorMessage: String?
     private(set) var trustRequest: DockTrustRequest?
     private(set) var isVisibleInUI: Bool = false
-    private(set) var renderHostId: UUID?
+    /// Host views currently showing this Dock. Normally at most one (the owning
+    /// window's right sidebar), but SwiftUI remounts can briefly overlap an old
+    /// and new host, so visibility is the union rather than a single flag.
     private var visibleUIHostIds: Set<UUID> = []
+    @ObservationIgnored let dockPortalReconcileState = DockPortalReconcileState()
 
     private let baseDirectoryProvider: () -> String?
     private let remoteBrowserSettingsProvider: () -> DockRemoteBrowserSettings
     private let browserAvailabilityProvider: () -> Bool
-    // Internal so cross-container transfers can move live panels without tearing them down.
     var panels: [UUID: any Panel] = [:]
     var surfaceIdToPanelId: [TabID: UUID] = [:]
     var panelCancellables: [UUID: AnyCancellable] = [:]
+    @ObservationIgnored var detachedSurfaceTransfersByPanelId: [UUID: Workspace.DetachedSurfaceTransfer] = [:]
     private var hasLoadedConfiguration = false
     private var configurationLoadTask: Task<Void, Never>?
     private var configurationIdentityTask: Task<Void, Never>?
@@ -56,6 +60,7 @@ final class DockSplitStore: BonsplitDelegate {
     @ObservationIgnored var tabCloseButtonCloseDockTabIds: Set<TabID> = []
     @ObservationIgnored var terminalViewReattachCoalescingDepth = 0
     @ObservationIgnored var pendingTerminalViewReattachPanelIds: Set<UUID> = []
+    @ObservationIgnored let focusHistoryNavigation: any FocusHistoryNavigating = FocusHistoryModel()
 
     /// Weak registry of every live Dock store. Lets control-surface routing
     /// resolve a Dock surface/pane by querying only the workspaces that actually
@@ -64,7 +69,6 @@ final class DockSplitStore: BonsplitDelegate {
     /// automatically when a store deallocates; accessed on the main actor only.
     @MainActor private static let liveStoresTable = NSHashTable<DockSplitStore>.weakObjects()
 
-    /// Snapshot of the currently live Dock stores.
     @MainActor static var liveStores: [DockSplitStore] { liveStoresTable.allObjects }
 
     init(
@@ -111,7 +115,7 @@ final class DockSplitStore: BonsplitDelegate {
         for tabId in bonsplitController.allTabIds {
             _ = bonsplitController.closeTab(tabId)
         }
-        // Register only after every stored property is initialized.
+        focusHistoryNavigation.attach(host: self)
         Self.liveStoresTable.add(self)
     }
 
@@ -130,24 +134,6 @@ final class DockSplitStore: BonsplitDelegate {
 
     func browserPanel(for panelId: UUID) -> BrowserPanel? {
         panels[panelId] as? BrowserPanel
-    }
-
-    func browserPanel(owning responder: NSResponder?, in window: NSWindow?) -> BrowserPanel? {
-        guard let responder, let window else { return nil }
-        if let focused = focusedPanelId,
-           let browser = panels[focused] as? BrowserPanel,
-           browser.ownedFocusIntent(for: responder, in: window) != nil {
-            return browser
-        }
-        for (panelId, panel) in panels {
-            guard panelId != focusedPanelId,
-                  let browser = panel as? BrowserPanel,
-                  browser.ownedFocusIntent(for: responder, in: window) != nil else {
-                continue
-            }
-            return browser
-        }
-        return nil
     }
 
     func surfaceId(forPanelId panelId: UUID) -> TabID? {
@@ -212,7 +198,6 @@ final class DockSplitStore: BonsplitDelegate {
     func setVisibleInUI(_ visible: Bool) {
         if !visible {
             visibleUIHostIds.removeAll()
-            renderHostId = nil
         }
         guard isVisibleInUI != visible else { return }
         isVisibleInUI = visible
@@ -220,20 +205,13 @@ final class DockSplitStore: BonsplitDelegate {
     }
 
     func setVisibleInUI(_ visible: Bool, hostId: UUID) {
-        let previousRenderHostId = renderHostId
         if visible {
             visibleUIHostIds.insert(hostId)
-            if renderHostId == nil {
-                renderHostId = hostId
-            }
         } else {
             visibleUIHostIds.remove(hostId)
-            if renderHostId == hostId {
-                renderHostId = visibleUIHostIds.first
-            }
         }
         let anyHostVisible = !visibleUIHostIds.isEmpty
-        guard isVisibleInUI != anyHostVisible || renderHostId != previousRenderHostId else { return }
+        guard isVisibleInUI != anyHostVisible else { return }
         isVisibleInUI = anyHostVisible
         applyFocusedDockSelection()
     }
@@ -412,6 +390,10 @@ final class DockSplitStore: BonsplitDelegate {
         bonsplitController.focusPane(paneId)
         bonsplitController.selectTab(tabId)
         applyDockSelection(tabId: tabId, inPane: paneId)
+    }
+
+    func triggerFocusFlash(panelId: UUID) {
+        panels[panelId]?.triggerFlash(reason: .navigation)
     }
 
     private func resolveSourcePanelId(_ requested: UUID?) -> UUID? {
@@ -634,6 +616,7 @@ final class DockSplitStore: BonsplitDelegate {
             panelCancellables[panelId]?.cancel()
             panelCancellables.removeValue(forKey: panelId)
             AppDelegate.shared?.notificationStore?.clearNotifications(forTabId: workspaceId, surfaceId: panelId)
+            detachedSurfaceTransfersByPanelId.removeValue(forKey: panelId)
             if let panel = panels.removeValue(forKey: panelId) { panel.close() }
         }
     }
@@ -676,6 +659,7 @@ final class DockSplitStore: BonsplitDelegate {
         reconcilePanels()
         for panel in panels.values { panel.close() }
         panels.removeAll(); surfaceIdToPanelId.removeAll()
+        detachedSurfaceTransfersByPanelId.removeAll()
         panelCancellables.values.forEach { $0.cancel() }
         panelCancellables.removeAll()
     }

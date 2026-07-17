@@ -24,6 +24,12 @@ final class CloudVMActionLauncher {
     func start(
         socketPath: String,
         preferredWindow: NSWindow?,
+        arguments: [String] = ["vm", "base", "open"],
+        successTitle: String? = nil,
+        presentOutputOnSuccess: Bool = false,
+        showsProgress: Bool = true,
+        presentsFailureAlert: Bool = true,
+        environmentOverrides: [String: String] = [:],
         onCompletion: ((Completion) -> Void)? = nil
     ) -> Bool {
         _ = socketPath
