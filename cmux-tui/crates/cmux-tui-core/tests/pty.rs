@@ -211,20 +211,24 @@ fn surface_exit_reaps_tree_and_emits_event() {
     let events = mux.subscribe();
     let surface = mux.new_workspace(None, None).unwrap();
 
+    // Generous deadlines: under valgrind the spawn/exit/reap round-trip can
+    // blow well past 10s (the CI leak-check lane runs this binary under
+    // valgrind's serialized scheduling); wait_for returns as soon as the
+    // condition holds, so the longer bound costs nothing on a healthy run.
     let got = wait_for(
         || {
             events
                 .try_iter()
                 .find(|e| matches!(e, MuxEvent::SurfaceExited(id) if *id == surface.id))
         },
-        Duration::from_secs(10),
+        Duration::from_secs(60),
     );
     assert!(got.is_some(), "no SurfaceExited event");
     assert!(surface.is_dead());
     // The mux reaps exited surfaces itself; the emptied workspace is gone.
     let reaped = wait_for(
         || mux.with_state(|s| s.workspaces.is_empty().then_some(())),
-        Duration::from_secs(10),
+        Duration::from_secs(60),
     );
     assert!(reaped.is_some(), "exited surface not reaped from tree");
 }
