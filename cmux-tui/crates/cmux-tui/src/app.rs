@@ -8089,7 +8089,9 @@ mod tests {
         let (mut app, events) = test_app_with_events(Session::Local(mux));
 
         app.session.attach_surface(77, Some((80, 24)));
-        let settled = events.recv_timeout(Duration::from_secs(1)).unwrap();
+        // Early-returning waits; the generous bounds only pad the valgrind
+        // lane's serialized scheduling.
+        let settled = events.recv_timeout(Duration::from_secs(30)).unwrap();
         assert!(matches!(
             settled,
             AppEvent::SessionMutationSettled {
@@ -8118,7 +8120,7 @@ mod tests {
             false,
             claim,
         );
-        let settled = events.recv_timeout(Duration::from_secs(1)).unwrap();
+        let settled = events.recv_timeout(Duration::from_secs(30)).unwrap();
         assert!(matches!(
             settled,
             AppEvent::SessionMutationSettled {
@@ -8138,10 +8140,31 @@ mod tests {
 
         app.session.clear_surface_sync_failures();
         assert!(app.session.can_attach_surface(77));
-        assert!(matches!(
-            app.session.surface_resize_decision(88, (100, 30), true),
-            SurfaceResizeDecision::NeedsQueue(_)
-        ));
+        // The worker holds the resize-claim guard for its whole closure and
+        // drops it only after sending the SurfaceSyncFailed settlement, so
+        // for a moment after the settlement is handled the claim can still be
+        // registered and the decision reads AlreadyClaimed (valgrind's
+        // serialized scheduling stretches that window). Wait out the release;
+        // the terminal state must still be NeedsQueue.
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            match app.session.surface_resize_decision(88, (100, 30), true) {
+                SurfaceResizeDecision::NeedsQueue(_) => break,
+                SurfaceResizeDecision::AlreadyClaimed => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "resize claim for surface 88 was never released after settlement"
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                SurfaceResizeDecision::Failed => {
+                    panic!("cleared surface 88 resize still reports Failed")
+                }
+                SurfaceResizeDecision::Noop => {
+                    panic!("cleared surface 88 resize reports Noop")
+                }
+            }
+        }
     }
 
     #[test]
@@ -8812,10 +8835,30 @@ mod tests {
             app.session.enqueue_coalescing_session_mutation(label, key, |_| {
                 Err(crate::session::test_remote_timeout_error())
             });
-            // recv_timeout returns as soon as the event arrives; the generous
+            // recv_timeout returns as soon as an event arrives; the generous
             // bound only pads slow schedulers (the valgrind lane serializes
             // threads).
-            let settled = events.recv_timeout(Duration::from_secs(30)).unwrap();
+            //
+            // Handling the previous iteration's MutationTimedOut settlement
+            // invalidates the remote tree and MAY spawn an async refresh whose
+            // IdentityRefresh* settlement lands on this same channel; whether
+            // and when it arrives depends on scheduling (it fired under
+            // valgrind, never on plain runs). Skip it wherever it interleaves
+            // and never wait for it.
+            let settled = loop {
+                let event = events.recv_timeout(Duration::from_secs(30)).unwrap();
+                if matches!(
+                    event,
+                    AppEvent::SessionMutationSettled {
+                        outcome: super::SessionMutationOutcome::IdentityRefreshSucceeded { .. }
+                            | super::SessionMutationOutcome::IdentityRefreshFailed { .. },
+                        ..
+                    }
+                ) {
+                    continue;
+                }
+                break event;
+            };
             let event_label = match &settled {
                 AppEvent::SessionMutationSettled { outcome, .. } => match outcome {
                     super::SessionMutationOutcome::IdentityRefreshSucceeded { .. } => {
@@ -8844,26 +8887,6 @@ mod tests {
             );
             app.handle(settled).unwrap();
             assert_eq!(app.deferred_input.len(), 1);
-            // Handling MutationTimedOut invalidates the remote tree and spawns
-            // an async refresh whose IdentityRefresh* settlement lands on this
-            // same channel. Left unconsumed, it races the next iteration's
-            // timeout settlement and the assert above receives the wrong
-            // settlement (observed on the valgrind lane, and on upstream's
-            // linux runner without valgrind). Drain it before enqueueing the
-            // next mutation so every iteration asserts its own settlement.
-            loop {
-                let follow_up = events.recv_timeout(Duration::from_secs(30)).unwrap();
-                if matches!(
-                    follow_up,
-                    AppEvent::SessionMutationSettled {
-                        outcome: super::SessionMutationOutcome::IdentityRefreshSucceeded { .. }
-                            | super::SessionMutationOutcome::IdentityRefreshFailed { .. },
-                        ..
-                    }
-                ) {
-                    break;
-                }
-            }
         }
     }
 
