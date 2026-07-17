@@ -2,7 +2,7 @@
 
 All notable changes to zerocmux are documented here.
 
-## [Unreleased]
+## [1.2.2] - 2026-07-17
 
 ### Changed
 - Synced with upstream cmux through manaflow-ai/cmux@a5a70ff906 (1,140
@@ -18,6 +18,11 @@ All notable changes to zerocmux are documented here.
   native Pro/pricing/billing UI, and the PostHog feature-flags window
 - Agent-chat entry points are available without a remote feature flag
 - The sidebar agent spinner now follows its settings row
+
+### Fixed
+- Removed an automatic script prefetch to unpkg.com that fired whenever a
+  browser panel was created (including session restore); the React Grab
+  overlay still fetches its script on demand when explicitly invoked
 
 ## [1.2.1] - 2026-07-07
 
