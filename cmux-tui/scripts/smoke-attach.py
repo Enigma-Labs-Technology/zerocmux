@@ -420,7 +420,12 @@ def wait_shell_ready(seconds=20):
     """
     deadline = time.time() + seconds
     while time.time() < deadline:
-        surfaces = active_surfaces()
+        try:
+            surfaces = active_surfaces()
+        except StopIteration:
+            # The headless server registers its first workspace asynchronously;
+            # until then list-workspaces has no active entry. Keep polling.
+            surfaces = []
         if surfaces:
             screen = rpc({"id": 2100, "cmd": "read-screen", "surface": surfaces[0]})
             if screen["data"]["text"].strip():
