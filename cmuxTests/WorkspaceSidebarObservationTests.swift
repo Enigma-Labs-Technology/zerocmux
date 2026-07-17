@@ -118,6 +118,167 @@ struct WorkspaceSidebarObservationTests {
         )
     }
 
+    @Test func sidebarImmediateObservationPublisherDeliversManualTitleChangeSynchronously() {
+        let workspace = Workspace()
+
+        var publishCount = 0
+        let cancellable = workspace.sidebarImmediateObservationPublisher.sink {
+            publishCount += 1
+        }
+        defer { cancellable.cancel() }
+        publishCount = 0
+
+        workspace.setCustomTitle("User Edit")
+
+        #expect(
+            publishCount == 1,
+            "The first immediate-field change after subscribing must reach the sidebar in the same run-loop turn; coalescing may only defer the tail of a burst."
+        )
+    }
+
+    @Test func sidebarImmediateObservationPublisherCoalescesDescriptionBursts() {
+        let workspace = Workspace()
+
+        var publishCount = 0
+        let cancellable = workspace.sidebarImmediateObservationPublisher.sink {
+            publishCount += 1
+        }
+        defer { cancellable.cancel() }
+        publishCount = 0
+
+        for turn in 0..<20 {
+            workspace.customDescription = "Agent Turn \(turn)"
+        }
+
+        #expect(
+            publishCount == 1,
+            "A synchronous burst of immediate fields must deliver only its leading edge immediately."
+        )
+
+        // Generous pump so the 50ms trailing emission fires deterministically.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+        #expect(
+            publishCount == 2,
+            "A coalesced burst must settle with exactly one trailing emission carrying the latest state."
+        )
+    }
+
+    @Test func coalesceLatestKeepsLeadingEdgeSynchronousAndEmitsLatestTrailing() {
+        let subject = PassthroughSubject<Int, Never>()
+        var received: [Int] = []
+        let cancellable = subject
+            .coalesceLatest(for: .milliseconds(50), scheduler: RunLoop.main)
+            .sink { received.append($0) }
+        defer { cancellable.cancel() }
+
+        // First value models the @Published current-state replay: forwarded
+        // synchronously without opening a coalesce window.
+        subject.send(1)
+        #expect(received == [1])
+
+        // First change is the synchronous leading edge and opens the window.
+        subject.send(2)
+        #expect(received == [1, 2])
+
+        // Burst inside the window coalesces to the latest value.
+        subject.send(3)
+        subject.send(4)
+        subject.send(5)
+        #expect(received == [1, 2])
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(received == [1, 2, 5])
+
+        // After the window closes and the trailing window expires, the next
+        // value is synchronous again.
+        subject.send(6)
+        #expect(received == [1, 2, 5, 6])
+    }
+
+    @Test func coalesceLatestDropsStalePendingValueWhenLeadingSupersedesOverdueTrailing() {
+        let scheduler = VirtualCoalesceScheduler()
+        let subject = PassthroughSubject<Int, Never>()
+        var received: [Int] = []
+        let cancellable = subject
+            .coalesceLatest(for: .milliseconds(50), scheduler: scheduler)
+            .sink { received.append($0) }
+        defer { cancellable.cancel() }
+
+        subject.send(1) // replay: forwarded, no window
+        subject.send(2) // leading edge: opens window
+        subject.send(3) // pending trailing value for the open window
+        #expect(received == [1, 2])
+        #expect(scheduler.scheduledActionCount == 1)
+
+        // The deadline passes WITHOUT the scheduled callback running,
+        // modeling a stalled main run loop with an overdue timer.
+        scheduler.advance(by: 0.12)
+        subject.send(4) // deadline passed: new leading edge must supersede 3
+
+        #expect(
+            received == [1, 2, 4],
+            "A newer leading value after an overdue deadline must drop the stale pending value."
+        )
+
+        scheduler.runScheduledActions()
+        #expect(
+            received == [1, 2, 4],
+            "The overdue trailing callback must not emit the superseded stale value out of order."
+        )
+    }
+
+    @Test func coalesceLatestDrainsReentrantValueBeforeCompletionWithUnlimitedDemand() {
+        let scheduler = VirtualCoalesceScheduler()
+        let subject = PassthroughSubject<Int, Never>()
+        let subscriber = DemandControlledSubscriber<Int>()
+        subject
+            .coalesceLatest(for: .milliseconds(50), scheduler: scheduler)
+            .subscribe(subscriber)
+        defer { subscriber.cancel() }
+
+        subscriber.onValue = { value in
+            if value == 1 {
+                subject.send(2)
+                subject.send(completion: .finished)
+            }
+        }
+        subscriber.request(.unlimited)
+        subject.send(1)
+
+        #expect(
+            subscriber.received == [1, 2],
+            "A reentrant value that arrived before completion must drain while unlimited demand remains."
+        )
+        #expect(subscriber.completionCount == 1)
+        #expect(subscriber.receivedValuesAtCompletion == [[1, 2]])
+    }
+
+    @Test func coalesceLatestDeliversBufferedValueBeforeCompletionWhenDemandResumes() {
+        let scheduler = VirtualCoalesceScheduler()
+        let subject = PassthroughSubject<Int, Never>()
+        let subscriber = DemandControlledSubscriber<Int>()
+        subject
+            .coalesceLatest(for: .milliseconds(50), scheduler: scheduler)
+            .subscribe(subscriber)
+        defer { subscriber.cancel() }
+
+        subject.send(1)
+        subject.send(completion: .finished)
+
+        #expect(subscriber.received.isEmpty)
+        #expect(
+            subscriber.completionCount == 0,
+            "Completion must wait while the final value is buffered without demand."
+        )
+
+        subscriber.request(.max(1))
+
+        #expect(subscriber.received == [1])
+        #expect(subscriber.completionCount == 1)
+        #expect(subscriber.receivedValuesAtCompletion == [[1]])
+    }
+
     @Test func sidebarObservationPublisherIgnoresRemoteHeartbeatOnlyChanges() {
         let workspace = Workspace()
 
@@ -136,6 +297,127 @@ struct WorkspaceSidebarObservationTests {
             "Expected non-visible remote heartbeat updates to avoid invalidating sidebar rows"
         )
     }
+
+    @Test func agentLifecycleChangeBumpsRuntimeObservationGeneration() throws {
+        let workspace = Workspace()
+        let panelId = try #require(workspace.focusedPanelId)
+        let before = workspace.sidebarAgentRuntimeObservation.changeGeneration
+
+        workspace.setAgentLifecycle(key: "codex", panelId: panelId, lifecycle: .running)
+
+        #expect(
+            workspace.sidebarAgentRuntimeObservation.changeGeneration > before,
+            "Agent lifecycle changes must notify sidebar rows so the loading spinner updates."
+        )
+    }
+
+    @Test func redundantAgentLifecycleWriteDoesNotNotifySidebarRows() throws {
+        let workspace = Workspace()
+        let panelId = try #require(workspace.focusedPanelId)
+        workspace.setAgentLifecycle(key: "codex", panelId: panelId, lifecycle: .running)
+        let before = workspace.sidebarAgentRuntimeObservation.changeGeneration
+
+        // Re-asserting the same lifecycle value must not churn row refreshes.
+        workspace.setAgentLifecycle(key: "codex", panelId: panelId, lifecycle: .running)
+
+        #expect(workspace.sidebarAgentRuntimeObservation.changeGeneration == before)
+    }
+
+    @Test func clearAgentLifecycleWithNilPanelClearsKeySetOnSpecificPanel() throws {
+        let workspace = Workspace()
+        let panelId = try #require(workspace.focusedPanelId)
+        workspace.setAgentLifecycle(key: "manual", panelId: panelId, lifecycle: .running)
+        #expect(
+            SidebarAgentActivitySummary.activeCodingAgentCount(
+                statesByPanelId: workspace.agentLifecycleStatesByPanelId
+            ) == 1
+        )
+
+        // The workspace-scoped `cmux workspace loading off` path clears with a
+        // nil panel id; it must remove the key even though `on` targeted a
+        // specific panel (the cross-surface off bug).
+        #expect(workspace.clearAgentLifecycle(key: "manual", panelId: nil))
+        #expect(
+            SidebarAgentActivitySummary.activeCodingAgentCount(
+                statesByPanelId: workspace.agentLifecycleStatesByPanelId
+            ) == 0
+        )
+    }
+
+    @Test func runningLifecycleQueryIsScopedToOneLoaderKey() throws {
+        let workspace = Workspace()
+        let panelId = try #require(workspace.focusedPanelId)
+        workspace.setAgentLifecycle(key: "codex", panelId: panelId, lifecycle: .running)
+        workspace.setAgentLifecycle(key: "manual", panelId: panelId, lifecycle: .running)
+
+        #expect(workspace.hasRunningAgentLifecycle(key: "manual"))
+        #expect(workspace.clearAgentLifecycle(key: "manual", panelId: nil))
+        #expect(!workspace.hasRunningAgentLifecycle(key: "manual"))
+        #expect(workspace.hasRunningAgentLifecycle(key: "codex"))
+        #expect(
+            SidebarAgentActivitySummary.activeCodingAgentCount(
+                statesByPanelId: workspace.agentLifecycleStatesByPanelId
+            ) == 1
+        )
+    }
+
+    @Test func clearAgentLifecycleStatesPreservesManualLoadersOnLivePanel() throws {
+        let workspace = Workspace()
+        let panelId = try #require(workspace.focusedPanelId)
+        workspace.setAgentLifecycle(key: "codex", panelId: panelId, lifecycle: .running)
+        workspace.setAgentLifecycle(key: "manual", panelId: panelId, lifecycle: .running)
+
+        // Agent lifecycle resets clear agent keys but must not drop the
+        // workspace-scoped manual loader with them.
+        workspace.clearAgentLifecycleStates(panelId: panelId)
+
+        #expect(workspace.agentLifecycleStatesByPanelId[panelId]?["codex"] == nil)
+        #expect(workspace.agentLifecycleStatesByPanelId[panelId]?["manual"] == .running)
+    }
+
+    @Test func activeCodingAgentCountOnlyCountsRunningAgents() {
+        let firstPanelId = UUID()
+        let secondPanelId = UUID()
+
+        let count = SidebarAgentActivitySummary.activeCodingAgentCount(
+            statesByPanelId: [
+                firstPanelId: [
+                    "codex": .running,
+                    "claude_code": .idle,
+                    "gemini": .needsInput,
+                ],
+                secondPanelId: [
+                    "opencode": .running,
+                    "kiro": .unknown,
+                ],
+            ]
+        )
+
+        #expect(count == 2)
+    }
+
+    @Test func visibleActiveCodingAgentCountReturnsZeroWhenSettingIsDisabled() {
+        let panelId = UUID()
+        let statesByPanelId = [
+            panelId: [
+                "codex": AgentHibernationLifecycleState.running,
+                "claude_code": AgentHibernationLifecycleState.running,
+            ],
+        ]
+
+        #expect(
+            SidebarAgentActivitySummary.visibleActiveCodingAgentCount(
+                showsAgentActivity: false,
+                statesByPanelId: statesByPanelId
+            ) == 0
+        )
+        #expect(
+            SidebarAgentActivitySummary.visibleActiveCodingAgentCount(
+                showsAgentActivity: true,
+                statesByPanelId: statesByPanelId
+            ) == 2
+        )
+    }
 }
 
 // Mutable flag captured by Observation's Sendable onChange closure in this test.
@@ -144,5 +426,86 @@ private final class ObservationChangeFlag: @unchecked Sendable {
 
     func mark() {
         fired = true
+    }
+}
+
+private final class DemandControlledSubscriber<Input>: Subscriber {
+    typealias Failure = Never
+
+    private var subscription: Subscription?
+    private(set) var received: [Input] = []
+    private(set) var completionCount = 0
+    private(set) var receivedValuesAtCompletion: [[Input]] = []
+    var onValue: ((Input) -> Void)?
+
+    func receive(subscription: Subscription) {
+        self.subscription = subscription
+    }
+
+    func receive(_ input: Input) -> Subscribers.Demand {
+        received.append(input)
+        onValue?(input)
+        return .none
+    }
+
+    func receive(completion: Subscribers.Completion<Never>) {
+        completionCount += 1
+        receivedValuesAtCompletion.append(received)
+    }
+
+    func request(_ demand: Subscribers.Demand) {
+        subscription?.request(demand)
+    }
+
+    func cancel() {
+        subscription?.cancel()
+        subscription = nil
+    }
+}
+// Deterministic Combine scheduler for coalesceLatest tests: `now` only moves
+// via advance(by:), and scheduled actions run only when runScheduledActions()
+// is called, so overdue-timer interleavings are exact instead of wall-clock.
+private final class VirtualCoalesceScheduler: Scheduler {
+    typealias SchedulerTimeType = RunLoop.SchedulerTimeType
+    typealias SchedulerOptions = Never
+
+    private(set) var now = SchedulerTimeType(Date(timeIntervalSinceReferenceDate: 0))
+    var minimumTolerance: SchedulerTimeType.Stride { .seconds(0) }
+    private var scheduledActions: [() -> Void] = []
+
+    var scheduledActionCount: Int { scheduledActions.count }
+
+    func advance(by seconds: TimeInterval) {
+        now = SchedulerTimeType(now.date.addingTimeInterval(seconds))
+    }
+
+    func runScheduledActions() {
+        let actions = scheduledActions
+        scheduledActions = []
+        actions.forEach { $0() }
+    }
+
+    func schedule(options: Never?, _ action: @escaping () -> Void) {
+        action()
+    }
+
+    func schedule(
+        after date: SchedulerTimeType,
+        tolerance: SchedulerTimeType.Stride,
+        options: Never?,
+        _ action: @escaping () -> Void
+    ) {
+        scheduledActions.append(action)
+    }
+
+    func schedule(
+        after date: SchedulerTimeType,
+        interval: SchedulerTimeType.Stride,
+        tolerance: SchedulerTimeType.Stride,
+        options: Never?,
+        _ action: @escaping () -> Void
+    ) -> Cancellable {
+        scheduledActions.append(action)
+        return AnyCancellable {}
     }
 }

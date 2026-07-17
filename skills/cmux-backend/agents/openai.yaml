@@ -1,4 +1,0 @@
-interface:
-  display_name: "zerocmux Backend"
-  short_description: "Use Effect and Postgres-backed Cloud VM rules for backend work."
-  default_prompt: "Use this skill when editing zerocmux backend TypeScript, Vercel route handlers, Effect services, Cloud VM lifecycle code, provider integrations, database migrations, or pricing gates."

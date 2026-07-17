@@ -1,4 +1,5 @@
 import CmuxSettings
+import CmuxSidebar
 import Foundation
 
 typealias RightSidebarWidthSettings = CmuxSettings.RightSidebarWidthSettings
@@ -11,6 +12,7 @@ enum SidebarWorkspaceDetailDefaults {
     static let showPortsKey = "sidebarShowPorts"
     static let showLogKey = "sidebarShowLog"
     static let showProgressKey = "sidebarShowProgress"
+    static let showAgentActivityKey = "sidebarShowAgentActivity"
     static let showCustomMetadataKey = "sidebarShowStatusPills"
 
     static let showBranchDirectory = true
@@ -20,6 +22,7 @@ enum SidebarWorkspaceDetailDefaults {
     static let showPorts = true
     static let showLog = true
     static let showProgress = true
+    static let showAgentActivity = true
     static let showCustomMetadata = true
 }
 
@@ -48,12 +51,43 @@ extension SidebarWorkspaceDetailDefaults {
         boolValue(defaults: defaults, key: showPullRequestsKey, defaultValue: showPullRequests)
     }
 
+    static func showBranchDirectoryValue(defaults: UserDefaults) -> Bool {
+        boolValue(defaults: defaults, key: showBranchDirectoryKey, defaultValue: showBranchDirectory)
+    }
+
     static func watchGitStatusValue(defaults: UserDefaults) -> Bool {
         boolValue(defaults: defaults, key: watchGitStatusKey, defaultValue: watchGitStatus)
     }
 
+    static func auxiliaryDetailVisibility(defaults: UserDefaults) -> SidebarWorkspaceAuxiliaryDetailVisibility {
+        let hideAllDetails = SidebarCatalogSection().hideAllDetails
+        return SidebarWorkspaceAuxiliaryDetailVisibility.resolved(
+            showMetadata: boolValue(
+                defaults: defaults,
+                key: showCustomMetadataKey,
+                defaultValue: showCustomMetadata
+            ),
+            showLog: boolValue(defaults: defaults, key: showLogKey, defaultValue: showLog),
+            showProgress: boolValue(defaults: defaults, key: showProgressKey, defaultValue: showProgress),
+            showBranchDirectory: showBranchDirectoryValue(defaults: defaults),
+            showPullRequests: showPullRequestsValue(defaults: defaults),
+            showPorts: boolValue(defaults: defaults, key: showPortsKey, defaultValue: showPorts),
+            hideAllDetails: boolValue(
+                defaults: defaults,
+                key: hideAllDetails.userDefaultsKey,
+                defaultValue: hideAllDetails.defaultValue
+            )
+        )
+    }
+
+    static func gitMetadataPollingEnabled(defaults: UserDefaults) -> Bool {
+        watchGitStatusValue(defaults: defaults)
+            && auxiliaryDetailVisibility(defaults: defaults).requiresGitMetadata
+    }
+
     static func pullRequestPollingEnabled(defaults: UserDefaults) -> Bool {
-        watchGitStatusValue(defaults: defaults) && showPullRequestsValue(defaults: defaults)
+        watchGitStatusValue(defaults: defaults)
+            && auxiliaryDetailVisibility(defaults: defaults).requiresPullRequestPolling
     }
 }
 
@@ -146,11 +180,21 @@ enum NotificationSettingsFileMapping {
             jsonKey: "suppressOnlyFocusedSurface",
             defaultsKey: notifications.suppressOnlyFocusedSurface.userDefaultsKey
         ),
+        .init(
+            jsonKey: "agentPermissionPrompt",
+            defaultsKey: notifications.agentPermissionPrompt.userDefaultsKey
+        ),
+        .init(
+            jsonKey: "agentIdleReminder",
+            defaultsKey: notifications.agentIdleReminder.userDefaultsKey
+        ),
     ]
 
     static let stringSettings: [SettingsFileStringMapping] = [
         .init(jsonKey: "customSoundFilePath", defaultsKey: NotificationSoundSettings.customFilePathKey),
         .init(jsonKey: "command", defaultsKey: NotificationSoundSettings.customCommandKey),
+        // agentTurnComplete is enum-valued and validated explicitly in
+        // parseNotificationsSection, like notifications.sound.
     ]
 }
 
@@ -239,6 +283,10 @@ enum SidebarSettingsFileMapping {
             defaultsKey: SidebarWorkspaceDetailDefaults.showProgressKey
         ),
         .init(
+            jsonKey: "showAgentActivity",
+            defaultsKey: SidebarWorkspaceDetailDefaults.showAgentActivityKey
+        ),
+        .init(
             jsonKey: "showCustomMetadata",
             defaultsKey: SidebarWorkspaceDetailDefaults.showCustomMetadataKey
         ),
@@ -325,6 +373,8 @@ extension CmuxSettingsFileStore {
     // Keep this in sync with the parser below and the web schema/docs. Settings UI rows
     // validate against this set so new persisted settings need an explicit cmux.json review.
     static let supportedSettingsJSONPaths: Set<String> = [
+        PaneChromeSettings.paneBorderColorKey,
+        PaneChromeSettings.activePaneBorderColorKey,
         "app.language",
         "app.appearance",
         "app.appIcon",
@@ -354,14 +404,19 @@ extension CmuxSettingsFileStore {
         "terminal.autoResumeAgentSessions",
         "terminal.showTextBoxOnNewTerminals",
         "terminal.focusTextBoxOnNewTerminals",
+        "terminal.textBoxDefaultSubmitAction",
+        "terminal.textBoxSubmitActions",
         "terminal.agentHibernation.enabled",
         "terminal.agentHibernation.idleSeconds",
         "terminal.agentHibernation.maxLiveTerminals",
         "terminal.rendererRealization.enabled",
         "terminal.rendererRealization.idleSeconds",
         "terminal.rendererRealization.maxWarmRenderers",
+        SessionContentWidthSettings.settingsPath,
+        SessionContentWidthSettings.alignmentSettingsPath,
         "terminal.textBoxMaxLines",
         "terminal.resumeCommands",
+        "terminal.uploadCommands",
         "notifications.dockBadge",
         "notifications.showInMenuBar",
         "notifications.unreadPaneRing",
@@ -372,13 +427,18 @@ extension CmuxSettingsFileStore {
         "notifications.hooks",
         "notifications.hooksMode",
         "notifications.suppressOnlyFocusedSurface",
+        "notifications.agentPermissionPrompt",
+        "notifications.agentTurnComplete",
+        "notifications.agentIdleReminder",
         "sidebar.hideAllDetails",
         "sidebar.wrapWorkspaceTitles",
         "sidebar.showWorkspaceDescription",
+        "sidebar.beta.workspaceTodos.checklistStyle",
         "sidebar.branchLayout",
         "sidebar.stackBranchDirectory",
         "sidebar.pathLastSegmentOnly",
         "sidebar.showNotificationMessage",
+        "sidebar.notificationMessageLineLimit",
         "sidebar.showBranchDirectory",
         "sidebar.showPullRequests",
         "sidebar.watchGitStatus",
@@ -389,6 +449,9 @@ extension CmuxSettingsFileStore {
         "sidebar.showPorts",
         "sidebar.showLog",
         "sidebar.showProgress",
+        "sidebar.showAgentActivity",
+        "sidebar.loadingSpinnerPosition",
+        "sidebar.notificationBadgePosition",
         "sidebar.showCustomMetadata",
         RightSidebarWidthSettings.settingsPath,
         "workspaceColors.indicatorStyle",

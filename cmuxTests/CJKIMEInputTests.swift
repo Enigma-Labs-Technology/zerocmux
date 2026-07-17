@@ -1715,7 +1715,7 @@ final class GhosttyKeyEquivalentRegressionTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let integrationPath = repoRoot
-            .appendingPathComponent("Resources/shell-integration/cmux-zsh-integration.zsh")
+            .appendingPathComponent("Resources/shell-integration/zerocmux-zsh-integration.zsh")
             .path
 
         let process = Process()

@@ -1276,8 +1276,8 @@ import Testing
     /// spawned CLI via `CFFIXED_USER_HOME`, so they never touch (or bind over) the
     /// developer's real `~/.local/state/zerocmux` (issue #5146).
     private func makeTemporaryHome() throws -> URL {
-        let home = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zerocmux-cli-home-\(UUID().uuidString)", isDirectory: true)
+        let shortID = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(8)
+        let home = URL(fileURLWithPath: "/tmp/cmxh-\(shortID)", isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         return home
     }
@@ -1501,7 +1501,7 @@ import Testing
     }
 }
 
-private final class UnixSocketResponder {
+final class UnixSocketResponder {
     let path: String
     private let response: String
     private let responseDelay: TimeInterval

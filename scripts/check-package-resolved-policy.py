@@ -20,6 +20,9 @@ XCODE_PACKAGE_RESOLVED = (
     "cmux.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 )
 XCODE_PROJECT_FILE = "cmux.xcodeproj/project.pbxproj"
+EXPECTED_XCODE_LOCKFILES = {
+    XCODE_PACKAGE_RESOLVED,
+}
 XCODE_PACKAGE_REFERENCE_TOKENS = (
     "XCRemoteSwiftPackageReference",
     "repositoryURL",
@@ -231,17 +234,18 @@ def file_text_at(ref: str, path: str) -> str:
 
 
 def xcode_package_reference_changed(
+    project_file: str,
     merge_base: str | None,
     changed_files: set[str],
 ) -> bool:
-    if merge_base is None or XCODE_PROJECT_FILE not in changed_files:
+    if merge_base is None or project_file not in changed_files:
         return False
     diff = git_stdout(
         "diff",
         "--unified=0",
         f"{merge_base}..HEAD",
         "--",
-        XCODE_PROJECT_FILE,
+        project_file,
     )
     for line in diff.splitlines():
         if not line.startswith(("+", "-")) or line.startswith(("+++", "---")):
@@ -252,7 +256,7 @@ def xcode_package_reference_changed(
 
 
 def is_expected_lockfile_path(lockfile: str, roots: set[str]) -> bool:
-    if lockfile == XCODE_PACKAGE_RESOLVED:
+    if lockfile in EXPECTED_XCODE_LOCKFILES:
         return True
     if has_skipped_part(lockfile):
         return False
@@ -292,6 +296,8 @@ def main() -> int:
     merge_base = merge_base_with_base_ref()
     changed_files = changed_files_since(merge_base)
     changed_dependency_roots: set[str] = set()
+    previous_manifests: dict[str, Path] = {}
+    previous_graph: dict[str, tuple[bool, list[str]]] = {}
 
     if merge_base is not None:
         current_remote_memo: dict[str, bool] = {}
@@ -329,7 +335,11 @@ def main() -> int:
                 changed_dependency_roots.add(root)
 
     if (
-        xcode_package_reference_changed(merge_base, changed_files)
+        xcode_package_reference_changed(
+            XCODE_PROJECT_FILE,
+            merge_base,
+            changed_files,
+        )
         and XCODE_PACKAGE_RESOLVED not in changed_files
     ):
         errors.append(

@@ -1,4 +1,5 @@
 import CmuxCommandPalette
+import CmuxCore
 import CmuxFoundation
 import XCTest
 import AppKit
@@ -834,6 +835,39 @@ final class CommandPaletteRenameSelectionSettingsTests: XCTestCase {
     }
 }
 
+
+final class CloudVMIdentityMetadataTests: XCTestCase {
+    func testCloudVMIdentityIsExplicitMetadata() {
+        let cloudConfig = WorkspaceRemoteConfiguration(
+            destination: "nncop8f8h6w9blhns6sy+cmux@vm-ssh.freestyle.sh",
+            port: 22,
+            identityFile: nil,
+            sshOptions: [],
+            localProxyPort: nil,
+            relayPort: nil,
+            relayID: nil,
+            relayToken: nil,
+            localSocketPath: nil,
+            managedCloudVMID: " nncop8f8h6w9blhns6sy ",
+            terminalStartupCommand: nil
+        )
+        XCTAssertEqual(cloudConfig.managedCloudVMID, "nncop8f8h6w9blhns6sy")
+
+        let plainSSHConfig = WorkspaceRemoteConfiguration(
+            destination: "nncop8f8h6w9blhns6sy+cmux@vm-ssh.freestyle.sh",
+            port: 22,
+            identityFile: nil,
+            sshOptions: [],
+            localProxyPort: nil,
+            relayPort: nil,
+            relayID: nil,
+            relayToken: nil,
+            localSocketPath: nil,
+            terminalStartupCommand: nil
+        )
+        XCTAssertNil(plainSSHConfig.managedCloudVMID)
+    }
+}
 
 
 final class CommandPaletteSelectionScrollBehaviorTests: XCTestCase {

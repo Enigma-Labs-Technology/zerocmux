@@ -1,0 +1,3093 @@
+//! Control protocol server over Unix JSON-lines and WebSocket text frames.
+//!
+//! This is the attach surface for external frontends (the cmux app, the
+//! bundled `cmux-tui attach` client, scripts). Unix uses one JSON message
+//! per line and WebSocket uses one JSON message per text frame. Two commands
+//! additionally turn the connection full-duplex:
+//!
+//! - `subscribe` — the server pushes `{"event":...}` lines (tree-changed,
+//!   surface-output, surface-exited, title-changed, bell) interleaved
+//!   with responses.
+//! - `attach-surface` — PTYs receive `{"event":"vt-state"}` with a
+//!   base64 VT replay followed by live `{"event":"output"}` pty bytes.
+//!   Browsers receive `{"event":"browser-state"}` with optional latest
+//!   frame followed by live `{"event":"frame"}` PNG payloads.
+//!
+//! ```text
+//! {"id":1,"cmd":"identify"}
+//! {"id":1,"ok":true,"data":{"app":"cmux-tui","session":"main",...}}
+//! ```
+
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+use base64::Engine;
+use ghostty_vt::{KeyEncoder, key_input_from_chord};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use tungstenite::protocol::CloseFrame;
+use tungstenite::protocol::Role;
+use tungstenite::protocol::frame::coding::CloseCode;
+use tungstenite::{Message, accept};
+
+use crate::model::{Screen, State};
+use crate::platform::{self, transport};
+use crate::surface::AttachLifecycle;
+use crate::{
+    AgentRecord, AgentSource, AgentState, AttachFrame, DefaultColors, Direction, LayoutLeafSpec,
+    LayoutSpec, Mux, MuxEvent, Node, NotificationLevel, PaneId, Rgb, ScreenId, SidebarPluginStatus,
+    SplitDir, SurfaceId, SurfaceKind, SurfaceNotification, TerminalColors, WorkspaceId, ZoomMode,
+    assign_short_ids,
+};
+
+pub const PROTOCOL_VERSION: u32 = 7;
+
+/// Default socket path for a session.
+pub fn default_socket_path(session: &str) -> PathBuf {
+    platform::runtime_dir().join(format!("{session}.sock"))
+}
+
+#[derive(Deserialize)]
+struct Request {
+    id: Option<Value>,
+    #[serde(flatten)]
+    cmd: Command,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "cmd", rename_all = "kebab-case")]
+enum Command {
+    Identify,
+    Ping,
+    SetClientInfo {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        kind: Option<String>,
+    },
+    ListClients,
+    DetachClient {
+        client: u64,
+    },
+    ReloadConfig,
+    SetWindowTitle {
+        title: String,
+    },
+    ClearWindowTitle,
+    ListWorkspaces,
+    ExportLayout {
+        #[serde(default)]
+        screen: Option<ScreenId>,
+    },
+    ApplyLayout {
+        #[serde(default)]
+        workspace: Option<WorkspaceId>,
+        #[serde(default)]
+        name: Option<String>,
+        layout: LayoutRequest,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    Send {
+        surface: SurfaceId,
+        #[serde(default)]
+        text: Option<String>,
+        /// Base64-encoded raw bytes, written verbatim to the pty.
+        #[serde(default)]
+        bytes: Option<String>,
+    },
+    ReadScreen {
+        surface: SurfaceId,
+    },
+    SidebarPlugin {
+        cols: u16,
+        rows: u16,
+        #[serde(default)]
+        relaunch: bool,
+    },
+    WaitFor {
+        surface: SurfaceId,
+        pattern: String,
+        #[serde(alias = "timeout_ms")]
+        timeout_ms: u64,
+    },
+    Run {
+        #[serde(default)]
+        argv: Option<Vec<String>>,
+        #[serde(default)]
+        command: Option<String>,
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        pane: Option<PaneId>,
+        #[serde(default)]
+        new_workspace: bool,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    SendKey {
+        surface: SurfaceId,
+        keys: Vec<String>,
+    },
+    Copy {
+        surface: SurfaceId,
+        mode: String,
+    },
+    Ids {
+        #[serde(default)]
+        kind: Option<String>,
+    },
+    Notify {
+        title: String,
+        body: String,
+        #[serde(default)]
+        level: Option<String>,
+        #[serde(default)]
+        surface: Option<SurfaceId>,
+    },
+    ListAgents {
+        #[serde(default)]
+        surface: Option<SurfaceId>,
+        #[serde(default)]
+        state: Option<String>,
+    },
+    ReportAgent {
+        surface: SurfaceId,
+        state: String,
+        source: String,
+        #[serde(default)]
+        session: Option<String>,
+    },
+    /// One-shot VT replay of the surface's current state (base64).
+    VtState {
+        surface: SurfaceId,
+    },
+    /// New tab in a pane (default: the active pane).
+    NewTab {
+        #[serde(default)]
+        pane: Option<PaneId>,
+        #[serde(default)]
+        cwd: Option<String>,
+        /// Expected content size in cells (spawn-at-size avoids shell
+        /// redraw artifacts).
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    NewBrowserTab {
+        url: String,
+        #[serde(default)]
+        pane: Option<PaneId>,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    SetCellPixels {
+        #[serde(alias = "width_px")]
+        width_px: u16,
+        #[serde(alias = "height_px")]
+        height_px: u16,
+    },
+    BrowserMouse {
+        surface: SurfaceId,
+        kind: String,
+        #[serde(alias = "x_px")]
+        x_px: f64,
+        #[serde(alias = "y_px")]
+        y_px: f64,
+        #[serde(default)]
+        button: Option<String>,
+        #[serde(default, alias = "click_count")]
+        click_count: Option<u32>,
+    },
+    BrowserWheel {
+        surface: SurfaceId,
+        #[serde(alias = "x_px")]
+        x_px: f64,
+        #[serde(alias = "y_px")]
+        y_px: f64,
+        #[serde(alias = "delta_y_px")]
+        delta_y_px: f64,
+    },
+    BrowserKey {
+        surface: SurfaceId,
+        kind: String,
+        key: String,
+        code: String,
+        #[serde(alias = "windows_virtual_key_code")]
+        windows_virtual_key_code: u32,
+        modifiers: u32,
+        #[serde(default)]
+        text: Option<String>,
+    },
+    BrowserInsertText {
+        surface: SurfaceId,
+        text: String,
+    },
+    BrowserNavigate {
+        surface: SurfaceId,
+        url: String,
+    },
+    BrowserBack {
+        surface: SurfaceId,
+    },
+    BrowserForward {
+        surface: SurfaceId,
+    },
+    BrowserReload {
+        surface: SurfaceId,
+    },
+    BrowserActivate {
+        surface: SurfaceId,
+    },
+    NewWorkspace {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    /// New screen in a workspace (default: the active one).
+    NewScreen {
+        #[serde(default)]
+        workspace: Option<WorkspaceId>,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    Split {
+        pane: PaneId,
+        /// "right" or "down"
+        dir: String,
+        #[serde(default)]
+        cols: Option<u16>,
+        #[serde(default)]
+        rows: Option<u16>,
+    },
+    SetRatio {
+        pane: PaneId,
+        /// "right" or "down"
+        dir: String,
+        ratio: f32,
+    },
+    PaneNeighbor {
+        pane: PaneId,
+        dir: String,
+    },
+    FocusDirection {
+        #[serde(default)]
+        pane: Option<PaneId>,
+        dir: String,
+    },
+    SwapPane {
+        pane: PaneId,
+        #[serde(default)]
+        dir: Option<String>,
+        #[serde(default)]
+        target: Option<PaneId>,
+    },
+    ZoomPane {
+        #[serde(default)]
+        pane: Option<PaneId>,
+        #[serde(default)]
+        mode: Option<String>,
+    },
+    ProcessInfo {
+        surface: SurfaceId,
+    },
+    MoveTab {
+        surface: SurfaceId,
+        pane: PaneId,
+        index: usize,
+    },
+    MoveWorkspace {
+        workspace: WorkspaceId,
+        index: usize,
+    },
+    SetDefaultColors {
+        #[serde(default)]
+        fg: Option<String>,
+        #[serde(default)]
+        bg: Option<String>,
+    },
+    /// Close one tab.
+    CloseSurface {
+        surface: SurfaceId,
+    },
+    /// Close a pane and all its tabs.
+    ClosePane {
+        pane: PaneId,
+    },
+    CloseScreen {
+        screen: ScreenId,
+    },
+    CloseWorkspace {
+        workspace: WorkspaceId,
+    },
+    RenamePane {
+        pane: PaneId,
+        /// Empty clears the name (falls back to the tab title).
+        name: String,
+    },
+    RenameSurface {
+        surface: SurfaceId,
+        /// Empty clears the name (falls back to the generated tab label).
+        name: String,
+    },
+    RenameScreen {
+        screen: ScreenId,
+        /// Empty clears the name (falls back to the screen number).
+        name: String,
+    },
+    RenameWorkspace {
+        workspace: WorkspaceId,
+        name: String,
+    },
+    ResizeSurface {
+        surface: SurfaceId,
+        cols: u16,
+        rows: u16,
+    },
+    FocusPane {
+        pane: PaneId,
+    },
+    /// Select a tab within a pane (default: the active pane).
+    SelectTab {
+        #[serde(default)]
+        pane: Option<PaneId>,
+        #[serde(default)]
+        index: Option<usize>,
+        #[serde(default)]
+        delta: Option<isize>,
+    },
+    /// Select a screen within the active workspace.
+    SelectScreen {
+        #[serde(default)]
+        index: Option<usize>,
+        #[serde(default)]
+        delta: Option<isize>,
+    },
+    SelectWorkspace {
+        #[serde(default)]
+        index: Option<usize>,
+        #[serde(default)]
+        delta: Option<isize>,
+    },
+    /// Stream mux events on this connection.
+    Subscribe,
+    /// Stream a surface: vt-state event followed by live output events.
+    AttachSurface {
+        surface: SurfaceId,
+    },
+    /// Scroll a surface's viewport by a row delta (negative is up).
+    ScrollSurface {
+        surface: SurfaceId,
+        delta: isize,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+enum LayoutRequest {
+    Leaf {
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        command: Option<Vec<String>>,
+    },
+    Split {
+        dir: String,
+        ratio: f32,
+        a: Box<LayoutRequest>,
+        b: Box<LayoutRequest>,
+    },
+}
+
+#[derive(Serialize)]
+struct Response {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Value>,
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+const STREAM_DISCONNECT_POLL: Duration = Duration::from_millis(100);
+const STREAM_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+#[cfg(not(test))]
+const WEBSOCKET_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const WEBSOCKET_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(100);
+const MAX_SERVER_CONNECTIONS: usize = 256;
+const OUTBOUND_CAPACITY: usize = 256;
+const OUTBOUND_CONTROL_RESERVE: usize = 256;
+const OUTBOUND_BYTE_CAPACITY: usize = 16 * 1024 * 1024;
+const OUTBOUND_CONTROL_BYTE_RESERVE: usize = 16 * 1024 * 1024;
+const CLIENT_DETACH_WRITE_TIMEOUT: Duration = Duration::from_millis(100);
+
+#[derive(Clone)]
+struct OutboundStream {
+    id: u64,
+    open: Arc<AtomicBool>,
+    terminal_enqueued: Arc<AtomicBool>,
+    overflow_text: Arc<str>,
+}
+
+impl OutboundStream {
+    fn new(id: u64, overflow_text: String) -> Self {
+        Self {
+            id,
+            open: Arc::new(AtomicBool::new(true)),
+            terminal_enqueued: Arc::new(AtomicBool::new(false)),
+            overflow_text: overflow_text.into(),
+        }
+    }
+
+    fn is_open(&self) -> bool {
+        self.open.load(Ordering::Acquire)
+    }
+
+    fn close(&self) {
+        self.open.store(false, Ordering::Release);
+    }
+}
+
+trait MessageSink: Send + Sync {
+    fn send_initial(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()>;
+    fn send_stream(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()>;
+    fn send_control(&self, value: &Value) -> std::io::Result<()>;
+    fn send_terminal(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()>;
+    fn set_write_timeout(&self, _timeout: Option<Duration>) -> std::io::Result<()> {
+        Ok(())
+    }
+    fn is_open(&self) -> bool;
+    fn close(&self);
+}
+
+/// Transport-independent writer shared by command responses and event streams.
+#[derive(Clone)]
+struct MessageWriter {
+    sink: Arc<dyn MessageSink>,
+    open: Arc<AtomicBool>,
+    next_stream_id: Arc<AtomicU64>,
+}
+
+impl MessageWriter {
+    fn new(sink: impl MessageSink + 'static) -> Self {
+        Self {
+            sink: Arc::new(sink),
+            open: Arc::new(AtomicBool::new(true)),
+            next_stream_id: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    fn start_stream(&self, overflow: &Value) -> std::io::Result<OutboundStream> {
+        Ok(OutboundStream::new(
+            self.next_stream_id.fetch_add(1, Ordering::Relaxed),
+            serde_json::to_string(overflow)?,
+        ))
+    }
+
+    fn send_stream(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        if !self.is_open() {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        let result = self.sink.send_stream(value, stream);
+        if result.as_ref().is_err_and(|error| error.kind() != std::io::ErrorKind::WouldBlock) {
+            stream.close();
+        }
+        result
+    }
+
+    fn send_initial(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        if !self.is_open() {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        let result = self.sink.send_initial(value, stream);
+        if result.as_ref().is_err_and(|error| error.kind() != std::io::ErrorKind::WouldBlock) {
+            stream.close();
+        }
+        result
+    }
+
+    fn send_terminal(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        if !self.is_open() {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        let result = self.sink.send_terminal(value, stream);
+        if result.is_err() {
+            self.close();
+        }
+        result
+    }
+
+    fn send_control(&self, value: &Value) -> std::io::Result<()> {
+        if !self.is_open() {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        let result = self.sink.send_control(value);
+        if result.is_err() {
+            self.close();
+        }
+        result
+    }
+
+    fn is_open(&self) -> bool {
+        self.open.load(Ordering::Acquire) && self.sink.is_open()
+    }
+
+    fn set_write_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        self.sink.set_write_timeout(timeout)
+    }
+
+    fn close(&self) {
+        if self.open.swap(false, Ordering::AcqRel) {
+            self.sink.close();
+        }
+    }
+}
+
+#[derive(Default)]
+struct BoundedOutbound {
+    state: Mutex<BoundedOutboundState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct BoundedOutboundState {
+    initial: VecDeque<RegularOutbound>,
+    control: VecDeque<String>,
+    regular: VecDeque<RegularOutbound>,
+    control_bytes: usize,
+    regular_bytes: usize,
+    closed: bool,
+}
+
+struct RegularOutbound {
+    text: String,
+    stream: OutboundStream,
+}
+
+struct ConnectionPermit(Arc<AtomicU64>);
+
+impl Drop for ConnectionPermit {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+fn claim_connection(active: &Arc<AtomicU64>) -> Option<ConnectionPermit> {
+    active
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            (count < MAX_SERVER_CONNECTIONS as u64).then_some(count + 1)
+        })
+        .ok()
+        .map(|_| ConnectionPermit(active.clone()))
+}
+
+impl BoundedOutbound {
+    fn push_regular(&self, text: String, stream: &OutboundStream) -> std::io::Result<()> {
+        self.push_regular_with_priority(text, stream, false)
+    }
+
+    fn push_initial(&self, text: String, stream: &OutboundStream) -> std::io::Result<()> {
+        self.push_regular_with_priority(text, stream, true)
+    }
+
+    fn push_regular_with_priority(
+        &self,
+        text: String,
+        stream: &OutboundStream,
+        initial: bool,
+    ) -> std::io::Result<()> {
+        let mut state = self.state.lock().unwrap();
+        if state.closed {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        if !stream.is_open() {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stream closed"));
+        }
+        let bytes = text.len();
+        if bytes > OUTBOUND_BYTE_CAPACITY {
+            Self::terminate_stream_locked(&mut state, stream)?;
+            self.changed.notify_one();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "outbound queue overflowed",
+            ));
+        }
+        loop {
+            let byte_full = bytes > OUTBOUND_BYTE_CAPACITY.saturating_sub(state.regular_bytes);
+            let count_full = state.initial.len() + state.regular.len() >= OUTBOUND_CAPACITY;
+            if !byte_full && !count_full {
+                break;
+            }
+            let Some(victim) = Self::largest_stream(&state, byte_full) else {
+                Self::terminate_stream_locked(&mut state, stream)?;
+                self.changed.notify_one();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "outbound queue overflowed",
+                ));
+            };
+            let incoming_terminated = victim.id == stream.id;
+            Self::terminate_stream_locked(&mut state, &victim)?;
+            if incoming_terminated {
+                self.changed.notify_one();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "outbound queue overflowed",
+                ));
+            }
+        }
+        state.regular_bytes += bytes;
+        let message = RegularOutbound { text, stream: stream.clone() };
+        if initial {
+            state.initial.push_back(message);
+        } else {
+            state.regular.push_back(message);
+        }
+        self.changed.notify_one();
+        Ok(())
+    }
+
+    fn push_control(&self, text: String) -> std::io::Result<()> {
+        let mut state = self.state.lock().unwrap();
+        Self::push_control_locked(&mut state, text)?;
+        self.changed.notify_one();
+        Ok(())
+    }
+
+    fn push_terminal(&self, text: String, stream: &OutboundStream) -> std::io::Result<()> {
+        let mut state = self.state.lock().unwrap();
+        stream.close();
+        Self::purge_stream_locked(&mut state, stream.id);
+        if stream.terminal_enqueued.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        Self::push_control_locked(&mut state, text)?;
+        self.changed.notify_one();
+        Ok(())
+    }
+
+    fn terminate_stream_locked(
+        state: &mut BoundedOutboundState,
+        stream: &OutboundStream,
+    ) -> std::io::Result<()> {
+        stream.close();
+        Self::purge_stream_locked(state, stream.id);
+        if stream.terminal_enqueued.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        if let Err(error) = Self::push_control_locked(state, stream.overflow_text.to_string()) {
+            state.closed = true;
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                format!("could not report stream overflow: {error}"),
+            ));
+        }
+        Ok(())
+    }
+
+    fn purge_stream_locked(state: &mut BoundedOutboundState, stream_id: u64) {
+        let mut removed_bytes = 0;
+        state.initial.retain(|message| {
+            if message.stream.id == stream_id {
+                removed_bytes += message.text.len();
+                false
+            } else {
+                true
+            }
+        });
+        state.regular.retain(|message| {
+            if message.stream.id == stream_id {
+                removed_bytes += message.text.len();
+                false
+            } else {
+                true
+            }
+        });
+        state.regular_bytes -= removed_bytes;
+    }
+
+    fn largest_stream(state: &BoundedOutboundState, by_bytes: bool) -> Option<OutboundStream> {
+        let mut usage = HashMap::<u64, (usize, usize, OutboundStream)>::new();
+        for message in state.initial.iter().chain(&state.regular) {
+            let entry =
+                usage.entry(message.stream.id).or_insert_with(|| (0, 0, message.stream.clone()));
+            entry.0 += 1;
+            entry.1 += message.text.len();
+        }
+        usage
+            .into_values()
+            .max_by_key(|(messages, bytes, _)| if by_bytes { *bytes } else { *messages })
+            .map(|(_, _, stream)| stream)
+    }
+
+    fn push_control_locked(state: &mut BoundedOutboundState, text: String) -> std::io::Result<()> {
+        if state.closed {
+            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "connection closed"));
+        }
+        let bytes = text.len();
+        if state.control.len() >= OUTBOUND_CONTROL_RESERVE
+            || bytes > OUTBOUND_CONTROL_BYTE_RESERVE.saturating_sub(state.control_bytes)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "outbound control reserve overflowed",
+            ));
+        }
+        state.control_bytes += bytes;
+        state.control.push_back(text);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn try_pop(&self) -> Option<String> {
+        let mut state = self.state.lock().unwrap();
+        Self::pop_locked(&mut state)
+    }
+
+    fn recv(&self) -> Option<String> {
+        let mut state = self.state.lock().unwrap();
+        loop {
+            if let Some(text) = Self::pop_locked(&mut state) {
+                return Some(text);
+            }
+            if state.closed {
+                return None;
+            }
+            state = self.changed.wait(state).unwrap();
+        }
+    }
+
+    fn pop_locked(state: &mut BoundedOutboundState) -> Option<String> {
+        if let Some(message) = state.initial.pop_front() {
+            state.regular_bytes -= message.text.len();
+            return Some(message.text);
+        }
+        if let Some(text) = state.control.pop_front() {
+            state.control_bytes -= text.len();
+            return Some(text);
+        }
+        let message = state.regular.pop_front()?;
+        state.regular_bytes -= message.text.len();
+        Some(message.text)
+    }
+
+    fn is_open(&self) -> bool {
+        !self.state.lock().unwrap().closed
+    }
+
+    fn close(&self) {
+        self.state.lock().unwrap().closed = true;
+        self.changed.notify_all();
+    }
+}
+
+struct QueuedSink {
+    outbound: Arc<BoundedOutbound>,
+    control: Option<SinkControl>,
+}
+
+enum SinkControl {
+    Unix(Box<dyn transport::Stream>),
+    WebSocket(TcpStream),
+}
+
+/// Cloned TCP streams share one write boundary so independent Tungstenite
+/// reader and writer contexts cannot interleave frame bytes. Reads remain
+/// fully blocking and are interrupted by shutting down a clone.
+struct SynchronizedTcpStream {
+    stream: TcpStream,
+    write_lock: Arc<Mutex<()>>,
+}
+
+impl SynchronizedTcpStream {
+    fn new(stream: TcpStream) -> Self {
+        Self { stream, write_lock: Arc::new(Mutex::new(())) }
+    }
+
+    fn try_clone(&self) -> std::io::Result<Self> {
+        Ok(Self { stream: self.stream.try_clone()?, write_lock: self.write_lock.clone() })
+    }
+
+    fn try_clone_raw(&self) -> std::io::Result<TcpStream> {
+        self.stream.try_clone()
+    }
+
+    fn set_read_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        self.stream.set_read_timeout(timeout)
+    }
+
+    fn set_write_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        self.stream.set_write_timeout(timeout)
+    }
+}
+
+impl Read for SynchronizedTcpStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.stream.read(buf)
+    }
+}
+
+impl Write for SynchronizedTcpStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let _guard = self.write_lock.lock().unwrap();
+        self.stream.write_all(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let _guard = self.write_lock.lock().unwrap();
+        self.stream.flush()
+    }
+}
+
+impl SinkControl {
+    fn set_write_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        match self {
+            Self::Unix(stream) => stream.set_write_timeout(timeout),
+            Self::WebSocket(stream) => stream.set_write_timeout(timeout),
+        }
+    }
+}
+
+impl MessageSink for QueuedSink {
+    fn send_initial(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        let text = serde_json::to_string(value)?;
+        self.outbound.push_initial(text, stream)
+    }
+
+    fn send_stream(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        let text = serde_json::to_string(value)?;
+        self.outbound.push_regular(text, stream)
+    }
+
+    fn send_control(&self, value: &Value) -> std::io::Result<()> {
+        let text = serde_json::to_string(value)?;
+        self.outbound.push_control(text)
+    }
+
+    fn send_terminal(&self, value: &Value, stream: &OutboundStream) -> std::io::Result<()> {
+        let text = serde_json::to_string(value)?;
+        self.outbound.push_terminal(text, stream)
+    }
+
+    fn is_open(&self) -> bool {
+        self.outbound.is_open()
+    }
+
+    fn set_write_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        self.control.as_ref().map_or(Ok(()), |control| control.set_write_timeout(timeout))
+    }
+
+    fn close(&self) {
+        self.outbound.close();
+    }
+}
+
+/// First-attach announcement payload: (transport, name, kind).
+type ClientAnnouncement = (String, Option<String>, Option<String>);
+
+#[derive(Clone, Copy)]
+enum ClientTransport {
+    Unix,
+    WebSocket,
+}
+
+impl ClientTransport {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Unix => "unix",
+            Self::WebSocket => "ws",
+        }
+    }
+}
+
+#[derive(Default)]
+struct AttachedSurface {
+    streams: BTreeMap<u64, OutboundStream>,
+    size: Option<(u16, u16)>,
+}
+
+struct ClientRecord {
+    transport: ClientTransport,
+    connected_at: Instant,
+    name: Option<String>,
+    kind: Option<String>,
+    attached: BTreeMap<SurfaceId, AttachedSurface>,
+    announced_attached: bool,
+    writer: MessageWriter,
+}
+
+pub(crate) struct ClientRegistry {
+    next_id: AtomicU64,
+    clients: Mutex<BTreeMap<u64, ClientRecord>>,
+}
+
+impl ClientRegistry {
+    pub(crate) fn new() -> Self {
+        Self { next_id: AtomicU64::new(1), clients: Mutex::new(BTreeMap::new()) }
+    }
+
+    fn register(&self, transport: ClientTransport, writer: MessageWriter) -> u64 {
+        let client = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.clients.lock().unwrap().insert(
+            client,
+            ClientRecord {
+                transport,
+                connected_at: Instant::now(),
+                name: None,
+                kind: None,
+                attached: BTreeMap::new(),
+                announced_attached: false,
+                writer,
+            },
+        );
+        client
+    }
+
+    fn set_info(
+        &self,
+        client: u64,
+        name: Option<String>,
+        kind: Option<String>,
+    ) -> anyhow::Result<(Option<String>, Option<String>)> {
+        let mut clients = self.clients.lock().unwrap();
+        let record =
+            clients.get_mut(&client).ok_or_else(|| anyhow::anyhow!("unknown client {client}"))?;
+        if let Some(name) = name {
+            record.name = Some(clamp_client_label(name));
+        }
+        if let Some(kind) = kind {
+            record.kind = Some(clamp_client_label(kind));
+        }
+        Ok((record.name.clone(), record.kind.clone()))
+    }
+
+    fn list_json(&self, requesting_client: u64) -> Value {
+        let clients = self.clients.lock().unwrap();
+        json!(
+            clients
+                .iter()
+                .map(|(client, record)| {
+                    json!({
+                        "client": client,
+                        "transport": record.transport.as_str(),
+                        "name": record.name,
+                        "kind": record.kind,
+                        "connected_seconds": record.connected_at.elapsed().as_secs(),
+                        "attached": record.attached.keys().copied().collect::<Vec<_>>(),
+                        "sizes": record.attached.iter().map(|(surface, attached)| {
+                            match attached.size {
+                                Some((cols, rows)) => json!({
+                                    "surface": surface,
+                                    "cols": cols,
+                                    "rows": rows,
+                                }),
+                                None => json!({
+                                    "surface": surface,
+                                    "cols": null,
+                                    "rows": null,
+                                }),
+                            }
+                        }).collect::<Vec<_>>(),
+                        "self": *client == requesting_client,
+                    })
+                })
+                .collect::<Vec<_>>()
+        )
+    }
+
+    fn attach_surface(
+        &self,
+        client: u64,
+        surface: SurfaceId,
+        stream: OutboundStream,
+    ) -> anyhow::Result<Option<ClientAnnouncement>> {
+        let mut clients = self.clients.lock().unwrap();
+        let record =
+            clients.get_mut(&client).ok_or_else(|| anyhow::anyhow!("unknown client {client}"))?;
+        record.attached.entry(surface).or_default().streams.insert(stream.id, stream);
+        if record.announced_attached {
+            return Ok(None);
+        }
+        record.announced_attached = true;
+        Ok(Some((record.transport.as_str().to_string(), record.name.clone(), record.kind.clone())))
+    }
+
+    fn detach_surface(&self, client: u64, surface: SurfaceId, stream: u64) {
+        let mut clients = self.clients.lock().unwrap();
+        let Some(record) = clients.get_mut(&client) else { return };
+        let Some(attached) = record.attached.get_mut(&surface) else { return };
+        attached.streams.remove(&stream);
+        if attached.streams.is_empty() {
+            record.attached.remove(&surface);
+        }
+    }
+
+    fn record_size(&self, client: u64, surface: SurfaceId, cols: u16, rows: u16) {
+        let mut clients = self.clients.lock().unwrap();
+        if let Some(attached) =
+            clients.get_mut(&client).and_then(|record| record.attached.get_mut(&surface))
+        {
+            attached.size = Some((cols, rows));
+        }
+    }
+
+    fn remove(&self, client: u64) -> Option<ClientRecord> {
+        self.clients.lock().unwrap().remove(&client)
+    }
+
+    fn contains(&self, client: u64) -> bool {
+        self.clients.lock().unwrap().contains_key(&client)
+    }
+}
+
+fn clamp_client_label(value: String) -> String {
+    sanitize_window_title(&value).chars().take(64).collect()
+}
+
+/// Bind the socket and serve connections on background threads.
+pub fn serve(mux: Arc<Mux>, path: Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    let path = path.unwrap_or_else(|| default_socket_path(&mux.session));
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+        platform::restrict_directory(dir)?;
+    }
+    // Refuse to clobber a live socket; remove a stale one.
+    if path.exists() {
+        match transport::connect(&path) {
+            Ok(_) => anyhow::bail!(
+                "session socket {} is already in use (another instance running?)",
+                path.display()
+            ),
+            Err(_) => std::fs::remove_file(&path)?,
+        }
+    }
+    let listener = transport::listen(&path)?;
+    platform::restrict_file(&path)?;
+    let active_connections = Arc::new(AtomicU64::new(0));
+
+    std::thread::Builder::new().name("mux-server".into()).spawn(move || {
+        loop {
+            let Ok(stream) = listener.accept() else { continue };
+            let Some(permit) = claim_connection(&active_connections) else { continue };
+            let mux = mux.clone();
+            let _ = std::thread::Builder::new().name("mux-conn".into()).spawn(move || {
+                let _permit = permit;
+                handle_connection(mux, stream);
+            });
+        }
+    })?;
+    Ok(path)
+}
+
+/// A running opt-in WebSocket listener. Dropping it stops accepts and closes clients.
+pub struct WebSocketServer {
+    local_addr: SocketAddr,
+    shutdown: Arc<AtomicBool>,
+    connections: Arc<Mutex<HashMap<u64, TcpStream>>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl WebSocketServer {
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+}
+
+impl Drop for WebSocketServer {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
+        for stream in self.connections.lock().unwrap().values() {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
+        let _ = TcpStream::connect(self.local_addr);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Bind an opt-in WebSocket listener using one JSON message per text frame.
+pub fn serve_websocket(
+    mux: Arc<Mux>,
+    addr: SocketAddr,
+    token: Option<String>,
+    allow_insecure_bind: bool,
+) -> anyhow::Result<WebSocketServer> {
+    // WebSocket has no TLS here. Remote deployments must explicitly opt in and
+    // should put cmux-tui behind a TLS-terminating reverse proxy.
+    if !addr.ip().is_loopback() && !allow_insecure_bind {
+        anyhow::bail!("refusing non-loopback WebSocket bind {addr} without --ws-insecure-bind");
+    }
+    let listener = TcpListener::bind(addr)?;
+    let local_addr = listener.local_addr()?;
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let connections = Arc::new(Mutex::new(HashMap::new()));
+    let next_connection = Arc::new(AtomicU64::new(1));
+    let active_connections = Arc::new(AtomicU64::new(0));
+    let thread_shutdown = shutdown.clone();
+    let thread_connections = connections.clone();
+    let thread = std::thread::Builder::new().name("mux-ws-server".into()).spawn(move || {
+        while !thread_shutdown.load(Ordering::Acquire) {
+            let stream = match listener.accept() {
+                Ok((stream, _)) => stream,
+                Err(_) => {
+                    if thread_shutdown.load(Ordering::Acquire) {
+                        break;
+                    }
+                    // Accept errors can persist (for example, after resource exhaustion).
+                    // A short backoff prevents a hot retry loop while still recovering promptly.
+                    std::thread::sleep(STREAM_DISCONNECT_POLL);
+                    continue;
+                }
+            };
+            if thread_shutdown.load(Ordering::Acquire) {
+                break;
+            }
+            let Some(permit) = claim_connection(&active_connections) else { continue };
+            let id = next_connection.fetch_add(1, Ordering::Relaxed);
+            if let Ok(tracked) = stream.try_clone() {
+                thread_connections.lock().unwrap().insert(id, tracked);
+            }
+            let mux = mux.clone();
+            let token = token.clone();
+            let connections = thread_connections.clone();
+            let cleanup_connections = thread_connections.clone();
+            if std::thread::Builder::new()
+                .name("mux-ws-conn".into())
+                .spawn(move || {
+                    let _permit = permit;
+                    handle_websocket_connection(mux, stream, token.as_deref());
+                    connections.lock().unwrap().remove(&id);
+                })
+                .is_err()
+            {
+                cleanup_connections.lock().unwrap().remove(&id);
+            }
+        }
+    })?;
+    Ok(WebSocketServer { local_addr, shutdown, connections, thread: Some(thread) })
+}
+
+pub fn window_title_osc(title: &str) -> Vec<u8> {
+    let title = sanitize_window_title(title);
+    format!("\x1b]0;{title}\x07\x1b]2;{title}\x07").into_bytes()
+}
+
+fn sanitize_window_title(title: &str) -> String {
+    title
+        .chars()
+        .map(|ch| match ch {
+            '\u{00}'..='\u{1f}' | '\u{7f}' => ' ',
+            _ => ch,
+        })
+        .collect()
+}
+
+fn handle_connection(mux: Arc<Mux>, stream: Box<dyn transport::Stream>) {
+    let Ok(mut write_half) = stream.try_clone_box() else { return };
+    let Ok(control) = write_half.try_clone_box() else { return };
+    if write_half.set_write_timeout(Some(STREAM_WRITE_TIMEOUT)).is_err() {
+        return;
+    }
+    let outbound = Arc::new(BoundedOutbound::default());
+    let writer = MessageWriter::new(QueuedSink {
+        outbound: outbound.clone(),
+        control: Some(SinkControl::Unix(control)),
+    });
+    let writer_outbound = outbound;
+    let Ok(writer_thread) =
+        std::thread::Builder::new().name("mux-line-out".into()).spawn(move || {
+            while let Some(text) = writer_outbound.recv() {
+                if write_half.write_all(text.as_bytes()).is_err()
+                    || write_half.write_all(b"\n").is_err()
+                {
+                    writer_outbound.close();
+                    let _ = write_half.shutdown(Shutdown::Both);
+                    break;
+                }
+            }
+            let _ = write_half.shutdown(Shutdown::Both);
+        })
+    else {
+        writer.close();
+        return;
+    };
+    let client = mux.control_clients.register(ClientTransport::Unix, writer.clone());
+    let reader = BufReader::new(stream);
+    for line in reader.lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        if !handle_message(&mux, client, &line, &writer) {
+            break;
+        }
+    }
+    disconnect_client(&mux, client, false);
+    let _ = writer_thread.join();
+}
+
+fn handle_websocket_connection(mux: Arc<Mux>, stream: TcpStream, token: Option<&str>) {
+    let stream = SynchronizedTcpStream::new(stream);
+    if stream.set_read_timeout(Some(WEBSOCKET_HANDSHAKE_TIMEOUT)).is_err()
+        || stream.set_write_timeout(Some(WEBSOCKET_HANDSHAKE_TIMEOUT)).is_err()
+    {
+        return;
+    }
+    let Ok(mut websocket) = accept(stream) else { return };
+
+    if let Some(expected) = token {
+        let authenticated = match websocket.read() {
+            Ok(Message::Text(text)) => auth_token(&text)
+                .is_some_and(|provided| constant_time_eq(provided.as_bytes(), expected.as_bytes())),
+            _ => false,
+        };
+        if !authenticated {
+            let frame =
+                CloseFrame { code: CloseCode::Policy, reason: "authentication failed".into() };
+            let _ = websocket.close(Some(frame));
+            return;
+        }
+    }
+    let _ = websocket.get_mut().set_read_timeout(None);
+    let _ = websocket.get_mut().set_write_timeout(Some(STREAM_WRITE_TIMEOUT));
+    let Ok(writer_stream) = websocket.get_ref().try_clone() else { return };
+    let Ok(writer_shutdown) = writer_stream.try_clone_raw() else { return };
+    let Ok(control) = writer_stream.try_clone_raw() else { return };
+    let _ = writer_stream.set_write_timeout(Some(STREAM_WRITE_TIMEOUT));
+    let outbound = Arc::new(BoundedOutbound::default());
+    let writer = MessageWriter::new(QueuedSink {
+        outbound: outbound.clone(),
+        control: Some(SinkControl::WebSocket(control)),
+    });
+    let writer_outbound = outbound;
+    let Ok(writer_thread) =
+        std::thread::Builder::new().name("mux-ws-out".into()).spawn(move || {
+            let mut websocket =
+                tungstenite::WebSocket::from_raw_socket(writer_stream, Role::Server, None);
+            while let Some(text) = writer_outbound.recv() {
+                if websocket.send(Message::Text(text.into())).is_err() {
+                    writer_outbound.close();
+                    break;
+                }
+            }
+            let _ = websocket.close(None);
+            let _ = websocket.flush();
+            let _ = writer_shutdown.shutdown(Shutdown::Both);
+        })
+    else {
+        writer.close();
+        return;
+    };
+    let client = mux.control_clients.register(ClientTransport::WebSocket, writer.clone());
+
+    loop {
+        if !writer.is_open() {
+            break;
+        }
+
+        let incoming = websocket.read();
+        match incoming {
+            Ok(Message::Text(text)) => {
+                if !handle_message(&mux, client, &text, &writer) {
+                    break;
+                }
+            }
+            Ok(Message::Ping(_)) | Ok(Message::Pong(_)) => {
+                let _ = websocket.flush();
+            }
+            Ok(Message::Close(_)) => break,
+            Ok(_) => break,
+            Err(_) => break,
+        }
+    }
+    disconnect_client(&mux, client, false);
+    let _ = writer_thread.join();
+    let _ = websocket.close(None);
+}
+
+fn disconnect_client(mux: &Mux, client: u64, send_detached: bool) -> bool {
+    let Some(record) = mux.control_clients.remove(client) else { return false };
+    if send_detached {
+        let _ = record.writer.set_write_timeout(Some(CLIENT_DETACH_WRITE_TIMEOUT));
+        for (surface, attached) in &record.attached {
+            for stream in attached.streams.values() {
+                let _ = record
+                    .writer
+                    .send_terminal(&json!({"event": "detached", "surface": surface}), stream);
+            }
+        }
+    }
+    record.writer.close();
+    mux.emit(MuxEvent::ClientDetached(client));
+    true
+}
+
+fn handle_message(mux: &Arc<Mux>, client: u64, message: &str, writer: &MessageWriter) -> bool {
+    let mut detach_self = false;
+    let response = match serde_json::from_str::<Request>(message) {
+        Ok(req) => {
+            let id = req.id.clone();
+            detach_self =
+                matches!(&req.cmd, Command::DetachClient { client: target } if *target == client);
+            match handle_command(mux, client, req.cmd, writer) {
+                Ok(data) => Response { id, ok: true, data: Some(data), error: None },
+                Err(e) => Response { id, ok: false, data: None, error: Some(e.to_string()) },
+            }
+        }
+        Err(e) => {
+            Response { id: None, ok: false, data: None, error: Some(format!("bad request: {e}")) }
+        }
+    };
+    let response_ok = response.ok;
+    let sent =
+        serde_json::to_value(&response).is_ok_and(|value| writer.send_control(&value).is_ok());
+    if detach_self && response_ok && sent {
+        disconnect_client(mux, client, true);
+        return false;
+    }
+    sent
+}
+
+fn auth_token(message: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(message).ok()?;
+    let object = value.as_object()?;
+    if object.len() != 1 {
+        return None;
+    }
+    let auth = object.get("auth")?.as_object()?;
+    if auth.len() != 1 {
+        return None;
+    }
+    auth.get("token")?.as_str().map(str::to_string)
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    let mut difference = a.len() ^ b.len();
+    let length = a.len().max(b.len());
+    for index in 0..length {
+        difference |=
+            usize::from(a.get(index).copied().unwrap_or(0) ^ b.get(index).copied().unwrap_or(0));
+    }
+    difference == 0
+}
+
+fn node_json(node: &Node) -> Value {
+    match node {
+        Node::Leaf(id) => json!({ "type": "leaf", "pane": id }),
+        Node::Split { dir, ratio, a, b } => json!({
+            "type": "split",
+            "dir": match dir { SplitDir::Right => "right", SplitDir::Down => "down" },
+            "ratio": ratio,
+            "a": node_json(a),
+            "b": node_json(b),
+        }),
+    }
+}
+
+fn layout_request_to_spec(layout: LayoutRequest) -> anyhow::Result<LayoutSpec> {
+    match layout {
+        LayoutRequest::Leaf { cwd, command } => {
+            Ok(LayoutSpec::Leaf(LayoutLeafSpec { cwd, command }))
+        }
+        LayoutRequest::Split { dir, ratio, a, b } => Ok(LayoutSpec::Split {
+            dir: parse_split_dir(&dir)?,
+            ratio,
+            a: Box::new(layout_request_to_spec(*a)?),
+            b: Box::new(layout_request_to_spec(*b)?),
+        }),
+    }
+}
+
+fn parse_split_dir(dir: &str) -> anyhow::Result<SplitDir> {
+    match dir {
+        "right" => Ok(SplitDir::Right),
+        "down" => Ok(SplitDir::Down),
+        other => anyhow::bail!("bad dir {other:?} (want \"right\" or \"down\")"),
+    }
+}
+
+fn optional_surface_size(cols: Option<u16>, rows: Option<u16>) -> Option<(u16, u16)> {
+    cols.zip(rows).map(|(cols, rows)| (cols.max(1), rows.max(1)))
+}
+
+fn parse_direction(dir: &str) -> anyhow::Result<Direction> {
+    match dir {
+        "left" => Ok(Direction::Left),
+        "right" => Ok(Direction::Right),
+        "up" => Ok(Direction::Up),
+        "down" => Ok(Direction::Down),
+        other => anyhow::bail!("bad dir {other:?} (want \"left\", \"right\", \"up\", or \"down\")"),
+    }
+}
+
+fn parse_zoom_mode(mode: Option<String>) -> anyhow::Result<ZoomMode> {
+    match mode.as_deref().unwrap_or("toggle") {
+        "toggle" => Ok(ZoomMode::Toggle),
+        "on" => Ok(ZoomMode::On),
+        "off" => Ok(ZoomMode::Off),
+        other => anyhow::bail!("bad mode {other:?} (want \"toggle\", \"on\", or \"off\")"),
+    }
+}
+
+fn export_layout_json(state: &State, screen_id: Option<ScreenId>) -> anyhow::Result<Value> {
+    let screen = match screen_id {
+        Some(id) => state
+            .workspaces
+            .iter()
+            .flat_map(|ws| ws.screens.iter())
+            .find(|screen| screen.id == id)
+            .ok_or_else(|| anyhow::anyhow!("unknown screen {id}"))?,
+        None => state
+            .workspaces
+            .get(state.active_workspace)
+            .and_then(|ws| ws.active_screen_ref())
+            .ok_or_else(|| anyhow::anyhow!("no active screen"))?,
+    };
+    let mut pane_ids = Vec::new();
+    screen.root.pane_ids(&mut pane_ids);
+    Ok(json!({
+        "layout": node_json(&screen.root),
+        "panes": pane_ids.iter().map(|pane_id| {
+            let surfaces = state
+                .panes
+                .get(pane_id)
+                .map(|pane| pane.tabs.clone())
+                .unwrap_or_default();
+            json!({ "pane": pane_id, "surfaces": surfaces })
+        }).collect::<Vec<_>>(),
+    }))
+}
+
+fn pane_json(
+    state: &State,
+    id: PaneId,
+    short_ids: &HashMap<u64, String>,
+    notifications: &HashMap<SurfaceId, SurfaceNotification>,
+) -> Value {
+    let Some(pane) = state.panes.get(&id) else {
+        return json!({ "id": id, "dead": true });
+    };
+    json!({
+        "id": id,
+        "short_id": short_ids.get(&id).cloned().unwrap_or_default(),
+        "name": pane.name,
+        "active_tab": pane.active_tab,
+        "tabs": pane.tabs.iter().map(|sid| {
+            let surface = state.surfaces.get(sid);
+            json!({
+                "surface": sid,
+                "short_id": short_ids.get(sid).cloned().unwrap_or_default(),
+                "kind": surface.map(|s| s.kind().as_str()).unwrap_or("pty"),
+                "browser_source": surface.and_then(|s| s.browser_source().map(|source| source.as_str())),
+                "browser_status": surface.and_then(|s| s.browser_status().map(|status| status.as_str())),
+                "browser_error": surface.and_then(|s| s.browser_status().and_then(|status| status.error())),
+                "browser_frames_stalled": surface.and_then(|s| s.browser_frames_stalled()),
+                "notification": notifications.get(sid).copied().map(|n| {
+                    json!({
+                        "notification": n.notification,
+                        "unread": n.unread,
+                        "level": n.level.as_str(),
+                    })
+                }),
+                "name": surface.and_then(|s| s.name()),
+                "title": surface.map(|s| s.title()).unwrap_or_default(),
+                "size": surface.map(|s| {
+                    let (c, r) = s.size();
+                    json!({"cols": c, "rows": r})
+                }),
+                "dead": surface.map(|s| s.is_dead()).unwrap_or(true),
+            })
+        }).collect::<Vec<_>>(),
+    })
+}
+
+fn screen_json(
+    state: &State,
+    screen: &Screen,
+    active: bool,
+    short_ids: &HashMap<u64, String>,
+    notifications: &HashMap<SurfaceId, SurfaceNotification>,
+) -> Value {
+    let mut pane_ids = Vec::new();
+    screen.root.pane_ids(&mut pane_ids);
+    json!({
+        "id": screen.id,
+        "short_id": short_ids.get(&screen.id).cloned().unwrap_or_default(),
+        "name": screen.name,
+        "active": active,
+        "active_pane": screen.active_pane,
+        "zoomed_pane": screen.zoomed_pane,
+        "layout": node_json(&screen.root),
+        "panes": pane_ids.iter().map(|id| pane_json(state, *id, short_ids, notifications)).collect::<Vec<_>>(),
+    })
+}
+
+fn workspaces_json(
+    state: &State,
+    notifications: &HashMap<SurfaceId, SurfaceNotification>,
+) -> Value {
+    let ids = state
+        .workspaces
+        .iter()
+        .flat_map(|ws| {
+            let mut ids = vec![ws.id];
+            for screen in &ws.screens {
+                ids.push(screen.id);
+                screen.root.pane_ids(&mut ids);
+            }
+            ids
+        })
+        .chain(state.surfaces.keys().copied());
+    let short_ids = assign_short_ids(ids);
+    json!({
+        "workspaces": state.workspaces.iter().enumerate().map(|(i, ws)| {
+            json!({
+                "id": ws.id,
+                "short_id": short_ids.get(&ws.id).cloned().unwrap_or_default(),
+                "name": ws.name,
+                "active": i == state.active_workspace,
+                "screens": ws.screens.iter().enumerate().map(|(s, screen)| {
+                    screen_json(state, screen, s == ws.active_screen, &short_ids, notifications)
+                }).collect::<Vec<_>>(),
+            })
+        }).collect::<Vec<_>>(),
+    })
+}
+
+fn ids_json(state: &State, kind: Option<&str>) -> anyhow::Result<Value> {
+    let allowed = ["workspace", "screen", "pane", "surface"];
+    if let Some(kind) = kind
+        && !allowed.contains(&kind)
+    {
+        anyhow::bail!("bad kind {kind}");
+    }
+    let mut raw = Vec::new();
+    for ws in &state.workspaces {
+        raw.push(("workspace", ws.id));
+        for screen in &ws.screens {
+            raw.push(("screen", screen.id));
+            let mut panes = Vec::new();
+            screen.root.pane_ids(&mut panes);
+            for pane in panes {
+                raw.push(("pane", pane));
+            }
+        }
+    }
+    raw.extend(state.surfaces.keys().copied().map(|id| ("surface", id)));
+    let short_ids = assign_short_ids(raw.iter().map(|(_, id)| *id));
+    Ok(json!({
+        "ids": raw
+            .into_iter()
+            .filter(|(item_kind, _)| kind.is_none_or(|kind| kind == *item_kind))
+            .map(|(kind, id)| json!({
+                "kind": kind,
+                "id": id,
+                "short_id": short_ids.get(&id).cloned().unwrap_or_default(),
+            }))
+            .collect::<Vec<_>>()
+    }))
+}
+
+fn get_surface(mux: &Mux, id: SurfaceId) -> anyhow::Result<Arc<crate::Surface>> {
+    mux.surface(id).ok_or_else(|| anyhow::anyhow!("unknown surface {id}"))
+}
+
+fn sidebar_plugin_status_json(status: SidebarPluginStatus) -> Value {
+    let retry_after_ms = status.retry_after.map(|duration| duration.as_millis() as u64);
+    json!({
+        "surface": status.surface,
+        "error": status.error,
+        "retry_after_ms": retry_after_ms,
+    })
+}
+
+fn require_pty(surface: &crate::Surface) -> anyhow::Result<()> {
+    if surface.kind() == SurfaceKind::Pty {
+        Ok(())
+    } else {
+        anyhow::bail!("browser surface does not support PTY/VT socket commands")
+    }
+}
+
+fn require_browser(surface: &crate::Surface) -> anyhow::Result<()> {
+    if surface.kind() == SurfaceKind::Browser {
+        Ok(())
+    } else {
+        anyhow::bail!("PTY surface is not a browser surface")
+    }
+}
+
+fn parse_notification_level(level: &str) -> anyhow::Result<NotificationLevel> {
+    match level {
+        "info" => Ok(NotificationLevel::Info),
+        "warning" => Ok(NotificationLevel::Warning),
+        "error" => Ok(NotificationLevel::Error),
+        other => anyhow::bail!("bad level {other}"),
+    }
+}
+
+fn parse_agent_state(state: &str) -> anyhow::Result<AgentState> {
+    match state {
+        "working" => Ok(AgentState::Working),
+        "blocked" => Ok(AgentState::Blocked),
+        "idle" => Ok(AgentState::Idle),
+        "done" => Ok(AgentState::Done),
+        "unknown" => Ok(AgentState::Unknown),
+        other => anyhow::bail!("bad state {other}"),
+    }
+}
+
+fn parse_agent_source(source: &str) -> anyhow::Result<AgentSource> {
+    match source {
+        "socket" => Ok(AgentSource::Socket),
+        "hook" => Ok(AgentSource::Hook),
+        other => anyhow::bail!("bad source {other}"),
+    }
+}
+
+fn agent_json(record: &AgentRecord) -> Value {
+    json!({
+        "surface": record.surface,
+        "state": record.state.as_str(),
+        "source": record.source.as_str(),
+        "session": record.session,
+        "updated_at_ms": record.updated_at_ms,
+    })
+}
+
+fn parse_hex_color(value: &str) -> anyhow::Result<Rgb> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 7 || bytes[0] != b'#' {
+        anyhow::bail!("bad color {value:?} (want \"#rrggbb\")");
+    }
+    let nibble = |b: u8| -> anyhow::Result<u8> {
+        match b {
+            b'0'..=b'9' => Ok(b - b'0'),
+            b'a'..=b'f' => Ok(b - b'a' + 10),
+            b'A'..=b'F' => Ok(b - b'A' + 10),
+            _ => anyhow::bail!("bad color {value:?} (want \"#rrggbb\")"),
+        }
+    };
+    let hex = |idx: usize| -> anyhow::Result<u8> {
+        Ok((nibble(bytes[idx])? << 4) | nibble(bytes[idx + 1])?)
+    };
+    Ok(Rgb { r: hex(1)?, g: hex(3)?, b: hex(5)? })
+}
+
+fn color_hex(color: Option<Rgb>) -> Option<String> {
+    color.map(|color| format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b))
+}
+
+fn terminal_colors_json(colors: TerminalColors) -> Value {
+    let cursor_style = colors.cursor_style.map(|style| match style {
+        ghostty_vt::CursorShape::Bar => "bar",
+        ghostty_vt::CursorShape::Underline => "underline",
+        ghostty_vt::CursorShape::Block | ghostty_vt::CursorShape::BlockHollow => "block",
+    });
+    json!({
+        "fg": color_hex(colors.fg),
+        "bg": color_hex(colors.bg),
+        "cursor": color_hex(colors.cursor),
+        "selection_bg": color_hex(colors.selection_bg),
+        "selection_fg": color_hex(colors.selection_fg),
+        "cursor_style": cursor_style,
+        "cursor_blink": colors.cursor_blink,
+    })
+}
+
+fn browser_state_json(
+    surface: SurfaceId,
+    state: &crate::BrowserAttachState,
+    include_frame: bool,
+) -> Value {
+    let mut value = json!({
+        "event": "browser-state",
+        "surface": surface,
+        "cols": state.cols,
+        "rows": state.rows,
+        "url": state.url,
+        "title": state.title,
+        "status": state.status.as_str(),
+        "error": state.status.error(),
+        "frames_stalled": state.frames_stalled,
+    });
+    if include_frame {
+        value["frame"] = match state.frame.as_ref() {
+            Some(frame) => json!({
+                "seq": frame.seq,
+                "width": frame.css_width,
+                "height": frame.css_height,
+                "data": frame.data_b64,
+            }),
+            None => Value::Null,
+        };
+    }
+    value
+}
+
+fn spawn_attach_notification_stream(
+    mux: Arc<Mux>,
+    surface_id: SurfaceId,
+    writer: MessageWriter,
+    lifecycle: AttachLifecycle,
+    outbound_stream: OutboundStream,
+) -> std::io::Result<()> {
+    let events = mux.subscribe_attached_surface(surface_id);
+    std::thread::Builder::new()
+        .name("mux-attach-notifications".into())
+        .spawn(move || {
+            while writer.is_open() && outbound_stream.is_open() && !lifecycle.is_canceled() {
+                let event = match events.recv_timeout(STREAM_DISCONNECT_POLL) {
+                    Ok(event) => event,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                };
+                let value = match event {
+                    MuxEvent::Notification(notification)
+                        if notification.surface == Some(surface_id) =>
+                    {
+                        json!({
+                            "event": "notification",
+                            "notification": notification.notification,
+                            "title": notification.title,
+                            "body": notification.body,
+                            "level": notification.level.as_str(),
+                            "surface": notification.surface,
+                        })
+                    }
+                    MuxEvent::ScrollChanged { surface, offset, at_bottom }
+                        if surface == surface_id =>
+                    {
+                        json!({
+                            "event": "scroll-changed",
+                            "surface": surface,
+                            "offset": offset,
+                            "at_bottom": at_bottom,
+                        })
+                    }
+                    _ => continue,
+                };
+                if let Err(error) = writer.send_stream(&value, &outbound_stream) {
+                    handle_attach_send_error(&lifecycle, &error);
+                    break;
+                }
+            }
+            if events.overflowed() {
+                lifecycle.mark_overflow();
+            }
+            report_attach_overflow(&writer, surface_id, &lifecycle, &outbound_stream);
+        })
+        .map(|_| ())
+}
+
+fn report_attach_overflow(
+    writer: &MessageWriter,
+    surface_id: SurfaceId,
+    lifecycle: &AttachLifecycle,
+    outbound_stream: &OutboundStream,
+) {
+    if lifecycle.claim_overflow_report() {
+        let _ = writer.send_terminal(&attach_overflow_json(surface_id), outbound_stream);
+    }
+}
+
+fn handle_attach_send_error(lifecycle: &AttachLifecycle, error: &std::io::Error) {
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        lifecycle.mark_overflow();
+    } else {
+        lifecycle.cancel();
+    }
+}
+
+fn mark_client_attached(
+    mux: &Mux,
+    client: u64,
+    surface: SurfaceId,
+    stream: OutboundStream,
+) -> anyhow::Result<()> {
+    if let Some((transport, name, kind)) =
+        mux.control_clients.attach_surface(client, surface, stream)?
+    {
+        mux.emit(MuxEvent::ClientAttached { client, transport, name, kind });
+    }
+    Ok(())
+}
+
+fn handle_command(
+    mux: &Arc<Mux>,
+    client: u64,
+    cmd: Command,
+    writer: &MessageWriter,
+) -> anyhow::Result<Value> {
+    match cmd {
+        Command::Identify => Ok(json!({
+            "app": "cmux-tui",
+            "version": env!("CARGO_PKG_VERSION"),
+            "protocol": PROTOCOL_VERSION,
+            "session": mux.session,
+            "pid": std::process::id(),
+        })),
+        Command::Ping => Ok(json!({
+            "ok": true,
+            "version": env!("CARGO_PKG_VERSION"),
+            "protocol": PROTOCOL_VERSION,
+        })),
+        Command::SetClientInfo { name, kind } => {
+            let (name, kind) = mux.control_clients.set_info(client, name, kind)?;
+            mux.emit(MuxEvent::ClientChanged { client, name, kind });
+            Ok(json!({}))
+        }
+        Command::ListClients => Ok(mux.control_clients.list_json(client)),
+        Command::DetachClient { client: target } => {
+            if target == client {
+                if !mux.control_clients.contains(target) {
+                    anyhow::bail!("unknown client {target}");
+                }
+            } else if !disconnect_client(mux, target, true) {
+                anyhow::bail!("unknown client {target}");
+            }
+            Ok(json!({}))
+        }
+        Command::ReloadConfig => {
+            mux.emit(MuxEvent::ConfigReloadRequested);
+            Ok(json!({
+                "reloaded": true,
+                "path": platform::config_path().map(|path| path.display().to_string()),
+            }))
+        }
+        Command::SetWindowTitle { title } => {
+            mux.emit(MuxEvent::WindowTitleRequested(title));
+            Ok(json!({}))
+        }
+        Command::ClearWindowTitle => {
+            mux.emit(MuxEvent::WindowTitleRequested(String::new()));
+            Ok(json!({}))
+        }
+        Command::ListWorkspaces => {
+            let notifications = mux.surface_notifications();
+            Ok(mux.with_state(|state| workspaces_json(state, &notifications)))
+        }
+        Command::ExportLayout { screen } => {
+            mux.with_state(|state| export_layout_json(state, screen))
+        }
+        Command::ApplyLayout { workspace, name, layout, cols, rows } => {
+            let layout = layout_request_to_spec(layout)?;
+            let applied =
+                mux.apply_layout(workspace, name, &layout, optional_surface_size(cols, rows))?;
+            Ok(json!({
+                "screen": applied.screen,
+                "panes": applied.panes.iter().map(|pane| {
+                    json!({ "pane": pane.pane, "surface": pane.surface })
+                }).collect::<Vec<_>>(),
+            }))
+        }
+        Command::Send { surface, text, bytes } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            if let Some(text) = text {
+                surface.write_bytes(text.as_bytes())?;
+            }
+            if let Some(b64) = bytes {
+                let raw = base64::engine::general_purpose::STANDARD.decode(b64)?;
+                surface.write_bytes(&raw)?;
+            }
+            Ok(json!({}))
+        }
+        Command::ReadScreen { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            let text = surface.try_with_terminal(|t| t.viewport_text())??;
+            Ok(json!({ "text": text }))
+        }
+        Command::SidebarPlugin { cols, rows, relaunch } => {
+            Ok(sidebar_plugin_status_json(mux.ensure_sidebar_plugin(cols, rows, relaunch)))
+        }
+        Command::WaitFor { surface, pattern, timeout_ms } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            let regex = Regex::new(&pattern).map_err(|err| anyhow::anyhow!("bad regex: {err}"))?;
+            let start = Instant::now();
+            let check = || -> anyhow::Result<Option<String>> {
+                let text = surface.try_with_terminal(|t| t.viewport_text())??;
+                Ok(regex.is_match(&text).then_some(text))
+            };
+            if timeout_ms == 0 {
+                if let Some(text) = check()? {
+                    return Ok(json!({
+                        "matched": true,
+                        "text": text,
+                        "elapsed_ms": start.elapsed().as_millis() as u64,
+                    }));
+                }
+                anyhow::bail!("timeout waiting for pattern");
+            }
+            let deadline = start + Duration::from_millis(timeout_ms);
+            let attach = surface.attach_stream()?;
+            if let Some(text) = check()? {
+                return Ok(json!({
+                    "matched": true,
+                    "text": text,
+                    "elapsed_ms": start.elapsed().as_millis() as u64,
+                }));
+            }
+            loop {
+                let now = Instant::now();
+                if now >= deadline {
+                    anyhow::bail!("timeout waiting for pattern");
+                }
+                let remaining = deadline.saturating_duration_since(now);
+                match attach.stream.recv_timeout(remaining) {
+                    Ok(_) => {
+                        if let Some(text) = check()? {
+                            return Ok(json!({
+                                "matched": true,
+                                "text": text,
+                                "elapsed_ms": start.elapsed().as_millis() as u64,
+                            }));
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        anyhow::bail!("timeout waiting for pattern");
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        anyhow::bail!("timeout waiting for pattern");
+                    }
+                }
+            }
+        }
+        Command::Run { argv, command, cwd, pane, new_workspace, name, cols, rows } => {
+            if argv.is_some() && command.is_some() {
+                anyhow::bail!("argv and command are mutually exclusive");
+            }
+            let argv = match (argv, command) {
+                (Some(argv), None) if !argv.is_empty() => argv,
+                (None, Some(command)) if !command.is_empty() => {
+                    vec![platform::default_shell(), "-lc".to_string(), command]
+                }
+                _ => anyhow::bail!("argv or command is required"),
+            };
+            if new_workspace && pane.is_some() {
+                anyhow::bail!("pane and new_workspace are mutually exclusive");
+            }
+            let placement = mux.run_command_surface(
+                argv,
+                pane,
+                new_workspace,
+                cwd,
+                name,
+                optional_surface_size(cols, rows),
+            )?;
+            Ok(json!({
+                "surface": placement.surface,
+                "pane": placement.pane,
+                "screen": placement.screen,
+                "workspace": placement.workspace,
+            }))
+        }
+        Command::SendKey { surface, keys } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)
+                .map_err(|_| anyhow::anyhow!("surface does not support key input"))?;
+            if keys.is_empty() {
+                anyhow::bail!("bad request: keys must be non-empty");
+            }
+            let mut encoder = KeyEncoder::new()?;
+            let mut encoded = Vec::new();
+            surface.scroll_to_bottom()?;
+            surface.try_with_terminal(|term| {
+                encoder.sync_from_terminal(term);
+                for key in &keys {
+                    let Some(input) = key_input_from_chord(key) else {
+                        return Err(anyhow::anyhow!("unknown key {key}"));
+                    };
+                    encoder.encode(&input, &mut encoded).map_err(anyhow::Error::from)?;
+                }
+                Ok::<(), anyhow::Error>(())
+            })??;
+            surface.write_bytes(&encoded)?;
+            Ok(json!({}))
+        }
+        Command::Copy { surface, mode } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            let text = match mode.as_str() {
+                "screen" => surface.try_with_terminal(|t| t.viewport_text())??,
+                "scrollback" => surface.try_with_terminal(|t| t.plain_text())??,
+                "selection" => {
+                    surface.selection_text().ok_or_else(|| anyhow::anyhow!("no selection"))?
+                }
+                other => anyhow::bail!("bad mode {other}"),
+            };
+            Ok(json!({ "text": text, "mode": mode }))
+        }
+        Command::Ids { kind } => mux.with_state(|state| ids_json(state, kind.as_deref())),
+        Command::Notify { title, body, level, surface } => {
+            if title.is_empty() {
+                anyhow::bail!("title is required");
+            }
+            let level = parse_notification_level(level.as_deref().unwrap_or("info"))?;
+            if let Some(surface) = surface {
+                get_surface(mux, surface)?;
+            }
+            let notification = mux.post_notification(title, body, level, surface);
+            Ok(json!({ "notification": notification }))
+        }
+        Command::ListAgents { surface, state } => {
+            if let Some(surface) = surface {
+                get_surface(mux, surface)?;
+            }
+            let state = match state {
+                Some(state) => Some(parse_agent_state(&state)?),
+                None => None,
+            };
+            let agents = mux.list_agents(surface, state).iter().map(agent_json).collect::<Vec<_>>();
+            Ok(json!({ "agents": agents }))
+        }
+        Command::ReportAgent { surface, state, source, session } => {
+            get_surface(mux, surface)?;
+            let state = parse_agent_state(&state)?;
+            let source = parse_agent_source(&source)?;
+            let record = mux.report_agent(surface, state, source, session);
+            Ok(json!({
+                "surface": record.surface,
+                "state": record.state.as_str(),
+                "source": record.source.as_str(),
+                "session": record.session,
+            }))
+        }
+        Command::VtState { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            let (cols, rows, replay) = surface.try_with_terminal(|t| {
+                t.vt_replay_bounded(crate::surface::VT_REPLAY_MAX_BYTES)
+                    .map(|replay| (t.cols(), t.rows(), replay))
+            })??;
+            Ok(json!({
+                "cols": cols,
+                "rows": rows,
+                "data": base64::engine::general_purpose::STANDARD.encode(replay),
+            }))
+        }
+        Command::NewTab { pane, cwd, cols, rows } => {
+            let surface = mux.new_tab(pane, cwd, optional_surface_size(cols, rows))?;
+            Ok(json!({ "surface": surface.id }))
+        }
+        Command::NewBrowserTab { url, pane, cols, rows } => {
+            let surface = mux.new_browser_tab(url, pane, optional_surface_size(cols, rows))?;
+            Ok(json!({ "surface": surface.id }))
+        }
+        Command::SetCellPixels { width_px, height_px } => {
+            let update = mux.set_cell_pixel_size(width_px, height_px);
+            let resizes = update
+                .resizes
+                .into_iter()
+                .map(|(surface, (cols, rows), reservation_id)| {
+                    json!({
+                        "surface": surface,
+                        "cols": cols,
+                        "rows": rows,
+                        "reservation_id": reservation_id,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let failures = update
+                .failures
+                .into_iter()
+                .map(|failure| {
+                    json!({
+                        "surface": failure.surface,
+                        "error": failure.error,
+                    })
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({"resizes": resizes, "failures": failures}))
+        }
+        Command::BrowserMouse { surface, kind, x_px, y_px, button, click_count } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            let event_type = match kind.as_str() {
+                "down" => "mousePressed",
+                "up" => "mouseReleased",
+                "move" => "mouseMoved",
+                other => anyhow::bail!("bad browser mouse kind {other:?}"),
+            };
+            surface.browser_mouse_event(event_type, x_px, y_px, button.as_deref(), click_count)?;
+            Ok(json!({}))
+        }
+        Command::BrowserWheel { surface, x_px, y_px, delta_y_px } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_wheel(x_px, y_px, delta_y_px)?;
+            Ok(json!({}))
+        }
+        Command::BrowserKey {
+            surface,
+            kind,
+            key,
+            code,
+            windows_virtual_key_code,
+            modifiers,
+            text,
+        } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            let event_type = match kind.as_str() {
+                "down" => "keyDown",
+                "up" => "keyUp",
+                other => anyhow::bail!("bad browser key kind {other:?}"),
+            };
+            surface.browser_key_event(
+                event_type,
+                &key,
+                &code,
+                windows_virtual_key_code,
+                modifiers,
+                text.as_deref(),
+            )?;
+            Ok(json!({}))
+        }
+        Command::BrowserInsertText { surface, text } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_insert_text(&text)?;
+            Ok(json!({}))
+        }
+        Command::BrowserNavigate { surface, url } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_navigate(&url)?;
+            Ok(json!({}))
+        }
+        Command::BrowserBack { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_back()?;
+            Ok(json!({}))
+        }
+        Command::BrowserForward { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_forward()?;
+            Ok(json!({}))
+        }
+        Command::BrowserReload { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_reload()?;
+            Ok(json!({}))
+        }
+        Command::BrowserActivate { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_browser(&surface)?;
+            surface.browser_activate()?;
+            Ok(json!({}))
+        }
+        Command::NewWorkspace { name, cols, rows } => {
+            let surface = mux.new_workspace(name, optional_surface_size(cols, rows))?;
+            Ok(json!({ "surface": surface.id }))
+        }
+        Command::NewScreen { workspace, cols, rows } => {
+            let surface = mux.new_screen(workspace, optional_surface_size(cols, rows))?;
+            Ok(json!({ "surface": surface.id }))
+        }
+        Command::Split { pane, dir, cols, rows } => {
+            let dir = parse_split_dir(&dir)?;
+            let surface = mux.split(pane, dir, optional_surface_size(cols, rows))?;
+            Ok(json!({ "surface": surface.id }))
+        }
+        Command::SetRatio { pane, dir, ratio } => {
+            let dir = parse_split_dir(&dir)?;
+            if !mux.set_ratio(pane, dir, ratio) {
+                anyhow::bail!("unknown pane/split {pane}");
+            }
+            Ok(json!({}))
+        }
+        Command::PaneNeighbor { pane, dir } => {
+            let dir = parse_direction(&dir)?;
+            let pane = mux.pane_neighbor(pane, dir)?;
+            Ok(json!({ "pane": pane }))
+        }
+        Command::FocusDirection { pane, dir } => {
+            let dir = parse_direction(&dir)?;
+            let pane = mux.focus_direction(pane, dir)?;
+            Ok(json!({ "pane": pane }))
+        }
+        Command::SwapPane { pane, dir, target } => {
+            let target = match (dir, target) {
+                (Some(_), Some(_)) => anyhow::bail!("use only one of dir or target"),
+                (Some(dir), None) => {
+                    let dir = parse_direction(&dir)?;
+                    mux.pane_neighbor(pane, dir)?.ok_or_else(|| anyhow::anyhow!("no neighbor"))?
+                }
+                (None, Some(target)) => target,
+                (None, None) => anyhow::bail!("one of dir or target is required"),
+            };
+            if !mux.swap_panes(pane, target) {
+                anyhow::bail!("unknown pane/target");
+            }
+            Ok(json!({}))
+        }
+        Command::ZoomPane { pane, mode } => {
+            let mode = parse_zoom_mode(mode)?;
+            let state = mux.zoom_pane(pane, mode)?;
+            Ok(json!({
+                "pane": state.pane,
+                "zoomed": state.zoomed,
+                "zoomed_pane": state.zoomed_pane,
+            }))
+        }
+        Command::ProcessInfo { surface } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            Ok(json!({
+                "pid": surface.process_id(),
+                "command": surface.spawn_command(),
+                "cwd": surface.pwd().or_else(|| surface.spawn_cwd()),
+            }))
+        }
+        Command::MoveTab { surface, pane, index } => {
+            let valid = mux.with_state(|state| {
+                state.surfaces.contains_key(&surface)
+                    && state.panes.contains_key(&pane)
+                    && state.pane_of(surface).is_some()
+            });
+            if !valid {
+                anyhow::bail!("unknown surface/pane");
+            }
+            mux.move_tab(surface, pane, index);
+            Ok(json!({}))
+        }
+        Command::MoveWorkspace { workspace, index } => {
+            if !mux.with_state(|state| state.workspaces.iter().any(|ws| ws.id == workspace)) {
+                anyhow::bail!("unknown workspace");
+            }
+            mux.move_workspace(workspace, index);
+            Ok(json!({}))
+        }
+        Command::SetDefaultColors { fg, bg } => {
+            let current = mux.default_colors();
+            let colors = DefaultColors {
+                fg: match fg {
+                    Some(value) => Some(parse_hex_color(&value)?),
+                    None => current.fg,
+                },
+                bg: match bg {
+                    Some(value) => Some(parse_hex_color(&value)?),
+                    None => current.bg,
+                },
+                cursor_style: current.cursor_style,
+                cursor_blink: current.cursor_blink,
+            };
+            mux.set_default_colors(colors);
+            Ok(json!({}))
+        }
+        Command::CloseSurface { surface } => {
+            get_surface(mux, surface)?;
+            mux.close_surface(surface);
+            Ok(json!({}))
+        }
+        Command::ClosePane { pane } => {
+            if !mux.with_state(|s| s.panes.contains_key(&pane)) {
+                anyhow::bail!("unknown pane {pane}");
+            }
+            mux.close_pane(pane);
+            Ok(json!({}))
+        }
+        Command::CloseScreen { screen } => {
+            if !mux.close_screen(screen) {
+                anyhow::bail!("unknown screen {screen}");
+            }
+            Ok(json!({}))
+        }
+        Command::CloseWorkspace { workspace } => {
+            if !mux.close_workspace(workspace) {
+                anyhow::bail!("unknown workspace {workspace}");
+            }
+            Ok(json!({}))
+        }
+        Command::RenamePane { pane, name } => {
+            if !mux.rename_pane(pane, name) {
+                anyhow::bail!("unknown pane {pane}");
+            }
+            Ok(json!({}))
+        }
+        Command::RenameSurface { surface, name } => {
+            if !mux.rename_surface(surface, name) {
+                anyhow::bail!("unknown surface {surface}");
+            }
+            Ok(json!({}))
+        }
+        Command::RenameScreen { screen, name } => {
+            if !mux.rename_screen(screen, name) {
+                anyhow::bail!("unknown screen {screen}");
+            }
+            Ok(json!({}))
+        }
+        Command::RenameWorkspace { workspace, name } => {
+            if !mux.rename_workspace(workspace, name) {
+                anyhow::bail!("unknown workspace {workspace}");
+            }
+            Ok(json!({}))
+        }
+        Command::ResizeSurface { surface, cols, rows } => {
+            let (accepted, reservation_id) =
+                mux.resize_surface_with_reservation(surface, cols, rows)?;
+            mux.record_client_size(cols, rows);
+            mux.control_clients.record_size(client, surface, cols.max(1), rows.max(1));
+            Ok(json!({"accepted": accepted, "reservation_id": reservation_id}))
+        }
+        Command::FocusPane { pane } => {
+            if !mux.focus_pane(pane) {
+                anyhow::bail!("unknown pane {pane}");
+            }
+            Ok(json!({}))
+        }
+        Command::SelectTab { pane, index, delta } => {
+            mux.select_tab(pane, index, delta);
+            Ok(json!({}))
+        }
+        Command::SelectScreen { index, delta } => {
+            mux.select_screen(index, delta);
+            Ok(json!({}))
+        }
+        Command::SelectWorkspace { index, delta } => {
+            mux.select_workspace(index, delta);
+            Ok(json!({}))
+        }
+        Command::ScrollSurface { surface, delta } => {
+            let surface = get_surface(mux, surface)?;
+            require_pty(&surface)?;
+            surface.scroll_delta(delta)?;
+            Ok(json!({}))
+        }
+        Command::Subscribe => {
+            let events = mux.subscribe();
+            let writer = writer.clone();
+            let outbound_stream = writer.start_stream(&subscription_overflow_json())?;
+            std::thread::Builder::new().name("mux-events-out".into()).spawn(move || {
+                let mut transport_overflow = false;
+                while writer.is_open() && outbound_stream.is_open() {
+                    let event = match events.recv_timeout(STREAM_DISCONNECT_POLL) {
+                        Ok(event) => event,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
+                    let value = subscribed_event_json(&event);
+                    if let Err(error) = writer.send_stream(&value, &outbound_stream) {
+                        transport_overflow = error.kind() == std::io::ErrorKind::WouldBlock;
+                        break;
+                    }
+                }
+                if events.overflowed() || transport_overflow {
+                    let _ = writer.send_terminal(&subscription_overflow_json(), &outbound_stream);
+                }
+            })?;
+            Ok(json!({}))
+        }
+        Command::AttachSurface { surface: surface_id } => {
+            let surface = get_surface(mux, surface_id)?;
+            let lifecycle = AttachLifecycle::default();
+            let outbound_stream = writer.start_stream(&attach_overflow_json(surface_id))?;
+            if surface.kind() == SurfaceKind::Browser {
+                let (state, frames) = match surface.attach_frames() {
+                    Ok(attach) => attach,
+                    Err(error) => {
+                        lifecycle.cancel();
+                        return Err(error);
+                    }
+                };
+                if let Err(error) = writer
+                    .send_initial(&browser_state_json(surface_id, &state, true), &outbound_stream)
+                {
+                    handle_attach_send_error(&lifecycle, &error);
+                    return Err(error.into());
+                }
+                mark_client_attached(mux, client, surface_id, outbound_stream.clone())?;
+                spawn_attach_notification_stream(
+                    mux.clone(),
+                    surface_id,
+                    writer.clone(),
+                    lifecycle.clone(),
+                    outbound_stream.clone(),
+                )?;
+                let writer = writer.clone();
+                let mux = mux.clone();
+                std::thread::Builder::new().name("mux-attach-out".into()).spawn(move || {
+                    while writer.is_open() && outbound_stream.is_open() && !lifecycle.is_canceled()
+                    {
+                        match frames.notify.recv_timeout(STREAM_DISCONNECT_POLL) {
+                            Ok(()) => {}
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                                lifecycle.cancel();
+                                if writer.is_open() {
+                                    let _ = writer.send_stream(
+                                        &json!({"event": "detached", "surface": surface_id}),
+                                        &outbound_stream,
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                        let update = std::mem::take(&mut *frames.slot.lock().unwrap());
+                        if let Some(state) = update.state {
+                            let value = browser_state_json(surface_id, &state, false);
+                            if let Err(error) = writer.send_stream(&value, &outbound_stream) {
+                                handle_attach_send_error(&lifecycle, &error);
+                                break;
+                            }
+                        }
+                        if let Some(frame) = update.frame {
+                            let value = json!({
+                                "event": "frame",
+                                "surface": surface_id,
+                                "seq": frame.seq,
+                                "width": frame.css_width,
+                                "height": frame.css_height,
+                                "data": frame.data_b64,
+                            });
+                            if let Err(error) = writer.send_stream(&value, &outbound_stream) {
+                                handle_attach_send_error(&lifecycle, &error);
+                                break;
+                            }
+                        }
+                    }
+                    report_attach_overflow(&writer, surface_id, &lifecycle, &outbound_stream);
+                    mux.control_clients.detach_surface(client, surface_id, outbound_stream.id);
+                })?;
+                return Ok(json!({}));
+            }
+            let attach = match surface.attach_stream_with_lifecycle(lifecycle.clone()) {
+                Ok(attach) => attach,
+                Err(error) => {
+                    lifecycle.cancel();
+                    return Err(error.into());
+                }
+            };
+            if let Err(error) = writer.send_initial(
+                &json!({
+                    "event": "vt-state",
+                    "surface": surface_id,
+                    "cols": attach.cols,
+                    "rows": attach.rows,
+                    "data": base64::engine::general_purpose::STANDARD.encode(attach.replay),
+                    "colors": terminal_colors_json(attach.colors),
+                }),
+                &outbound_stream,
+            ) {
+                handle_attach_send_error(&lifecycle, &error);
+                return Err(error.into());
+            }
+            mark_client_attached(mux, client, surface_id, outbound_stream.clone())?;
+            spawn_attach_notification_stream(
+                mux.clone(),
+                surface_id,
+                writer.clone(),
+                lifecycle,
+                outbound_stream.clone(),
+            )?;
+            let writer = writer.clone();
+            let mux = mux.clone();
+            std::thread::Builder::new().name("mux-attach-out".into()).spawn(move || {
+                while writer.is_open()
+                    && outbound_stream.is_open()
+                    && !attach.lifecycle.is_canceled()
+                {
+                    let frame = match attach.stream.recv_timeout(STREAM_DISCONNECT_POLL) {
+                        Ok(frame) => frame,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                            attach.lifecycle.cancel();
+                            if writer.is_open() {
+                                let _ = writer.send_stream(
+                                    &json!({"event": "detached", "surface": surface_id}),
+                                    &outbound_stream,
+                                );
+                            }
+                            break;
+                        }
+                    };
+                    let value = match frame {
+                        AttachFrame::Output(chunk) => json!({
+                            "event": "output",
+                            "surface": surface_id,
+                            "data": base64::engine::general_purpose::STANDARD.encode(chunk),
+                        }),
+                        AttachFrame::Resized { cols, rows, replay } => json!({
+                            "event": "resized",
+                            "surface": surface_id,
+                            "cols": cols,
+                            "rows": rows,
+                            "replay": base64::engine::general_purpose::STANDARD.encode(replay),
+                        }),
+                        AttachFrame::ColorsChanged(colors) => {
+                            let mut value = terminal_colors_json(colors);
+                            value["event"] = json!("colors-changed");
+                            value
+                        }
+                    };
+                    if let Err(error) = writer.send_stream(&value, &outbound_stream) {
+                        handle_attach_send_error(&attach.lifecycle, &error);
+                        break;
+                    }
+                }
+                report_attach_overflow(&writer, surface_id, &attach.lifecycle, &outbound_stream);
+                mux.control_clients.detach_surface(client, surface_id, outbound_stream.id);
+            })?;
+            Ok(json!({}))
+        }
+    }
+}
+
+fn subscribed_event_json(event: &MuxEvent) -> Value {
+    match event {
+        MuxEvent::SurfaceOutput(id) => json!({"event": "surface-output", "surface": id}),
+        MuxEvent::SurfaceResized { surface, cols, rows, reservation_id } => json!({
+            "event": "surface-resized",
+            "surface": surface,
+            "cols": cols,
+            "rows": rows,
+            "reservation_id": reservation_id,
+        }),
+        MuxEvent::SurfaceResizeFailed {
+            surface,
+            cols,
+            rows,
+            error,
+            retry_after_ms,
+            reservation_id,
+        } => json!({
+            "event": "surface-resize-failed",
+            "surface": surface,
+            "cols": cols,
+            "rows": rows,
+            "error": error.as_ref(),
+            "retry_after_ms": retry_after_ms,
+            "reservation_id": reservation_id,
+        }),
+        MuxEvent::SurfaceExited(id) => json!({"event": "surface-exited", "surface": id}),
+        MuxEvent::TitleChanged { surface, title } => {
+            json!({"event": "title-changed", "surface": surface, "title": title.as_ref()})
+        }
+        MuxEvent::Bell(id) => json!({"event": "bell", "surface": id}),
+        MuxEvent::Notification(notification) => json!({
+            "event": "notification",
+            "notification": notification.notification,
+            "title": notification.title,
+            "body": notification.body,
+            "level": notification.level.as_str(),
+            "surface": notification.surface,
+        }),
+        MuxEvent::Status(message) => json!({"event": "status", "message": message}),
+        MuxEvent::ConfigReloadRequested => json!({"event": "config-reload-requested"}),
+        MuxEvent::WindowTitleRequested(title) => {
+            json!({"event": "window-title-requested", "title": title})
+        }
+        MuxEvent::ScrollChanged { surface, offset, at_bottom } => json!({
+            "event": "scroll-changed",
+            "surface": surface,
+            "offset": offset,
+            "at_bottom": at_bottom,
+        }),
+        MuxEvent::TreeChanged => json!({"event": "tree-changed"}),
+        MuxEvent::LayoutChanged(screen) => json!({"event": "layout-changed", "screen": screen}),
+        MuxEvent::ClientAttached { client, transport, name, kind } => json!({
+            "event": "client-attached",
+            "client": client,
+            "transport": transport,
+            "name": name,
+            "kind": kind,
+        }),
+        MuxEvent::ClientChanged { client, name, kind } => json!({
+            "event": "client-changed",
+            "client": client,
+            "name": name,
+            "kind": kind,
+        }),
+        MuxEvent::ClientDetached(client) => {
+            json!({"event": "client-detached", "client": client})
+        }
+        MuxEvent::Empty => json!({"event": "empty"}),
+    }
+}
+
+fn subscription_overflow_json() -> Value {
+    json!({
+        "event": "overflow",
+        "error": "subscriber fell behind; resubscribe to continue receiving events",
+    })
+}
+
+fn attach_overflow_json(surface: SurfaceId) -> Value {
+    json!({
+        "event": "overflow",
+        "scope": "surface",
+        "surface": surface,
+        "error": "surface stream fell behind; reattach the surface",
+    })
+}
+
+/// Remove the socket file (call on clean shutdown).
+pub fn cleanup(path: &Path) {
+    let _ = std::fs::remove_file(path);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SurfaceOptions;
+    use std::sync::mpsc::TryRecvError;
+    use std::time::Duration;
+
+    fn test_mux() -> Arc<Mux> {
+        Mux::new_for_test("test", SurfaceOptions::default())
+    }
+
+    fn test_writer() -> MessageWriter {
+        MessageWriter::new(QueuedSink {
+            outbound: Arc::new(BoundedOutbound::default()),
+            control: None,
+        })
+    }
+
+    #[test]
+    fn bounded_writer_reserves_a_control_lane_for_responses_and_overflow() {
+        let outbound = Arc::new(BoundedOutbound::default());
+        let writer = MessageWriter::new(QueuedSink { outbound: outbound.clone(), control: None });
+        let backlog = writer.start_stream(&json!({"event": "overflow"})).unwrap();
+
+        for sequence in 0..OUTBOUND_CAPACITY - 1 {
+            writer
+                .send_stream(&json!({"event": "output", "sequence": sequence}), &backlog)
+                .unwrap();
+        }
+
+        let failed_stream = writer.start_stream(&subscription_overflow_json()).unwrap();
+        writer.send_control(&json!({"id": 42, "ok": true, "data": {}})).unwrap();
+        writer.send_terminal(&subscription_overflow_json(), &failed_stream).unwrap();
+        let response: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(response["id"], 42);
+        let terminal: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(terminal["event"], "overflow");
+        let drained = (0..OUTBOUND_CAPACITY - 1)
+            .map(|_| outbound.try_pop().expect("accepted output"))
+            .collect::<Vec<_>>();
+        assert!(drained[0].contains("\"sequence\":0"));
+        assert!(writer.is_open());
+    }
+
+    #[test]
+    fn initial_stream_state_precedes_its_response_and_overflows_only_its_stream() {
+        let outbound = Arc::new(BoundedOutbound::default());
+        let writer = MessageWriter::new(QueuedSink { outbound: outbound.clone(), control: None });
+        let stream = writer.start_stream(&attach_overflow_json(7)).unwrap();
+
+        writer.send_initial(&json!({"event": "vt-state", "surface": 7}), &stream).unwrap();
+        writer.send_control(&json!({"id": 1, "ok": true})).unwrap();
+        let initial: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(initial["event"], "vt-state");
+        let response: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(response["id"], 1);
+
+        let oversized = writer.start_stream(&attach_overflow_json(8)).unwrap();
+        let error = writer
+            .send_initial(
+                &json!({"event": "vt-state", "data": "x".repeat(OUTBOUND_BYTE_CAPACITY)}),
+                &oversized,
+            )
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+        let overflow: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(overflow["event"], "overflow");
+        assert_eq!(overflow["surface"], 8);
+        assert!(writer.is_open());
+    }
+
+    #[test]
+    fn server_connection_permits_enforce_and_release_the_cap() {
+        let active = Arc::new(AtomicU64::new(MAX_SERVER_CONNECTIONS as u64));
+        assert!(claim_connection(&active).is_none());
+        active.store(MAX_SERVER_CONNECTIONS as u64 - 1, Ordering::Release);
+        let permit = claim_connection(&active).expect("last connection slot");
+        assert_eq!(active.load(Ordering::Acquire), MAX_SERVER_CONNECTIONS as u64);
+        drop(permit);
+        assert_eq!(active.load(Ordering::Acquire), MAX_SERVER_CONNECTIONS as u64 - 1);
+    }
+
+    #[test]
+    fn shutting_down_a_writer_clone_unblocks_the_reader() {
+        let path = std::env::temp_dir().join(format!(
+            "cmux-tui-shutdown-{}-{}.sock",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let listener = transport::listen(&path).unwrap();
+        let _client = transport::connect(&path).unwrap();
+        let mut reader = listener.accept().unwrap();
+        let writer = reader.try_clone_box().unwrap();
+        let (done, finished) = std::sync::mpsc::channel();
+        let read_thread = std::thread::spawn(move || {
+            let mut byte = [0_u8; 1];
+            done.send(reader.read(&mut byte)).unwrap();
+        });
+
+        writer.shutdown(Shutdown::Both).unwrap();
+        assert_eq!(finished.recv_timeout(Duration::from_secs(1)).unwrap().unwrap(), 0);
+        read_thread.join().unwrap();
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn stalled_websocket_handshake_times_out() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        let (done, finished) = std::sync::mpsc::channel();
+        let handler = std::thread::spawn(move || {
+            handle_websocket_connection(test_mux(), server, None);
+            done.send(()).unwrap();
+        });
+
+        finished
+            .recv_timeout(Duration::from_secs(1))
+            .expect("stalled handshake must not occupy a connection slot indefinitely");
+        drop(client);
+        handler.join().unwrap();
+    }
+
+    #[test]
+    fn stalled_websocket_authentication_times_out() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let client_stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        let (done, finished) = std::sync::mpsc::channel();
+        let handler = std::thread::spawn(move || {
+            handle_websocket_connection(test_mux(), server, Some("secret"));
+            done.send(()).unwrap();
+        });
+        let (client, _) = tungstenite::client("ws://localhost/", client_stream).unwrap();
+
+        finished
+            .recv_timeout(Duration::from_secs(1))
+            .expect("stalled authentication must not occupy a connection slot indefinitely");
+        drop(client);
+        handler.join().unwrap();
+    }
+
+    #[test]
+    fn global_pressure_terminates_the_stream_occupying_the_backlog() {
+        let outbound = Arc::new(BoundedOutbound::default());
+        let writer = MessageWriter::new(QueuedSink { outbound: outbound.clone(), control: None });
+        let noisy = writer.start_stream(&json!({"event": "overflow", "stream": "noisy"})).unwrap();
+        let quiet = writer.start_stream(&json!({"event": "overflow", "stream": "quiet"})).unwrap();
+
+        for sequence in 0..OUTBOUND_CAPACITY {
+            writer.send_stream(&json!({"event": "output", "sequence": sequence}), &noisy).unwrap();
+        }
+        writer.send_stream(&json!({"event": "tree-changed"}), &quiet).unwrap();
+
+        let terminal: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(terminal["stream"], "noisy");
+        let quiet_event: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(quiet_event["event"], "tree-changed");
+        assert_eq!(outbound.try_pop(), None);
+        assert_eq!(
+            writer.send_stream(&json!({"event": "late"}), &noisy).unwrap_err().kind(),
+            std::io::ErrorKind::BrokenPipe
+        );
+        assert!(quiet.is_open());
+        assert!(writer.is_open());
+    }
+
+    #[test]
+    fn bounded_writer_rejects_payloads_beyond_each_byte_budget() {
+        let outbound = BoundedOutbound::default();
+        let stream = OutboundStream::new(1, r#"{"event":"overflow"}"#.to_string());
+
+        let regular =
+            outbound.push_regular("x".repeat(OUTBOUND_BYTE_CAPACITY + 1), &stream).unwrap_err();
+        assert_eq!(regular.kind(), std::io::ErrorKind::WouldBlock);
+        let control =
+            outbound.push_control("x".repeat(OUTBOUND_CONTROL_BYTE_RESERVE + 1)).unwrap_err();
+        assert_eq!(control.kind(), std::io::ErrorKind::WouldBlock);
+        let terminal: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(terminal["event"], "overflow");
+        assert_eq!(outbound.try_pop(), None);
+    }
+
+    #[test]
+    fn terminal_overflow_purges_only_its_stream_and_rejects_late_frames() {
+        let outbound = Arc::new(BoundedOutbound::default());
+        let writer = MessageWriter::new(QueuedSink { outbound: outbound.clone(), control: None });
+        let stale = writer.start_stream(&subscription_overflow_json()).unwrap();
+        let unrelated = writer.start_stream(&subscription_overflow_json()).unwrap();
+
+        writer.send_stream(&json!({"event": "output", "stream": "stale"}), &stale).unwrap();
+        writer.send_stream(&json!({"event": "output", "stream": "unrelated"}), &unrelated).unwrap();
+        writer.send_terminal(&subscription_overflow_json(), &stale).unwrap();
+
+        let late = writer.send_stream(&json!({"event": "output", "stream": "late"}), &stale);
+        assert_eq!(late.unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+        let terminal: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(terminal["event"], "overflow");
+        let remaining: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(remaining["stream"], "unrelated");
+        assert_eq!(outbound.try_pop(), None);
+        assert!(writer.is_open());
+    }
+
+    #[test]
+    fn client_detach_purges_attach_backlog_before_terminal_event() {
+        let mux = Mux::new("detach-order-test", SurfaceOptions::default());
+        let outbound = Arc::new(BoundedOutbound::default());
+        let writer = MessageWriter::new(QueuedSink { outbound: outbound.clone(), control: None });
+        let stream = writer.start_stream(&attach_overflow_json(41)).unwrap();
+        let client = mux.control_clients.register(ClientTransport::Unix, writer.clone());
+        mux.control_clients.attach_surface(client, 41, stream.clone()).unwrap();
+        writer.send_initial(&json!({"event": "vt-state", "surface": 41}), &stream).unwrap();
+        writer.send_stream(&json!({"event": "output", "surface": 41}), &stream).unwrap();
+
+        assert!(disconnect_client(&mux, client, true));
+
+        let terminal: Value = serde_json::from_str(&outbound.try_pop().unwrap()).unwrap();
+        assert_eq!(terminal, json!({"event": "detached", "surface": 41}));
+        assert_eq!(outbound.try_pop(), None);
+    }
+
+    #[test]
+    fn closing_bounded_writer_wakes_a_waiting_drain() {
+        let outbound = Arc::new(BoundedOutbound::default());
+        let waiting = outbound.clone();
+        let drain = std::thread::spawn(move || waiting.recv());
+
+        outbound.close();
+
+        assert_eq!(drain.join().unwrap(), None);
+    }
+
+    #[test]
+    fn websocket_overflow_marks_attach_lifecycle() {
+        let lifecycle = AttachLifecycle::default();
+        let error = std::io::Error::new(std::io::ErrorKind::WouldBlock, "queue full");
+
+        handle_attach_send_error(&lifecycle, &error);
+
+        assert!(lifecycle.is_canceled());
+        assert!(lifecycle.overflowed());
+    }
+
+    #[test]
+    fn ping_returns_version_and_protocol() {
+        let mux = test_mux();
+        let data = handle_command(&mux, 0, Command::Ping, &test_writer()).unwrap();
+        assert_eq!(data["ok"].as_bool(), Some(true));
+        assert_eq!(data["version"].as_str(), Some(env!("CARGO_PKG_VERSION")));
+        assert_eq!(data["protocol"].as_u64(), Some(PROTOCOL_VERSION as u64));
+    }
+
+    #[test]
+    fn client_info_is_sanitized_recallable_and_clamped_to_64_characters() {
+        let mux = test_mux();
+        let writer = test_writer();
+        let client = mux.control_clients.register(ClientTransport::Unix, writer.clone());
+        let events = mux.subscribe();
+
+        handle_command(
+            &mux,
+            client,
+            Command::SetClientInfo {
+                name: Some("\u{1b}]0;evil\u{07}name".to_string()),
+                kind: Some("web".to_string()),
+            },
+            &writer,
+        )
+        .unwrap();
+        let data = handle_command(&mux, client, Command::ListClients, &writer).unwrap();
+        assert_eq!(data[0]["name"], " ]0;evil name");
+
+        handle_command(
+            &mux,
+            client,
+            Command::SetClientInfo { name: Some("n".repeat(80)), kind: None },
+            &writer,
+        )
+        .unwrap();
+        handle_command(
+            &mux,
+            client,
+            Command::SetClientInfo { name: None, kind: Some("tui".to_string()) },
+            &writer,
+        )
+        .unwrap();
+
+        let data = handle_command(&mux, client, Command::ListClients, &writer).unwrap();
+        let listed = &data[0];
+        assert_eq!(listed["name"].as_str().unwrap().chars().count(), 64);
+        assert_eq!(listed["kind"], "tui");
+        assert_eq!(listed["self"], true);
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::ClientChanged { client: id, kind: Some(kind), .. })
+                if id == client && kind == "web"
+        ));
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::ClientChanged { client: id, kind: Some(kind), .. })
+                if id == client && kind == "web"
+        ));
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::ClientChanged { client: id, kind: Some(kind), .. })
+                if id == client && kind == "tui"
+        ));
+    }
+
+    #[test]
+    fn reload_config_returns_path_and_emits_request() {
+        let mux = test_mux();
+        let events = mux.subscribe();
+        let data = handle_command(&mux, 0, Command::ReloadConfig, &test_writer()).unwrap();
+        assert_eq!(data["reloaded"].as_bool(), Some(true));
+        assert!(data.get("path").is_some());
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::ConfigReloadRequested)
+        ));
+    }
+
+    #[test]
+    fn window_title_commands_emit_requests() {
+        let mux = test_mux();
+        let events = mux.subscribe();
+
+        let data = handle_command(
+            &mux,
+            0,
+            Command::SetWindowTitle { title: "hello".to_string() },
+            &test_writer(),
+        )
+        .unwrap();
+        assert_eq!(data, json!({}));
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::WindowTitleRequested(title)) if title == "hello"
+        ));
+
+        handle_command(&mux, 0, Command::ClearWindowTitle, &test_writer()).unwrap();
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(1)),
+            Ok(MuxEvent::WindowTitleRequested(title)) if title.is_empty()
+        ));
+    }
+
+    #[test]
+    fn window_title_osc_uses_osc_0_and_2_and_strips_controls() {
+        assert_eq!(window_title_osc("hello").as_slice(), b"\x1b]0;hello\x07\x1b]2;hello\x07");
+        assert_eq!(window_title_osc("a\x1bb\x07c").as_slice(), b"\x1b]0;a b c\x07\x1b]2;a b c\x07");
+    }
+
+    #[test]
+    fn title_changed_event_includes_authoritative_surface_title() {
+        let mux = Mux::new(
+            "title-event-test",
+            SurfaceOptions {
+                command: Some(vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "printf '\\033]2;server title\\007'; exec cat".to_string(),
+                ]),
+                ..SurfaceOptions::default()
+            },
+        );
+        let events = mux.subscribe();
+        let surface = mux.new_workspace(None, Some((20, 4))).unwrap();
+        loop {
+            match events.recv_timeout(Duration::from_secs(1)).unwrap() {
+                MuxEvent::TitleChanged { surface: id, title }
+                    if id == surface.id && title.as_ref() == "server title" =>
+                {
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert_eq!(surface.title(), "server title");
+        assert_eq!(
+            subscribed_event_json(&MuxEvent::TitleChanged {
+                surface: surface.id,
+                title: Arc::<str>::from("server title"),
+            }),
+            json!({
+                "event": "title-changed",
+                "surface": surface.id,
+                "title": "server title",
+            })
+        );
+    }
+
+    #[test]
+    fn scroll_surface_emits_one_scroll_changed_event() {
+        let mux = test_mux();
+        let surface = mux.new_workspace(None, Some((20, 4))).unwrap();
+        surface
+            .try_with_terminal(|term| {
+                for i in 0..20 {
+                    term.vt_write(format!("line{i}\r\n").as_bytes());
+                }
+            })
+            .unwrap();
+        let events = mux.subscribe();
+
+        handle_command(
+            &mux,
+            0,
+            Command::ScrollSurface { surface: surface.id, delta: -5 },
+            &test_writer(),
+        )
+        .unwrap();
+
+        let event = events.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(matches!(
+            event,
+            MuxEvent::ScrollChanged { surface: id, offset, at_bottom: false }
+                if id == surface.id && offset > 0
+        ));
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+
+        handle_command(
+            &mux,
+            0,
+            Command::ScrollSurface { surface: surface.id, delta: 0 },
+            &test_writer(),
+        )
+        .unwrap();
+        assert!(matches!(events.try_recv(), Err(TryRecvError::Empty)));
+    }
+}

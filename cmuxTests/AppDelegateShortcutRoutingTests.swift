@@ -5691,92 +5691,6 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
 #endif
     }
 
-    func testPresentPreferencesWindowShowsCustomSettingsWindowAndActivates() {
-        var showFallbackSettingsWindowCallCount = 0
-        var activateApplicationCallCount = 0
-        var receivedNavigationTargets: [SettingsNavigationTarget?] = []
-
-        AppDelegate.presentPreferencesWindow(
-            showFallbackSettingsWindow: { navigationTarget in
-                receivedNavigationTargets.append(navigationTarget)
-                showFallbackSettingsWindowCallCount += 1
-            },
-            activateApplication: {
-                activateApplicationCallCount += 1
-            }
-        )
-
-        XCTAssertEqual(showFallbackSettingsWindowCallCount, 1)
-        XCTAssertEqual(activateApplicationCallCount, 1)
-        XCTAssertEqual(receivedNavigationTargets, [nil])
-    }
-
-    func testPresentPreferencesWindowSupportsRepeatedCalls() {
-        var showFallbackSettingsWindowCallCount = 0
-        var activateApplicationCallCount = 0
-        var receivedNavigationTargets: [SettingsNavigationTarget?] = []
-
-        AppDelegate.presentPreferencesWindow(
-            showFallbackSettingsWindow: { navigationTarget in
-                receivedNavigationTargets.append(navigationTarget)
-                showFallbackSettingsWindowCallCount += 1
-            },
-            activateApplication: {
-                activateApplicationCallCount += 1
-            }
-        )
-
-        AppDelegate.presentPreferencesWindow(
-            showFallbackSettingsWindow: { navigationTarget in
-                receivedNavigationTargets.append(navigationTarget)
-                showFallbackSettingsWindowCallCount += 1
-            },
-            activateApplication: {
-                activateApplicationCallCount += 1
-            }
-        )
-
-        XCTAssertEqual(showFallbackSettingsWindowCallCount, 2)
-        XCTAssertEqual(activateApplicationCallCount, 2)
-        XCTAssertEqual(receivedNavigationTargets, [nil, nil])
-    }
-
-    func testPresentPreferencesWindowForwardsNavigationTarget() {
-        var receivedNavigationTarget: SettingsNavigationTarget?
-        var activateApplicationCallCount = 0
-
-        AppDelegate.presentPreferencesWindow(
-            navigationTarget: .keyboardShortcuts,
-            showFallbackSettingsWindow: { navigationTarget in
-                receivedNavigationTarget = navigationTarget
-            },
-            activateApplication: {
-                activateApplicationCallCount += 1
-            }
-        )
-
-        XCTAssertEqual(receivedNavigationTarget, .keyboardShortcuts)
-        XCTAssertEqual(activateApplicationCallCount, 1)
-    }
-
-    func testPresentPreferencesWindowForwardsBrowserImportNavigationTarget() {
-        var receivedNavigationTarget: SettingsNavigationTarget?
-        var activateApplicationCallCount = 0
-
-        AppDelegate.presentPreferencesWindow(
-            navigationTarget: .browserImport,
-            showFallbackSettingsWindow: { navigationTarget in
-                receivedNavigationTarget = navigationTarget
-            },
-            activateApplication: {
-                activateApplicationCallCount += 1
-            }
-        )
-
-        XCTAssertEqual(receivedNavigationTarget, .browserImport)
-        XCTAssertEqual(activateApplicationCallCount, 1)
-    }
-
     // MARK: - Shortcut settings consultation regression tests
 
     func testExampleShortcutRoutingConsultsConfiguredShortcutSettings() {
@@ -6971,10 +6885,10 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
             let recorder = RecorderHostButton(frame: .zero)
             defer {
                 if RecorderHostButton.isActivelyRecording {
-                    recorder.debugStopRecording()
+                    recorder.stopRecording()
                 }
             }
-            recorder.debugStartRecording()
+            recorder.startRecording()
 
             XCTAssertTrue(RecorderHostButton.isActivelyRecording)
             XCTAssertFalse(textBoxView.performKeyEquivalent(with: event))
@@ -12166,9 +12080,11 @@ final class AppDelegateShortcutRoutingTests: XCTestCase {
         }
 
         workspace.focusPanel(browserPanel.id)
-        if webView.superview == nil {
-            webView.frame = window.contentView?.bounds ?? .zero
-            window.contentView?.addSubview(webView)
+        if webView.cmuxBrowserViewportAttachmentSuperview == nil,
+           let contentView = window.contentView {
+            let presentationView = webView.cmuxBrowserViewportPresentationView
+            contentView.addSubview(presentationView)
+            webView.cmuxApplyBrowserViewportLayout(in: contentView.bounds)
         }
         window.makeKeyAndOrderFront(nil)
         XCTAssertTrue(window.makeFirstResponder(webView), file: file, line: line)

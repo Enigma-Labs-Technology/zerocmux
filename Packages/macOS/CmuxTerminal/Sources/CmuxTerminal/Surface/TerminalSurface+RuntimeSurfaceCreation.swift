@@ -110,6 +110,10 @@ extension TerminalSurface {
         }
 
         let spawnPolicy = spawnPolicyProvider.currentSpawnPolicy()
+        for (key, value) in spawnPolicy.socketAuthenticationEnvironment
+            where !key.isEmpty && !value.isEmpty {
+            setManagedEnvironmentValue(key, value)
+        }
         let claudeHooksEnabled = spawnPolicy.claudeHooksEnabled
         if !claudeHooksEnabled {
             setManagedEnvironmentValue("CMUX_CLAUDE_HOOKS_DISABLED", "1")
@@ -142,7 +146,12 @@ extension TerminalSurface {
             setManagedEnvironmentValue("CMUX_AMP_HOOKS_DISABLED", "1")
         }
 
-        if let cliBinPath = Bundle.main.resourceURL?.appendingPathComponent("bin").path {
+        if let cliBinURL = Bundle.main.resourceURL?.appendingPathComponent("bin") {
+            let cliBinPath = cliBinURL.path
+            let ghosttyCLIPath = cliBinURL.appendingPathComponent("ghostty").path
+            if FileManager.default.isExecutableFile(atPath: ghosttyCLIPath) {
+                setManagedEnvironmentValue("GHOSTTY_BIN", ghosttyCLIPath)
+            }
             let currentPath = env["PATH"]
                 ?? getenv("PATH").map { String(cString: $0) }
                 ?? ProcessInfo.processInfo.environment["PATH"]

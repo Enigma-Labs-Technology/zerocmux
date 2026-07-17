@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// zerocmux: local stand-in for the removed CmuxFeedback package (captures stay on disk).
+/// zerocmux: local stand-in for the removed feedback-composer package (captures stay on disk).
 struct FeedbackComposerSettings {
     let storedEmailKey = "sidebarHelpFeedbackEmail"
 }
