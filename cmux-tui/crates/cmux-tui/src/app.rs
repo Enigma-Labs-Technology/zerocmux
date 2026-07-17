@@ -8812,7 +8812,12 @@ mod tests {
             app.session.enqueue_coalescing_session_mutation(label, key, |_| {
                 Err(crate::session::test_remote_timeout_error())
             });
-            let settled = events.recv_timeout(Duration::from_secs(1)).unwrap();
+            // Generous bound: the settlement is delivered by a background
+            // worker, and under valgrind's serialized scheduling (the CI
+            // leak-check lane runs this binary) the 1s budget flaked;
+            // recv_timeout returns as soon as the event arrives, so a healthy
+            // run pays nothing.
+            let settled = events.recv_timeout(Duration::from_secs(30)).unwrap();
             assert!(matches!(
                 settled,
                 AppEvent::SessionMutationSettled {
