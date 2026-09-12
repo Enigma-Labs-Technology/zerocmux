@@ -1,20 +1,11 @@
+#if DEBUG
 import Foundation
 
-enum CmuxRuntimeDebugCapture {
-    private static let configuration: CmuxRuntimeDebugCaptureConfiguration? = {
-        let env = ProcessInfo.processInfo.environment
-        guard let baseURLString = env["CMUX_RUNTIME_DEBUG_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let baseURL = URL(string: baseURLString),
-              let token = env["CMUX_RUNTIME_DEBUG_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !token.isEmpty,
-              let sessionID = env["CMUX_RUNTIME_DEBUG_SESSION_ID"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !sessionID.isEmpty else {
-            return nil
-        }
-        return CmuxRuntimeDebugCaptureConfiguration(baseURL: baseURL, token: token, sessionID: sessionID)
-    }()
-
-    private static let sender = CmuxRuntimeDebugCaptureSender(maxInFlightRequests: 16)
+/// Writes explicitly enabled terminal probes to the local tagged debug log.
+struct CmuxRuntimeDebugCapture {
+    // The former URL/token/session environment configuration is deliberately ignored.
+    // Debug builds follow the same zero-telemetry policy as release builds.
+    private static let isEnabled = ProcessInfo.processInfo.environment["CMUX_RUNTIME_DEBUG_LOG"] == "1"
 
     static func logIfConfigured(
         hypothesisID: String,
@@ -24,18 +15,24 @@ enum CmuxRuntimeDebugCapture {
         actual: String? = nil,
         data: [String: Any] = [:]
     ) {
-        guard let configuration else { return }
+        guard isEnabled else { return }
 
-        Task(priority: .utility) {
-            await sender.sendIfCapacityAvailable(
-                configuration: configuration,
-                hypothesisID: hypothesisID,
-                source: source,
-                name: name,
-                expected: expected,
-                actual: actual,
-                data: data
-            )
+        var payload: [String: Any] = [
+            "hypothesis_id": hypothesisID,
+            "source": source,
+            "name": name,
+            "data": data,
+        ]
+        if let expected {
+            payload["expected"] = expected
         }
+        if let actual {
+            payload["actual"] = actual
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let encoded = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let message = String(data: encoded, encoding: .utf8) else { return }
+        cmuxDebugLog("runtime.probe \(message)")
     }
 }
+#endif

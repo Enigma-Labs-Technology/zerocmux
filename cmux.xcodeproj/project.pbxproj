@@ -700,9 +700,6 @@ C0DE71B10000000000000001 /* AppDelegate+AgentChatNotifications.swift in Sources 
 		CC0DE30000000000000000A3 /* CmuxRemoteSession in Frameworks */ = {isa = PBXBuildFile; productRef = CC0DE30000000000000000A2 /* CmuxRemoteSession */; };
 		CC0DE20000000000000000A3 /* CmuxRemoteWorkspace in Frameworks */ = {isa = PBXBuildFile; productRef = CC0DE20000000000000000A2 /* CmuxRemoteWorkspace */; };
 		A9F200000000000000000005 /* CmuxRuntimeDebugCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F100000000000000000005 /* CmuxRuntimeDebugCapture.swift */; };
-		A9F200000000000000000006 /* CmuxRuntimeDebugCaptureConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F100000000000000000006 /* CmuxRuntimeDebugCaptureConfiguration.swift */; };
-		A9F20000000000000000001A /* CmuxRuntimeDebugCaptureSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F10000000000000000001A /* CmuxRuntimeDebugCaptureSender.swift */; };
-		A9F200000000000000000007 /* CmuxRuntimeDebugCaptureSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F100000000000000000007 /* CmuxRuntimeDebugCaptureSequence.swift */; };
 		CD0CFE5300000000CD0CFE53 /* CmuxSettings in Frameworks */ = {isa = PBXBuildFile; productRef = CD0CFE5200000000CD0CFE52 /* CmuxSettings */; };
 		CD0CFE5700000000CD0CFE57 /* CmuxSettings in Frameworks */ = {isa = PBXBuildFile; productRef = CD0CFE5200000000CD0CFE52 /* CmuxSettings */; };
 		A7984AC10000000000000001 /* CmuxSettingsFileStore+Live.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7984AC10000000000000002 /* CmuxSettingsFileStore+Live.swift */; };
@@ -3126,9 +3123,6 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 		C0DE31390000000000000102 /* CMUXOpenCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CMUXOpenCommandTests.swift; sourceTree = "<group>"; };
 		C0DE31390000000000000112 /* CMUXOpenHTMLFocusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CMUXOpenHTMLFocusTests.swift; sourceTree = "<group>"; };
 		A9F100000000000000000005 /* CmuxRuntimeDebugCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxRuntimeDebugCapture.swift; sourceTree = "<group>"; };
-		A9F100000000000000000006 /* CmuxRuntimeDebugCaptureConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxRuntimeDebugCaptureConfiguration.swift; sourceTree = "<group>"; };
-		A9F10000000000000000001A /* CmuxRuntimeDebugCaptureSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxRuntimeDebugCaptureSender.swift; sourceTree = "<group>"; };
-		A9F100000000000000000007 /* CmuxRuntimeDebugCaptureSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxRuntimeDebugCaptureSequence.swift; sourceTree = "<group>"; };
 		A7984AC10000000000000002 /* CmuxSettingsFileStore+Live.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CmuxSettingsFileStore+Live.swift"; sourceTree = "<group>"; };
 		D3610C010000000000000002 /* CmuxSettingsJSONPathSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxSettingsJSONPathSupport.swift; sourceTree = "<group>"; };
 		DC5DC5DC0000000000000002 /* CmuxSidebarActionDispatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxSidebarActionDispatch.swift; sourceTree = "<group>"; };
@@ -6092,9 +6086,6 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				A9F100000000000000000003 /* AgentSessionDebugMenuButtons.swift */,
 				A9F100000000000000000004 /* AgentSessionLaunchPlan.swift */,
 				A9F100000000000000000005 /* CmuxRuntimeDebugCapture.swift */,
-				A9F100000000000000000006 /* CmuxRuntimeDebugCaptureConfiguration.swift */,
-				A9F10000000000000000001A /* CmuxRuntimeDebugCaptureSender.swift */,
-				A9F100000000000000000007 /* CmuxRuntimeDebugCaptureSequence.swift */,
 				A9F100000000000000000008 /* SessionAgentSessionPanelSnapshot.swift */,
 				A9F10000000000000000000B /* AgentSessionBridgeError.swift */,
 				A9F10000000000000000000C /* AgentSessionBridgeRequest.swift */,
@@ -8130,9 +8121,6 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				468150000000000000000001 /* CmuxNotificationHookFileSnapshot.swift in Sources */,
 				468140000000000000000007 /* CmuxNotificationHookParsedConfig.swift in Sources */,
 				A9F200000000000000000005 /* CmuxRuntimeDebugCapture.swift in Sources */,
-				A9F200000000000000000006 /* CmuxRuntimeDebugCaptureConfiguration.swift in Sources */,
-				A9F20000000000000000001A /* CmuxRuntimeDebugCaptureSender.swift in Sources */,
-				A9F200000000000000000007 /* CmuxRuntimeDebugCaptureSequence.swift in Sources */,
 				A7984AC10000000000000001 /* CmuxSettingsFileStore+Live.swift in Sources */,
 				D3610C010000000000000001 /* CmuxSettingsJSONPathSupport.swift in Sources */,
 				DC5DC5DC0000000000000001 /* CmuxSidebarActionDispatch.swift in Sources */,
