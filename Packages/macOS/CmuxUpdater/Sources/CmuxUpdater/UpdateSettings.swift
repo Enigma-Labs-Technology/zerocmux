@@ -38,9 +38,10 @@ public struct UpdateSettings: Sendable {
 
     /// Registers the update defaults on `defaults` and runs the one-time migration.
     ///
-    /// Registration is idempotent. The migration (guarded by ``migrationKey``) re-enables
-    /// automatic checks and upgrades the legacy 24h interval to ``scheduledCheckInterval`` for
-    /// installs that predate the embedded defaults.
+    /// System-profile reporting is disabled on every application, including installations
+    /// with an older enabled preference. Registration is idempotent. The migration (guarded
+    /// by ``migrationKey``) re-enables automatic checks and upgrades the legacy 24h interval
+    /// to ``scheduledCheckInterval`` for installs that predate the embedded defaults.
     public func apply(to defaults: UserDefaults) {
         defaults.register(defaults: [
             Self.automaticChecksKey: true,
@@ -48,6 +49,10 @@ public struct UpdateSettings: Sendable {
             Self.scheduledCheckIntervalKey: scheduledCheckInterval,
             Self.sendProfileInfoKey: false,
         ])
+
+        // Privacy is an invariant, not a default that an older persisted opt-in can override.
+        // Keep this outside the one-time update-check migration.
+        defaults.set(false, forKey: Self.sendProfileInfoKey)
 
         guard !defaults.bool(forKey: Self.migrationKey) else { return }
 
@@ -68,10 +73,6 @@ public struct UpdateSettings: Sendable {
         if defaults.object(forKey: Self.automaticallyUpdateKey) == nil {
             defaults.set(false, forKey: Self.automaticallyUpdateKey)
         }
-        if defaults.object(forKey: Self.sendProfileInfoKey) == nil {
-            defaults.set(false, forKey: Self.sendProfileInfoKey)
-        }
-
         defaults.set(true, forKey: Self.migrationKey)
     }
 }
