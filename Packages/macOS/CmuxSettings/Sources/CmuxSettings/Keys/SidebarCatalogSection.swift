@@ -80,7 +80,7 @@ public struct SidebarCatalogSection: SettingCatalogSection {
 
     public let showPullRequests = DefaultsKey<Bool>(
         id: "sidebar.showPullRequests",
-        defaultValue: true,
+        defaultValue: false,
         userDefaultsKey: "sidebarShowPullRequest"
     )
 

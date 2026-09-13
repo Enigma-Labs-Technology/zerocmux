@@ -47,3 +47,19 @@ jobs:
         env:
           CUA_PRIVACY_BINARY: ${{ runner.temp }}/zerocmux-cua
         run: python3 tests/test_cua_bundled_privacy.py
+
+  tui-integration:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Initialize terminal dependency
+        run: git submodule update --init --depth 1 ghostty
+      - name: Install Zig
+        run: ./scripts/install-zig-ci.sh
+      - name: Install Rust
+        run: ./scripts/install-rust-ci.sh
+      - name: Test local TUI integration
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui

@@ -3415,6 +3415,13 @@ final class BrowserPanel: Panel, ObservableObject {
         }
     }
 
+    static func resolvedProfileID(requested: UUID?) -> UUID {
+        let requestedProfileID = requested ?? BrowserProfileStore.shared.effectiveLastUsedProfileID
+        return BrowserProfileStore.shared.profileDefinition(id: requestedProfileID) != nil
+            ? requestedProfileID
+            : BrowserProfileStore.shared.builtInDefaultProfileID
+    }
+
     init(
         id: UUID = UUID(),
         workspaceId: UUID,
@@ -11396,4 +11403,11 @@ extension BrowserPanel {
         return nil
 #endif
     }
+}
+
+private func browserBareHostCandidate(_ lowercasedInput: String) -> String {
+    let end = lowercasedInput.firstIndex { character in
+        character == ":" || character == "/" || character == "?" || character == "#"
+    } ?? lowercasedInput.endIndex
+    return String(lowercasedInput[..<end])
 }

@@ -1645,8 +1645,16 @@ if [[ -n "${TAG_SLUG:-}" ]]; then
   TMP_COMPAT_DERIVED_LINK="/tmp/zerocmux-${TAG_SLUG}"
   if [[ "$DERIVED_DATA" != "$TMP_COMPAT_DERIVED_LINK" ]]; then
     ABS_DERIVED_DATA="$(cd "$DERIVED_DATA" && pwd)"
-    rm -rf "$TMP_COMPAT_DERIVED_LINK"
-    ln -s "$ABS_DERIVED_DATA" "$TMP_COMPAT_DERIVED_LINK"
+    # This convenience path may be an unrelated checkout or user directory.
+    # Replace links only; never recursively delete a real path to publish one.
+    if [[ -L "$TMP_COMPAT_DERIVED_LINK" ]]; then
+      rm -f "$TMP_COMPAT_DERIVED_LINK"
+    fi
+    if [[ ! -e "$TMP_COMPAT_DERIVED_LINK" ]]; then
+      ln -s "$ABS_DERIVED_DATA" "$TMP_COMPAT_DERIVED_LINK"
+    else
+      echo "Preserving existing path at $TMP_COMPAT_DERIVED_LINK; skipping compatibility link"
+    fi
   fi
 fi
 
