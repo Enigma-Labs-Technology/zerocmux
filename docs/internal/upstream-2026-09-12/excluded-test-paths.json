@@ -246,5 +246,13 @@
   [
     "BrowserWebContentProcessTests.swift",
     "three removed hosted-auth callback policy cases"
+  ],
+  [
+    "cmux-tui/scripts/test_verify_published_manifest.py",
+    "test_artifact_workflow_verifies_unix_machine_manifest_before_latest"
+  ],
+  [
+    "cmux-tui/scripts/test_verify_published_manifest.py",
+    "test_machine_manifest_builder_copies_dependency_before_directory_change"
   ]
 ]

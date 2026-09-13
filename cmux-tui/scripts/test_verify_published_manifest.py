@@ -4,18 +4,11 @@ import importlib.util
 import hashlib
 import json
 from pathlib import Path
-import re
 import tempfile
 from unittest import TestCase, main
 from unittest.mock import patch
 
-import yaml
-
-
 SCRIPT = Path(__file__).with_name("verify_published_manifest.py")
-ROOT = SCRIPT.parents[2]
-ARTIFACT_WORKFLOW = ROOT / ".github" / "workflows" / "cmux-tui-artifacts.yml"
-WINDOWS_INSTALLER = ROOT / "web" / "public" / "tui" / "install-static.ps1"
 SPEC = importlib.util.spec_from_file_location("verify_published_manifest", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 VERIFY = importlib.util.module_from_spec(SPEC)
@@ -146,72 +139,6 @@ class VerifyPublishedManifestTests(TestCase):
                     expected_commit=manifest["commit"],
                     required_artifacts=(self.WINDOWS,),
                 )
-
-    def test_artifact_workflow_verifies_unix_machine_manifest_before_latest(self) -> None:
-        document = yaml.safe_load(ARTIFACT_WORKFLOW.read_text(encoding="utf-8"))
-        build = document["jobs"]["build"]["with"]
-        self.assertIs(build["include_windows"], False)
-        self.assertIs(build["package_npm"], False)
-        self.assertIs(build["package_pypi"], False)
-
-        installer = WINDOWS_INSTALLER.read_text(encoding="utf-8")
-        advertised = re.search(r'^\$Artifact = "([^"]+)"$', installer, re.MULTILINE)
-        self.assertIsNotNone(advertised)
-        self.assertEqual(advertised.group(1), self.WINDOWS)
-
-        steps = document["jobs"]["publish"]["steps"]
-        names = [step.get("name", "") for step in steps]
-        before_upload = names.index("Verify Unix manifests before upload")
-        upload = names.index("Upload to R2")
-        before_latest = names.index("Verify immutable Unix manifests before latest publish")
-        rolling = names.index("Publish rolling latest artifacts")
-        after_publish = names.index("Verify published Unix manifests")
-        self.assertLess(before_upload, upload)
-        self.assertLess(upload, before_latest)
-        self.assertLess(before_latest, rolling)
-        self.assertLess(rolling, after_publish)
-
-        upload_run = steps[upload]["run"]
-        self.assertNotIn("cmux-tui/latest", upload_run)
-        before_upload_run = steps[before_upload]["run"]
-        before_latest_run = steps[before_latest]["run"]
-        after_publish_run = steps[after_publish]["run"]
-        self.assertIn(f"cmux-tui/$GITHUB_SHA/manifest.json", after_publish_run)
-        self.assertIn("cmux-tui/latest/manifest.json?verify=$GITHUB_SHA", after_publish_run)
-        self.assertIn("--artifact-directory assets/cmux-tui", before_upload_run)
-        self.assertIn("--artifact-base-url", before_latest_run)
-        self.assertIn("--artifact-base-url", after_publish_run)
-        self.assertIn("chatmux-relay/$GITHUB_SHA/manifest.json", after_publish_run)
-        self.assertIn("--machine-manifest", before_upload_run)
-        self.assertNotIn("chatmux-relay-x86_64-pc-windows-gnu.exe", before_upload_run)
-        self.assertIn("--forbid-artifact cmux-tui-x86_64-pc-windows-gnu.exe", before_upload_run)
-        self.assertIn("--forbid-artifact cmux-relay-x86_64-pc-windows-gnu.exe", before_upload_run)
-        self.assertNotIn("--require-dependency-artifact", before_upload_run)
-        self.assertNotIn("--dependency-artifact-directory assets/cmux-tui", before_upload_run)
-        self.assertIn("--require-provenance", before_upload_run)
-        self.assertIn("--require-provenance", before_latest_run)
-        self.assertIn("--require-provenance", after_publish_run)
-        self.assertIn("pattern: chatmux-relay-*", ARTIFACT_WORKFLOW.read_text(encoding="utf-8"))
-        self.assertIn("assets/chatmux-relay/cmux-tui-*", ARTIFACT_WORKFLOW.read_text(encoding="utf-8"))
-        self.assertNotIn("chatmux-relay-x86_64-pc-windows-gnu.exe", ARTIFACT_WORKFLOW.read_text(encoding="utf-8"))
-        self.assertIn("chatmux-relay/$GITHUB_SHA", upload_run)
-        self.assertIn("--machine-manifest", before_upload_run)
-        self.assertIn("--machine-manifest", before_latest_run)
-        self.assertIn("--machine-manifest", after_publish_run)
-        self.assertIn("0.0.0-r2.sha-${GITHUB_SHA}", ARTIFACT_WORKFLOW.read_text(encoding="utf-8"))
-
-        attestation = steps[names.index("Attest raw binary subjects")]
-        self.assertEqual(attestation["with"]["push-to-registry"], False)
-
-    def test_machine_manifest_builder_copies_dependency_before_directory_change(self) -> None:
-        workflow = ARTIFACT_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn(
-            'cp "assets/cmux-tui/cmux-tui-${target}" "assets/chatmux-relay/cmux-tui-${target}"',
-            workflow,
-        )
-        self.assertIn('directory="$(cd "$directory" && pwd)"', workflow)
-        self.assertIn('dependency_directory="$(cd "$dependency_directory" && pwd)"', workflow)
-        self.assertIn("build_machine_manifest assets/chatmux-relay assets/cmux-tui", workflow)
 
     def test_machine_manifest_requires_dual_unix_binaries_and_full_digests(self) -> None:
         payloads = self.machine_payloads()

@@ -70,6 +70,10 @@ this checkout with Cargo's locked dependencies and the app's architectures.
 External manifest and prebuilt-binary overrides are rejected; the app records the
 TUI source tree identity. Iroh stays excluded from the default feature set.
 
+The hosted `cmux-tui-artifacts.yml` publisher and web installer remain excluded.
+Their two source-text tests are recorded in the exclusion ledger; executable
+manifest digest, artifact-set, size, and provenance validation tests are retained.
+
 Tagged builds no longer seed hosted API, Iroh broker, or authentication settings.
 The reload script also preserves real directories at its compatibility-link path.
 
