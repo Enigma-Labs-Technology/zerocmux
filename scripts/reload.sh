@@ -1238,6 +1238,16 @@ fi
 CMUX_DEV_PORT="$(choose_cmux_dev_port)"
 CMUX_DEV_PORT_RANGE="$(choose_cmux_dev_port_range)"
 CMUX_DEV_PORT_END="$(choose_cmux_dev_port_end "$CMUX_DEV_PORT" "$CMUX_DEV_PORT_RANGE")"
+if [[ -n "$CMUX_TUI_CLIENT_MANIFEST_URL_VALUE" ]]; then
+  echo "error: external TUI manifests are unavailable in zerocmux; the bundled TUI builds from source" >&2
+  exit 1
+fi
+
+if [[ "$PROD_AUTH" -eq 1 || -n "$AUTH_CREDENTIALS_FILE" || -n "$AUTH_PROFILE" ]]; then
+  echo "error: hosted authentication is unavailable in zerocmux" >&2
+  exit 1
+fi
+
 CMUX_DEV_ORIGIN="http://localhost:${CMUX_DEV_PORT}"
 CMUX_DEV_API_BASE_URL_VALUE="$(cmux_attach_resolve_dev_api_base_url "$CMUX_DEV_ORIGIN")"
 CMUX_IROH_BROKER_BASE_URL_VALUE="${CMUX_IROH_BROKER_BASE_URL:-https://cmux-staging.vercel.app}"
@@ -1314,19 +1324,6 @@ reload_finalize() {
     echo
     echo "App path:"
     echo "  $APP_PATH"
-  fi
-  if [[ -n "${CMUX_DEV_ORIGIN:-}" ]]; then
-    echo
-    echo "Dev web origin:"
-    echo "  $CMUX_DEV_ORIGIN"
-    echo "Dev API origin:"
-    echo "  $CMUX_DEV_API_BASE_URL_VALUE"
-    echo "Iroh broker origin:"
-    echo "  $CMUX_IROH_BROKER_BASE_URL_VALUE"
-    if [[ -n "${TAG_SLUG:-}" ]]; then
-      echo "Dev web command:"
-      echo "  cd web && CMUX_PORT=$CMUX_DEV_PORT CMUX_PORT_RANGE=$CMUX_DEV_PORT_RANGE CMUX_PORT_END=$CMUX_DEV_PORT_END CMUX_AUTH_CALLBACK_SCHEME=zerocmux-dev-$TAG_SLUG bun dev"
-    fi
   fi
   if [[ -x "${CLI_PATH:-}" ]]; then
     echo
@@ -1676,7 +1673,7 @@ if [[ -n "$TAG" && "$APP_NAME" != "$SEARCH_APP_NAME" ]]; then
       CMUXD_SOCKET="${APP_SUPPORT_DIR}/cmuxd-dev-${TAG_SLUG}.sock"
       CMUX_SOCKET_PATH_VALUE="/tmp/zerocmux-debug-${TAG_SLUG}.sock"
       CMUX_DEBUG_LOG="/tmp/zerocmux-debug-${TAG_SLUG}.log"
-      CMUX_AUTH_CALLBACK_SCHEME_VALUE="cmux-dev-${TAG_SLUG}"
+      CMUX_AUTH_CALLBACK_SCHEME_VALUE="zerocmux-dev-${TAG_SLUG}"
       echo "$CMUX_DEBUG_LOG" > /tmp/zerocmux-last-debug-log-path || true
       /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$INFO_PLIST" 2>/dev/null || true
       set_plist_url_scheme "$INFO_PLIST" "$CMUX_AUTH_CALLBACK_SCHEME_VALUE"
@@ -1696,21 +1693,6 @@ if [[ -n "$TAG" && "$APP_NAME" != "$SEARCH_APP_NAME" ]]; then
       set_plist_env "$INFO_PLIST" CMUX_PORT_END "$CMUX_DEV_PORT_END"
       set_plist_env "$INFO_PLIST" CMUX_PORT_RANGE "$CMUX_DEV_PORT_RANGE"
       set_plist_env "$INFO_PLIST" PORT "$CMUX_DEV_PORT"
-      set_plist_env "$INFO_PLIST" CMUX_AUTH_WWW_ORIGIN "$CMUX_AUTH_WWW_ORIGIN_VALUE"
-      set_plist_env "$INFO_PLIST" CMUX_WWW_ORIGIN "$CMUX_WWW_ORIGIN_VALUE"
-      set_plist_env "$INFO_PLIST" CMUX_API_BASE_URL "$CMUX_DEV_API_BASE_URL_VALUE"
-      set_plist_env "$INFO_PLIST" CMUX_VM_API_BASE_URL "$CMUX_DEV_API_BASE_URL_VALUE"
-      set_plist_env "$INFO_PLIST" CMUX_IROH_BROKER_BASE_URL "$CMUX_IROH_BROKER_BASE_URL_VALUE"
-      if [[ "$PROD_AUTH" -eq 1 ]]; then
-        set_plist_env "$INFO_PLIST" CMUX_AUTH_ENVIRONMENT production
-      fi
-      if [[ -n "$AUTH_CREDENTIALS_FILE" ]]; then
-        set_plist_env "$INFO_PLIST" CMUX_AUTH_CREDENTIALS_FILE "$AUTH_CREDENTIALS_FILE"
-      fi
-      if [[ -n "$AUTH_PROFILE" ]]; then
-        set_plist_env "$INFO_PLIST" CMUX_DEV_AUTH_PROFILE "$AUTH_PROFILE"
-        set_plist_env "$INFO_PLIST" CMUX_DEV_AUTH_REPLACE_SESSION "1"
-      fi
       if [[ -S "$CMUXD_SOCKET" ]]; then
         for PID in $(lsof -t "$CMUXD_SOCKET" 2>/dev/null); do
           kill "$PID" 2>/dev/null || true
@@ -1755,24 +1737,8 @@ if [[ -x "$CMUXD_SRC" ]]; then
   cp "$CMUXD_SRC" "$BIN_DIR/cmuxd"
   chmod +x "$BIN_DIR/cmuxd"
 fi
-# The cmux-tui client the Machines panel uses for cloud sessions ships inside the
-# bundle like the Ghostty helper. Dev builds take the rolling latest manifest (or
-# CMUX_TUI_CLIENT_MANIFEST_URL / CMUX_TUI_CLIENT_LOCAL); CMUX_SKIP_CMUX_TUI_CLIENT=1
-# leaves an existing copy alone for offline reloads.
-if [[ "${CMUX_SKIP_CMUX_TUI_CLIENT:-}" == "1" && -x "$APP_PATH/Contents/Resources/bin/cmux-tui" ]]; then
-  echo "Preserving bundled cmux-tui client (CMUX_SKIP_CMUX_TUI_CLIENT=1)"
-else
-  cmux_tui_install_args=(
-    "$APP_PATH"
-    --require-capability wireguard-hub
-  )
-  if [[ -n "$CMUX_TUI_CLIENT_MANIFEST_URL_VALUE" ]]; then
-    cmux_tui_install_args+=(
-      --manifest-url "$CMUX_TUI_CLIENT_MANIFEST_URL_VALUE"
-    )
-  fi
-  "$PWD/scripts/install-cmux-tui-client.sh" "${cmux_tui_install_args[@]}"
-fi
+# Compile the bundled TUI from the same reviewed checkout as the app.
+"$PWD/scripts/install-cmux-tui-client.sh" "$APP_PATH"
 if command -v xattr >/dev/null 2>&1; then
   xattr -cr "$APP_PATH" || true
 fi
@@ -1925,24 +1891,8 @@ if [[ "$LAUNCH" -eq 1 ]]; then
     CMUX_PORT_END="$CMUX_DEV_PORT_END"
     CMUX_PORT_RANGE="$CMUX_DEV_PORT_RANGE"
     PORT="$CMUX_DEV_PORT"
-    CMUX_AUTH_WWW_ORIGIN="$CMUX_AUTH_WWW_ORIGIN_VALUE"
-    CMUX_WWW_ORIGIN="$CMUX_WWW_ORIGIN_VALUE"
-    CMUX_API_BASE_URL="$CMUX_DEV_API_BASE_URL_VALUE"
-    CMUX_VM_API_BASE_URL="$CMUX_DEV_API_BASE_URL_VALUE"
-    CMUX_IROH_BROKER_BASE_URL="$CMUX_IROH_BROKER_BASE_URL_VALUE"
+
   )
-  if [[ "$PROD_AUTH" -eq 1 ]]; then
-    TAG_LAUNCH_ENV+=(CMUX_AUTH_ENVIRONMENT=production)
-  fi
-  if [[ -n "$AUTH_CREDENTIALS_FILE" ]]; then
-    TAG_LAUNCH_ENV+=(CMUX_AUTH_CREDENTIALS_FILE="$AUTH_CREDENTIALS_FILE")
-  fi
-  if [[ -n "$AUTH_PROFILE" ]]; then
-    TAG_LAUNCH_ENV+=(
-      CMUX_DEV_AUTH_PROFILE="$AUTH_PROFILE"
-      CMUX_DEV_AUTH_REPLACE_SESSION=1
-    )
-  fi
 
   LAUNCH_CMD=()
   LAUNCH_RETRY_CMD=()

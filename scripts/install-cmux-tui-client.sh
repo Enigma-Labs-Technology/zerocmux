@@ -1,125 +1,52 @@
 #!/usr/bin/env bash
-# Installs the cmux-tui client into an app bundle as Contents/Resources/bin/cmux-tui,
-# the same way the Ghostty CLI helper is bundled: the app carries the exact client
-# that talks to cmux Cloud machines, so the Machines panel needs no separate install.
-#
-# The build comes from the artifacts manifest the cmux-tui-artifacts workflow publishes
-# (rolling `latest` by default; a commit-addressed manifest pins one build). Both
-# darwin slices are downloaded, sha256-verified against the manifest, and lipo'd into
-# one universal binary. Downloads are cached per commit under CMUX_TUI_CLIENT_CACHE.
-#
-#   scripts/install-cmux-tui-client.sh <app-path> [--manifest-url <url>] [--cache-dir <dir>]
-#     [--expected-commit <sha>] [--require-capability <name>]...
-#
-# Env: CMUX_TUI_CLIENT_MANIFEST_URL overrides the manifest, CMUX_TUI_CLIENT_LOCAL points at
-# a prebuilt universal binary to install instead of downloading (offline/dev builds).
+# Build the bundled TUI from the reviewed source in this checkout.
+# A rolling upstream binary could contain code outside the fork's privacy audit.
 set -euo pipefail
 
-usage() { sed -n '2,13p' "$0"; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+APP_PATH="${1:-}"
+[[ -n "$APP_PATH" && -d "$APP_PATH/Contents" ]] || {
+  echo "usage: scripts/install-cmux-tui-client.sh <app-path>" >&2
+  exit 64
+}
+shift
+[[ "$#" -eq 0 && -z "${CMUX_TUI_CLIENT_MANIFEST_URL:-}" && -z "${CMUX_TUI_CLIENT_LOCAL:-}" ]] || {
+  echo "error: zerocmux bundles its reviewed TUI source; external binary overrides are unavailable" >&2
+  exit 64
+}
 
-APP_PATH=""
-MANIFEST_URL="${CMUX_TUI_CLIENT_MANIFEST_URL:-https://files.cmux.com/cmux-tui/latest/manifest.json}"
-CACHE_DIR="${CMUX_TUI_CLIENT_CACHE:-$HOME/Library/Caches/cmux/cmux-tui-client}"
-EXPECTED_COMMIT=""
-REQUIRED_CAPABILITIES=()
-while (( $# )); do
-  case "$1" in
-    --manifest-url) shift; MANIFEST_URL="${1:?--manifest-url needs a value}" ;;
-    --cache-dir) shift; CACHE_DIR="${1:?--cache-dir needs a value}" ;;
-    --expected-commit) shift; EXPECTED_COMMIT="${1:?--expected-commit needs a value}" ;;
-    --require-capability) shift; REQUIRED_CAPABILITIES+=("${1:?--require-capability needs a value}") ;;
-    -h|--help) usage; exit 0 ;;
-    -*) echo "unknown option: $1" >&2; usage >&2; exit 64 ;;
-    *) APP_PATH="$1" ;;
+EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+ARCHS="$(lipo -archs "$APP_PATH/Contents/MacOS/$EXECUTABLE")"
+MANIFEST="$REPO_ROOT/cmux-tui/Cargo.toml"
+TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/cmux-tui/target}"
+SLICES=()
+for arch in $ARCHS; do
+  case "$arch" in
+    arm64) triple=aarch64-apple-darwin ;;
+    x86_64) triple=x86_64-apple-darwin ;;
+    *) echo "error: unsupported app architecture: $arch" >&2; exit 1 ;;
   esac
-  shift
-done
-[[ -n "$APP_PATH" && -d "$APP_PATH/Contents" ]] || { echo "error: app bundle not found at '${APP_PATH:-<missing>}'" >&2; exit 1; }
-DEST_DIR="$APP_PATH/Contents/Resources/bin"
-DEST="$DEST_DIR/cmux-tui"
-mkdir -p "$DEST_DIR"
-
-sha256_of() { shasum -a 256 "$1" | awk '{print $1}'; }
-
-verify_probe() {
-  local probe capability
-  probe="$("$DEST" remote-probe --json 2>/dev/null || true)"
-  [[ "$probe" == *'"app":"cmux-tui"'* ]] || {
-    echo "error: installed binary does not probe as cmux-tui: $probe" >&2
-    exit 1
-  }
-  # Bash 3.2 treats an empty array as unset under nounset. Expand no arguments
-  # when there are no requirements, while preserving each supplied capability.
-  for capability in ${REQUIRED_CAPABILITIES[@]+"${REQUIRED_CAPABILITIES[@]}"}; do
-    if ! python3 - "$capability" "$probe" <<'PY'
-import json
-import sys
-
-capability = sys.argv[1]
-probe = json.loads(sys.argv[2])
-raise SystemExit(0 if capability in probe.get("capabilities", []) else 1)
-PY
-    then
-      echo "error: required cmux-tui capability is missing: $capability" >&2
-      exit 1
-    fi
-  done
-}
-
-if [[ -n "${CMUX_TUI_CLIENT_LOCAL:-}" ]]; then
-  [[ -f "$CMUX_TUI_CLIENT_LOCAL" ]] || { echo "error: CMUX_TUI_CLIENT_LOCAL not found: $CMUX_TUI_CLIENT_LOCAL" >&2; exit 1; }
-  install -m 755 "$CMUX_TUI_CLIENT_LOCAL" "$DEST"
-  verify_probe
-  echo "Installed local cmux-tui client at $DEST"
-  exit 0
-fi
-
-mkdir -p "$CACHE_DIR"
-MANIFEST="$CACHE_DIR/manifest.$(printf '%s' "$MANIFEST_URL" | shasum -a 256 | cut -c1-12).json"
-curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 2 "$MANIFEST_URL" -o "$MANIFEST"
-COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$MANIFEST")"
-[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "error: manifest at $MANIFEST_URL has no commit" >&2; exit 1; }
-if [[ -n "$EXPECTED_COMMIT" && "$COMMIT" != "$EXPECTED_COMMIT" ]]; then
-  echo "error: cmux-tui manifest commit mismatch (expected $EXPECTED_COMMIT, got $COMMIT)" >&2
-  exit 1
-fi
-BASE="${MANIFEST_URL%/manifest.json}"
-# The rolling latest/ prefix is rewritten on every main push, so a slice fetched
-# a moment after the manifest can belong to a newer build and fail its checksum.
-# The publisher also stores every build under its commit, immutably; fetch the
-# slices from there whenever the manifest came from the rolling prefix.
-if [[ "$BASE" == */latest ]]; then
-  BASE="${BASE%/latest}/$COMMIT"
-fi
-BUILD_DIR="$CACHE_DIR/$COMMIT"
-mkdir -p "$BUILD_DIR"
-
-fetch_slice() { # <artifact-name> -> path
-  local name="$1" want got out
-  want="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["binaries"].get(sys.argv[2], ""))' "$MANIFEST" "$name")"
-  [[ "$want" =~ ^[0-9a-f]{64}$ ]] || { echo "error: manifest lacks $name" >&2; exit 1; }
-  out="$BUILD_DIR/$name"
-  if [[ -f "$out" ]] && [[ "$(sha256_of "$out")" == "$want" ]]; then
-    printf '%s' "$out"; return
+  if ! rustup target list --installed | grep -Fxq "$triple"; then
+    rustup target add "$triple"
   fi
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 2 "$BASE/$name" -o "$out.tmp"
-  got="$(sha256_of "$out.tmp")"
-  [[ "$got" == "$want" ]] || { echo "error: sha256 mismatch for $name (want $want, got $got)" >&2; rm -f "$out.tmp"; exit 1; }
-  mv -f "$out.tmp" "$out"
-  printf '%s' "$out"
-}
-
-ARM="$(fetch_slice cmux-tui-aarch64-apple-darwin)"
-X64="$(fetch_slice cmux-tui-x86_64-apple-darwin)"
-UNIVERSAL="$BUILD_DIR/cmux-tui-universal"
-if [[ ! -f "$UNIVERSAL" ]]; then
-  lipo -create "$ARM" "$X64" -output "$UNIVERSAL.tmp"
-  mv -f "$UNIVERSAL.tmp" "$UNIVERSAL"
+  # Keep host proc-macro debug info: Rust issue #157750 can produce dylibs
+  # rejected by macOS 27 when stripping it. These build tools are not bundled.
+  CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=1 \
+  CARGO_TARGET_DIR="$TARGET_DIR" MACOSX_DEPLOYMENT_TARGET=14.0 \
+    cargo build --release --locked --manifest-path "$MANIFEST" --target "$triple" -p cmux-tui --bin cmux-tui
+  SLICES+=("$TARGET_DIR/$triple/release/cmux-tui")
+done
+[[ "${#SLICES[@]}" -gt 0 ]] || { echo "error: app has no supported architectures" >&2; exit 1; }
+DEST_DIR="$APP_PATH/Contents/Resources/bin"
+mkdir -p "$DEST_DIR"
+if [[ "${#SLICES[@]}" -eq 1 ]]; then
+  install -m 755 "${SLICES[0]}" "$DEST_DIR/cmux-tui"
+else
+  lipo -create "${SLICES[@]}" -output "$DEST_DIR/cmux-tui"
+  chmod 755 "$DEST_DIR/cmux-tui"
 fi
-install -m 755 "$UNIVERSAL" "$DEST"
-# One arch per invocation: some lipo builds (Xcode 27 beta 4) consume only one
-# arch after -verify_arch and read the second as an extra input file, failing
-# with "requires exactly one input file".
-for arch in arm64 x86_64; do lipo "$DEST" -verify_arch "$arch"; done
-verify_probe
-echo "Installed universal cmux-tui client (commit ${COMMIT:0:10}) at $DEST"
+for arch in $ARCHS; do lipo "$DEST_DIR/cmux-tui" -verify_arch "$arch"; done
+printf 'source-tree=%s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD:cmux-tui)" \
+  > "$APP_PATH/Contents/Resources/cmux-tui-source.txt"
+echo "Installed TUI built from this checkout at $DEST_DIR/cmux-tui"

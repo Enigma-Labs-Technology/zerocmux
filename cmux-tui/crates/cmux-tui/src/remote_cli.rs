@@ -2999,14 +2999,19 @@ mod tests {
         ];
 
         let candidates =
-            resolve_route_candidates(&routes, &BTreeMap::new(), &test_provider_registry()).unwrap();
-
-        assert_eq!(candidates[0].endpoint.as_str(), "iroh://first");
-        assert_eq!(candidates[0].routing[ROUTING_RELAY_URL], "https://first-relay.example");
-        assert_eq!(candidates[0].routing[ROUTING_DIRECT_ADDRS], "127.0.0.1:1111");
-        assert_eq!(candidates[1].endpoint.as_str(), "iroh://second");
-        assert_eq!(candidates[1].routing[ROUTING_RELAY_URL], "https://second-relay.example");
-        assert_eq!(candidates[1].routing[ROUTING_DIRECT_ADDRS], "127.0.0.1:2222");
+            resolve_route_candidates(&routes, &BTreeMap::new(), &test_provider_registry());
+        #[cfg(not(feature = "iroh-transport"))]
+        assert!(candidates.is_err());
+        #[cfg(feature = "iroh-transport")]
+        {
+            let candidates = candidates.unwrap();
+            assert_eq!(candidates[0].endpoint.as_str(), "iroh://first");
+            assert_eq!(candidates[0].routing[ROUTING_RELAY_URL], "https://first-relay.example");
+            assert_eq!(candidates[0].routing[ROUTING_DIRECT_ADDRS], "127.0.0.1:1111");
+            assert_eq!(candidates[1].endpoint.as_str(), "iroh://second");
+            assert_eq!(candidates[1].routing[ROUTING_RELAY_URL], "https://second-relay.example");
+            assert_eq!(candidates[1].routing[ROUTING_DIRECT_ADDRS], "127.0.0.1:2222");
+        }
     }
 
     #[test]

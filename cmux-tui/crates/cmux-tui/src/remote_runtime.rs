@@ -3200,13 +3200,20 @@ mod tests {
         .unwrap();
 
         assert_eq!(candidate.supported_client_auth(), SupportedClientAuthModes::DeviceOnly);
-        for scheme in ["ws", "wss", "relay+ws", "relay+wss", "relay+https", "relay+do", "iroh"] {
+        for scheme in ["ws", "wss", "relay+ws", "relay+wss", "relay+https", "relay+do"] {
             assert_eq!(
                 providers.supported_client_auth(scheme).unwrap(),
                 SupportedClientAuthModes::DeviceOnly,
                 "{scheme}"
             );
         }
+        #[cfg(feature = "iroh-transport")]
+        assert_eq!(
+            providers.supported_client_auth("iroh").unwrap(),
+            SupportedClientAuthModes::DeviceOnly
+        );
+        #[cfg(not(feature = "iroh-transport"))]
+        assert!(providers.supported_client_auth("iroh").is_err());
         assert_eq!(
             providers.supported_client_auth("ssh").unwrap(),
             SupportedClientAuthModes::DeviceOrCarrier
