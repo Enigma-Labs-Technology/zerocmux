@@ -841,6 +841,57 @@ final class CommandPaletteRenameSelectionSettingsTests: XCTestCase {
     }
 }
 
+final class CommandPaletteAuthCommandTests: XCTestCase {
+    func testSignedOutContextShowsSignInCommandOnly() {
+        var context = CommandPaletteContextSnapshot()
+        context.setBool(CommandPaletteContextKeys.authSignedIn, false)
+        context.setBool(CommandPaletteContextKeys.authWorking, false)
+
+        let visibleCommandIds = visibleAuthCommandIds(context)
+
+        XCTAssertEqual(visibleCommandIds, [ContentView.commandPaletteAuthSignInCommandId])
+    }
+
+    func testSignedInContextShowsSignOutCommandOnly() {
+        var context = CommandPaletteContextSnapshot()
+        context.setBool(CommandPaletteContextKeys.authSignedIn, true)
+        context.setBool(CommandPaletteContextKeys.authWorking, false)
+
+        let visibleCommandIds = visibleAuthCommandIds(context)
+
+        XCTAssertEqual(visibleCommandIds, [ContentView.commandPaletteAuthSignOutCommandId])
+    }
+
+    func testWorkingAuthContextHidesSignInAndSignOutCommands() {
+        for signedIn in [false, true] {
+            var context = CommandPaletteContextSnapshot()
+            context.setBool(CommandPaletteContextKeys.authSignedIn, signedIn)
+            context.setBool(CommandPaletteContextKeys.authWorking, true)
+
+            XCTAssertTrue(visibleAuthCommandIds(context).isEmpty)
+        }
+    }
+
+    private func visibleAuthCommandIds(_ context: CommandPaletteContextSnapshot) -> [String] {
+        ContentView.commandPaletteAuthCommandContributions()
+            .filter { $0.when(context) }
+            .map(\.commandId)
+    }
+}
+
+final class CommandPaletteCloudCommandTests: XCTestCase {
+    func testCloudCommandPaletteIncludesCloudWorkspaceActions() {
+        let commandIds = Set(ContentView.commandPaletteCloudCommandContributions().map(\.commandId))
+
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudForkCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudSnapshotCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudRestoreCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPromoteTemplateCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudStatusCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPortsCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudToolsCommandId))
+        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudHandoffCommandId))
+    }
 
 final class CloudVMIdentityMetadataTests: XCTestCase {
     func testCloudVMIdentityIsExplicitMetadata() {
@@ -1141,9 +1192,22 @@ final class RightSidebarModeShortcutHintTests: XCTestCase {
         .switchRightSidebarToSessions,
         .switchRightSidebarToFeed,
         .switchRightSidebarToDock,
+        .switchRightSidebarToMachines,
+    ]
+    /// The digit defaults are positional over the visible tabs, so the
+    /// expectations below pin every mode gate on and clear any tab
+    /// customization; otherwise the test host's own settings would shift the
+    /// digits.
+    private let touchedTabEnvironmentKeys: [String] = [
+        RightSidebarBetaFeatureSettings.feedEnabledKey,
+        RightSidebarBetaFeatureSettings.dockEnabledKey,
+        RightSidebarBetaFeatureSettings.cloudMachinesEnabledKey,
+        RightSidebarTabPreferences.orderKey,
+        RightSidebarTabPreferences.hiddenKey,
     ]
     private var originalSettingsFileStore: KeyboardShortcutSettingsFileStore!
     private var savedShortcutData: [KeyboardShortcutSettings.Action: Data?] = [:]
+    private var savedTabEnvironment: [String: Any?] = [:]
     private var temporaryDirectoryURL: URL?
 
     override func setUpWithError() throws {
@@ -1154,6 +1218,16 @@ final class RightSidebarModeShortcutHintTests: XCTestCase {
                 (action, UserDefaults.standard.data(forKey: action.defaultsKey))
             }
         )
+        savedTabEnvironment = Dictionary(
+            uniqueKeysWithValues: touchedTabEnvironmentKeys.map { key in
+                (key, UserDefaults.standard.object(forKey: key))
+            }
+        )
+        UserDefaults.standard.set(true, forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+        UserDefaults.standard.set(true, forKey: RightSidebarBetaFeatureSettings.dockEnabledKey)
+        UserDefaults.standard.set(true, forKey: RightSidebarBetaFeatureSettings.cloudMachinesEnabledKey)
+        UserDefaults.standard.removeObject(forKey: RightSidebarTabPreferences.orderKey)
+        UserDefaults.standard.removeObject(forKey: RightSidebarTabPreferences.hiddenKey)
 
         let directoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1178,6 +1252,13 @@ final class RightSidebarModeShortcutHintTests: XCTestCase {
                 UserDefaults.standard.removeObject(forKey: action.defaultsKey)
             }
         }
+        for key in touchedTabEnvironmentKeys {
+            if case let .some(.some(value)) = savedTabEnvironment[key] {
+                UserDefaults.standard.set(value, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
         KeyboardShortcutSettings.settingsFileStore = originalSettingsFileStore
         KeyboardShortcutSettings.notifySettingsFileDidChange()
         if let temporaryDirectoryURL {
@@ -1192,6 +1273,7 @@ final class RightSidebarModeShortcutHintTests: XCTestCase {
         XCTAssertEqual(RightSidebarMode.sessions.shortcutAction, .switchRightSidebarToSessions)
         XCTAssertEqual(RightSidebarMode.feed.shortcutAction, .switchRightSidebarToFeed)
         XCTAssertEqual(RightSidebarMode.dock.shortcutAction, .switchRightSidebarToDock)
+        XCTAssertEqual(RightSidebarMode.machines.shortcutAction, .switchRightSidebarToMachines)
     }
 
     func testModeShortcutsUsePrivateControlDigitDefaults() {
@@ -1214,6 +1296,26 @@ final class RightSidebarModeShortcutHintTests: XCTestCase {
         XCTAssertEqual(
             RightSidebarMode.modeShortcut(for: makeKeyDownEvent(key: "5", modifiers: [.control], keyCode: 23)),
             .dock
+        )
+        XCTAssertEqual(
+            RightSidebarMode.modeShortcut(for: makeKeyDownEvent(key: "6", modifiers: [.control], keyCode: 22)),
+            .machines
+        )
+    }
+
+    /// The reported bug: Feed and Dock hidden leaves Cloud as the 4th visible
+    /// tab, so ctrl+4 must select it (the old static table pinned Cloud to
+    /// ctrl+6 while ctrl+4 fell on the invisible Feed and did nothing).
+    func testModeShortcutDigitsFollowVisibleTabPositions() {
+        UserDefaults.standard.set(false, forKey: RightSidebarBetaFeatureSettings.feedEnabledKey)
+        UserDefaults.standard.set(false, forKey: RightSidebarBetaFeatureSettings.dockEnabledKey)
+
+        XCTAssertEqual(
+            RightSidebarMode.modeShortcut(for: makeKeyDownEvent(key: "4", modifiers: [.control], keyCode: 21)),
+            .machines
+        )
+        XCTAssertNil(
+            RightSidebarMode.modeShortcut(for: makeKeyDownEvent(key: "5", modifiers: [.control], keyCode: 23))
         )
     }
 

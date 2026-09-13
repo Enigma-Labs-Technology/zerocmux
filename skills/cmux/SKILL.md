@@ -20,18 +20,12 @@ Use this skill to control non-browser zerocmux topology and routing.
 ## Fast Start
 
 ```bash
-# identify current caller context
-zerocmux identify --json
-
-# list topology
-zerocmux list-windows
-zerocmux list-workspaces
-zerocmux list-panes
+zerocmux identify --json                              # current caller context
+zerocmux list-windows / list-workspaces / list-panes
 zerocmux list-pane-surfaces --pane pane:1
-
-# create/focus/move
 zerocmux new-workspace
 zerocmux new-split right --panel pane:1
+zerocmux new-split down --command "npm run dev"       # new terminal runs the command in a live shell
 zerocmux move-surface --surface surface:7 --pane pane:2 --focus true
 zerocmux split-off --surface surface:7 right
 zerocmux reorder-surface --surface surface:7 --before surface:3
@@ -48,10 +42,11 @@ zerocmux trigger-flash --surface surface:7
 
 Use `zerocmux docs settings` before changing zerocmux-owned settings. It prints the docs URL, schema URL, raw GitHub resources, cmux.json paths, and reload command.
 
-```bash
-zerocmux docs settings
-zerocmux settings path
-```
+## Initial command on new terminals
+
+`new-workspace`, `new-split`, `new-pane`, and `new-surface` accept `--command <text>`. zerocmux starts the terminal's normal interactive shell and delivers the text plus one Enter at spawn time, so the command runs immediately and the shell stays alive after it exits. No follow-up `send` or `send-key enter` is needed, and the text is passed literally (quoting, `&&`, pipes, and `$VARS` are interpreted by the new shell). The flag is terminal-only: it is rejected with `--type browser|simulator|agent-session`, blank text is ignored, and `new-workspace --layout` ignores it because layout surfaces define their own commands. Details: [references/panes-surfaces.md](references/panes-surfaces.md).
+
+## Settings
 
 zerocmux-owned settings live in `~/.config/cmux/cmux.json`. Legacy `~/.config/cmux/settings.json` and `~/Library/Application Support/com.cmuxterm.app/settings.json` files are read only as fallback for missing keys. Before editing, copy any existing `cmux.json` file to a timestamped `.bak` next to it so the user can revert. Edit the user file, then reload:
 

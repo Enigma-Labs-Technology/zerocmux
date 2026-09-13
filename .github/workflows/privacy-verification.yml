@@ -1,0 +1,47 @@
+name: Privacy verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privacy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-package-tests:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Run privacy and local-state tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package in CmuxUpdater CMUXAgentLaunch CmuxCore CmuxGit CmuxSettings CmuxSettingsUI; do
+            swift test --package-path "Packages/macOS/$package"
+          done
+
+  computer-use-privacy:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Install Rust
+        run: ./scripts/install-rust-ci.sh
+      - name: Build the privacy-patched helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/build-cmux-cua.sh --output "$RUNNER_TEMP/zerocmux-cua" --archs "$(uname -m)"
+      - name: Verify compiled policy and unavailable reporting commands
+        env:
+          CUA_PRIVACY_BINARY: ${{ runner.temp }}/zerocmux-cua
+        run: python3 tests/test_cua_bundled_privacy.py

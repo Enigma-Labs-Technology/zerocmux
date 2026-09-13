@@ -408,7 +408,8 @@ extension CLINotifyProcessIntegrationRegressionTests {
             encoding: .utf8
         )
         XCTAssertTrue(config.contains("eventHooks:"), config)
-        XCTAssertTrue(config.contains("zerocmux hooks rovodev prompt-submit"), config)
+        XCTAssertTrue(config.contains(#"hooks enqueue rovodev prompt-submit"#), config)
+        XCTAssertTrue(config.contains(#"CMUX_BUNDLED_CLI_PATH"#), config)
     }
 
     func testSetupHooksRejectsConflictingAgentFilters() throws {

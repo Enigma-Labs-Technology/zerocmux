@@ -6,7 +6,7 @@
 public enum ActionCommand: Codable, Sendable, Equatable {
     /// A zerocmux command: a dispatcher method plus named string params, e.g.
     /// `zerocmux("workspace.select", workspace_id: w.id)` →
-    /// `.cmux("workspace.select", ["workspace_id": "<uuid>"])`. Maps directly
+    /// `.zerocmux("workspace.select", ["workspace_id": "<uuid>"])`. Maps directly
     /// onto the socket command protocol (`{"method","params"}`).
     case zerocmux(method: String, params: [String: String])
     case log(String)

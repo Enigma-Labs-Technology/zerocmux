@@ -29,19 +29,17 @@ snapshot -> refs (e1/e2/...) -> direct action
 
 ## The Snapshot Command
 
-```bash
-zerocmux browser surface:7 snapshot
-zerocmux browser surface:7 snapshot --interactive
-zerocmux browser surface:7 snapshot --interactive --compact --max-depth 3
-```
-
-## Using Refs
+Set `SURFACE` from creation or
+[surface discovery](surface-discovery.md) before taking the snapshot.
 
 ```bash
-zerocmux browser surface:7 click e6
-zerocmux browser surface:7 fill e10 "user@example.com"
-zerocmux browser surface:7 fill e11 "password123"
-zerocmux browser surface:7 click e12
+zerocmux browser --surface "$SURFACE" snapshot
+zerocmux browser --surface "$SURFACE" snapshot --interactive
+zerocmux browser --surface "$SURFACE" snapshot --interactive --compact --max-depth 3
+
+zerocmux browser --surface "$SURFACE" fill e10 "$APP_USERNAME"
+zerocmux browser --surface "$SURFACE" fill e11 "$APP_PASSWORD"
+zerocmux browser --surface "$SURFACE" click e12
 ```
 
 ## Ref lifecycle

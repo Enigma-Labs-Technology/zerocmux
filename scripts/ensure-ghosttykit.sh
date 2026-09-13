@@ -76,7 +76,13 @@ if ! validate_bridge_header "$PROJECT_DIR/ghostty.h"; then
 fi
 
 GHOSTTY_SHA="$(git -C ghostty rev-parse HEAD)"
-GHOSTTY_KEY="$GHOSTTY_SHA"
+GHOSTTYKIT_CRASH_REPORT_SUBDIR="${CMUX_GHOSTTYKIT_CRASH_REPORT_SUBDIR:-zerocmux/crash}"
+# The cache key includes every privacy-relevant build option so a framework built
+# with a different crash handler or localization configuration cannot be reused.
+GHOSTTYKIT_BUILD_FLAVOR="sentry-off-noi18n-crashsubdir-$(printf '%s' "$GHOSTTYKIT_CRASH_REPORT_SUBDIR" | tr '/=' '--')-v2"
+export GHOSTTYKIT_CRASH_REPORT_SUBDIR GHOSTTYKIT_BUILD_FLAVOR
+GHOSTTY_CLEAN_KEY="${GHOSTTY_SHA}-${GHOSTTYKIT_BUILD_FLAVOR}"
+GHOSTTY_KEY="$GHOSTTY_CLEAN_KEY"
 UNTRACKED_FILES="$(git -C ghostty ls-files --others --exclude-standard)"
 if ! git -C ghostty diff --quiet --ignore-submodules=all HEAD -- || [[ -n "$UNTRACKED_FILES" ]]; then
   DIRTY_HASH="$(
@@ -131,7 +137,7 @@ try_fetch_prebuilt_xcframework() {
   # Trust model: only install prebuilt artifacts whose SHA256 is pinned in the
   # reviewed checksum manifest for the current ghostty submodule commit.
   # Unpinned or mismatched artifacts fall back to a local ReleaseFast build.
-  if [[ "$GHOSTTY_KEY" != "$GHOSTTY_SHA" ]]; then
+  if [[ "$GHOSTTY_KEY" != "$GHOSTTY_CLEAN_KEY" ]]; then
     return 1
   fi
   if [[ "${CMUX_GHOSTTYKIT_NO_PREBUILT:-0}" == "1" ]]; then

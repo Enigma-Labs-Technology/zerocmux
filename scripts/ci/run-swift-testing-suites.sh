@@ -84,11 +84,18 @@ while IFS= read -r suite; do
   [ -n "$suite" ] || continue
   echo "swift test $package_path --filter $suite"
   suite_status=0
-  run_suite_attempt "$suite" "$output_dir/$suite-attempt-1.txt" || suite_status=$?
+  # Keep the child from consuming the suite-list pipe that drives this loop.
+  python3 "$script_dir/run_with_timeout.py" \
+    --timeout-seconds "$suite_timeout_seconds" \
+    -- swift test --package-path "$package_path" --filter "$suite" \
+    < /dev/null || suite_status=$?
   if [ "$suite_status" -eq 124 ]; then
     echo "Swift test suite timed out; retrying $suite once." >&2
     suite_status=0
-    run_suite_attempt "$suite" "$output_dir/$suite-attempt-2.txt" || suite_status=$?
+    python3 "$script_dir/run_with_timeout.py" \
+      --timeout-seconds "$suite_timeout_seconds" \
+      -- swift test --package-path "$package_path" --filter "$suite" \
+      < /dev/null || suite_status=$?
   fi
   if [ "$suite_status" -ne 0 ]; then
     exit "$suite_status"

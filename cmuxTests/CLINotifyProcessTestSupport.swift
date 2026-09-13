@@ -9,34 +9,7 @@ extension CLINotifyProcessIntegrationRegressionTests {
         let timedOut: Bool
     }
 
-    final class MockSocketServerState: @unchecked Sendable {
-        private let lock = NSLock()
-        private(set) var commands: [String] = []
-        private var commandTimestamps: [TimeInterval] = []
 
-        func append(_ command: String) {
-            lock.lock()
-            commands.append(command)
-            commandTimestamps.append(ProcessInfo.processInfo.systemUptime)
-            lock.unlock()
-        }
-
-        func snapshot() -> [String] {
-            lock.lock()
-            let value = commands
-            lock.unlock()
-            return value
-        }
-
-        func timestampedSnapshot() -> [(command: String, timestamp: TimeInterval)] {
-            lock.lock()
-            let value = zip(commands, commandTimestamps).map {
-                (command: $0.0, timestamp: $0.1)
-            }
-            lock.unlock()
-            return value
-        }
-    }
 
     struct LoopbackTCPListener {
         let fd: Int32
@@ -199,7 +172,11 @@ extension CLINotifyProcessIntegrationRegressionTests {
         return handled
     }
 
-    func startBridgeReadyThenCloseServer(listenerFD: Int32) -> XCTestExpectation {
+    func startBridgeReadyThenCloseServer(
+        listenerFD: Int32,
+        replay: Data = Data(),
+        liveOutput: Data = Data()
+    ) -> XCTestExpectation {
         let handled = expectation(description: "pty bridge ready close server handled")
         DispatchQueue.global(qos: .userInitiated).async {
             defer { handled.fulfill() }
@@ -226,9 +203,15 @@ extension CLINotifyProcessIntegrationRegressionTests {
                 pending.append(buffer, count: count)
             }
 
-            let payload: [String: Any] = ["type": "ready", "attachment_token": "attach-token"]
+            let payload: [String: Any] = [
+                "type": "ready",
+                "attachment_token": "attach-token",
+                "replay_bytes": replay.count,
+            ]
             guard var data = try? JSONSerialization.data(withJSONObject: payload, options: []) else { return }
             data.append(0x0A)
+            data.append(contentsOf: replay)
+            data.append(contentsOf: liveOutput)
             data.withUnsafeBytes { rawBuffer in
                 guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
                 var remaining = rawBuffer.count
@@ -249,7 +232,55 @@ extension CLINotifyProcessIntegrationRegressionTests {
         return handled
     }
 
-    func startBridgeReadyThenResetAfterClientEOFServer(listenerFD: Int32) -> XCTestExpectation {
+    func startBridgeReadySendingReplayServer(
+        listenerFD: Int32,
+        replay: Data
+    ) -> XCTestExpectation {
+        let handled = expectation(description: "pty bridge replay server handled")
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { handled.fulfill() }
+
+            var clientAddr = sockaddr_in()
+            var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+            let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                    Darwin.accept(listenerFD, sockaddrPtr, &clientAddrLen)
+                }
+            }
+            guard clientFD >= 0 else { return }
+            defer { Darwin.close(clientFD) }
+
+            var pending = Data()
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while !pending.contains(0x0A) {
+                let count = Darwin.read(clientFD, &buffer, buffer.count)
+                if count < 0 {
+                    if errno == EINTR { continue }
+                    return
+                }
+                if count == 0 { return }
+                pending.append(buffer, count: count)
+            }
+
+            let payload: [String: Any] = [
+                "type": "ready",
+                "attachment_token": "attach-token",
+                "replay_bytes": replay.count,
+            ]
+            guard var status = try? JSONSerialization.data(withJSONObject: payload, options: []) else {
+                return
+            }
+            status.append(0x0A)
+            Self.writeAll(fd: clientFD, data: status)
+            Self.writeAll(fd: clientFD, data: replay)
+        }
+        return handled
+    }
+
+    func startBridgeReadyThenResetAfterClientEOFServer(
+        listenerFD: Int32,
+        waitBeforeClientEOF: [DispatchSemaphore] = []
+    ) -> XCTestExpectation {
         let handled = expectation(description: "pty bridge ready reset server handled")
         DispatchQueue.global(qos: .userInitiated).async {
             defer { handled.fulfill() }
@@ -294,6 +325,10 @@ extension CLINotifyProcessIntegrationRegressionTests {
                         return
                     }
                 }
+            }
+
+            for semaphore in waitBeforeClientEOF {
+                guard semaphore.wait(timeout: .now() + 5) == .success else { return }
             }
 
             while true {
@@ -386,7 +421,7 @@ extension CLINotifyProcessIntegrationRegressionTests {
         let stdinPipe = standardInput == nil ? nil : Pipe()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
-        process.environment = environment
+        process.environment = CLIChildEnvironment(appHostEnvironment: ProcessInfo.processInfo.environment).normalizing(environment)
         process.standardInput = stdinPipe ?? FileHandle.nullDevice
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
@@ -438,6 +473,7 @@ extension CLINotifyProcessIntegrationRegressionTests {
                 _ = exitSignal.wait(timeout: .now() + 1)
             }
         }
+
         _ = outputGroup.wait(timeout: .now() + 2)
 
         outputLock.lock()
@@ -454,149 +490,22 @@ extension CLINotifyProcessIntegrationRegressionTests {
         )
     }
 
-    // MARK: - Removed hosted surfaces
-
-    /// zerocmux ships without the hosted web backend, so every verb that used to
-    /// reach it (`auth` / `login` / `logout`, `vm` / `cloud`, and the VM attach
-    /// entrypoints) is answered locally by `hostedServicesUnavailable`. These
-    /// helpers pin that replacement contract for both test files that cover it.
-    static let hostedServicesUnavailableMessage =
-        "Hosted auth and Cloud VM services are not available in zerocmux "
-        + "because the web backend has been removed."
-
-    /// Runs `zerocmux <arguments>` with `CMUX_SOCKET_PATH` pointing at a bound
-    /// but unserved listener, then reports how many request bytes the CLI sent.
-    ///
-    /// No background accept loop and no XCTestExpectation: the property under
-    /// test is that the CLI issues no request, and an expectation that is never
-    /// fulfilled is itself an XCTest failure. The CLI does open the socket while
-    /// resolving its endpoint; what must never happen is a command going out.
-    func runRemovedHostedVerb(
-        _ arguments: [String],
-        socketLabel: String
-    ) throws -> (result: ProcessRunResult, requestBytes: Int) {
-        let cliPath = try bundledCLIPath()
-        let socketPath = makeSocketPath(socketLabel)
-        let listenerFD = try bindUnixSocket(at: socketPath)
-
-        defer {
-            Darwin.close(listenerFD)
-            unlink(socketPath)
-        }
-
-        var environment = ProcessInfo.processInfo.environment
-        environment["CMUX_SOCKET_PATH"] = socketPath
-        environment["CMUX_CLI_SENTRY_DISABLED"] = "1"
-
-        let result = runProcess(
-            executablePath: cliPath,
-            arguments: arguments,
-            environment: environment,
-            timeout: 5
-        )
-        XCTAssertFalse(result.timedOut, result.stderr)
-
-        // The listen backlog holds any completed connect() even though nothing
-        // ever called accept(), so draining it after the CLI exits shows
-        // exactly what it put on the wire. The CLI has exited by now, so a
-        // connection that carried no request reads as immediate EOF.
-        let listenerFlags = fcntl(listenerFD, F_GETFL, 0)
-        _ = fcntl(listenerFD, F_SETFL, listenerFlags | O_NONBLOCK)
-        var requestBytes = 0
-        while true {
-            let acceptedFD = Darwin.accept(listenerFD, nil, nil)
-            guard acceptedFD >= 0 else { break }
-            var buffer = [UInt8](repeating: 0, count: 4_096)
-            while true {
-                let count = Darwin.read(acceptedFD, &buffer, buffer.count)
-                if count > 0 {
-                    requestBytes += count
+    private static func writeAll(fd: Int32, data: Data) {
+        data.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
+            var remaining = rawBuffer.count
+            var cursor = base
+            while remaining > 0 {
+                let written = Darwin.write(fd, cursor, remaining)
+                if written > 0 {
+                    remaining -= written
+                    cursor = cursor.advanced(by: written)
+                } else if written < 0, errno == EINTR {
                     continue
+                } else {
+                    return
                 }
-                if count < 0 && errno == EINTR { continue }
-                break
             }
-            Darwin.close(acceptedFD)
         }
-        return (result, requestBytes)
-    }
-
-    /// Asserts the fork answers `arguments` with the removed-service refusal:
-    /// a recognized verb, a non-zero status carrying the explanation, and no
-    /// socket conversation at all.
-    func assertHostedServicesUnavailable(
-        _ arguments: [String],
-        socketLabel: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws {
-        let (result, requestBytes) = try runRemovedHostedVerb(arguments, socketLabel: socketLabel)
-        let rendered = arguments.joined(separator: " ")
-
-        XCTAssertEqual(
-            result.status,
-            1,
-            "`zerocmux \(rendered)` should fail with the removed-service status, "
-                + "not \(result.status). stderr=\(result.stderr)",
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            result.stderr.contains(Self.hostedServicesUnavailableMessage),
-            "expected the removed-service explanation, got \(result.stderr)",
-            file: file,
-            line: line
-        )
-        // Status 2 is the unknown-command status. Asserting the verb does not
-        // land there is what proves it is still wired up and explained rather
-        // than silently deleted along with the backend.
-        XCTAssertFalse(
-            result.stderr.contains("Unknown command"),
-            "`\(rendered)` must stay a recognized verb, got \(result.stderr)",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            requestBytes,
-            0,
-            "removed hosted verbs must refuse locally without sending any request, sent "
-                + "\(requestBytes) byte(s)",
-            file: file,
-            line: line
-        )
-    }
-
-    // MARK: - SSH startup script decoding
-
-    /// SSH terminal startup commands wrap their real script in nested
-    /// `printf %s <base64>` layers. `VMSSHCommandTests` asserts on the decoded
-    /// script, so unwrap up to four layers before comparing.
-    func decodedReusableShellStartupCommand(_ command: String) -> String {
-        var decoded = command
-        for _ in 0..<4 {
-            let next = decodedSingleEmbeddedStartupScript(decoded)
-            guard next != decoded else {
-                return decoded
-            }
-            decoded = next
-        }
-        return decoded
-    }
-
-    private func decodedSingleEmbeddedStartupScript(_ command: String) -> String {
-        guard let marker = command.range(of: "printf %s ") else {
-            return command
-        }
-        let suffix = command[marker.upperBound...]
-        guard let end = suffix.firstIndex(where: { $0 == " " || $0 == "\n" || $0 == "'" }),
-              end > suffix.startIndex else {
-            return command
-        }
-        let encoded = String(suffix[..<end])
-        guard let data = Data(base64Encoded: encoded),
-              let decoded = String(data: data, encoding: .utf8) else {
-            return command
-        }
-        return decoded
     }
 }

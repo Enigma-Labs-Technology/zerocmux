@@ -12,7 +12,151 @@ import WebKit
 @MainActor
 @Suite(.serialized)
 struct BrowserWebContentProcessTests {
-    private let recoveryURL = URL(string: "data:text/html,zerocmux-recovery")!
+    private let recoveryURL = URL(string: "data:text/html,cmux-recovery")!
+
+    @Test
+    func authCallbackNavigationPolicyIsPureAndFailClosed() {
+        let policy = BrowserAuthCallbackNavigationPolicy(
+            trustedSourcePageOrigin: URL(string: "https://cmux.test")!,
+            callbackScheme: "cmux-dev-test"
+        )
+        let callbackURL = URL(string: "cmux-dev-test://auth-callback?refresh_token=secret")!
+
+        switch policy.disposition(
+            for: callbackURL,
+            targetFrameIsMainFrame: true,
+            isLinkActivated: true,
+            sourceOriginMatches: true
+        ) {
+        case .deliverInApp:
+            break
+        case .block, .passThrough:
+            Issue.record("Trusted user-activated callback should be delivered in-process")
+        }
+
+        for rejectedContext in [
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        ] {
+            switch policy.disposition(
+                for: callbackURL,
+                targetFrameIsMainFrame: rejectedContext.0,
+                isLinkActivated: rejectedContext.1,
+                sourceOriginMatches: rejectedContext.2
+            ) {
+            case .block:
+                break
+            case .deliverInApp, .passThrough:
+                Issue.record("Auth callbacks that fail a trust check must be blocked")
+            }
+        }
+
+        switch policy.disposition(
+            for: URL(string: "https://cmux.test/app-pricing")!,
+            targetFrameIsMainFrame: true,
+            isLinkActivated: true,
+            sourceOriginMatches: true
+        ) {
+        case .passThrough:
+            break
+        case .block, .deliverInApp:
+            Issue.record("Ordinary web navigation should pass through")
+        }
+
+        #expect(BrowserAuthCallbackNavigationPolicy.shouldBlockExternalNavigation(callbackURL))
+        #expect(
+            !BrowserAuthCallbackNavigationPolicy.shouldBlockExternalNavigation(
+                URL(string: "https://cmux.test/app-pricing")!
+            )
+        )
+    }
+
+    @Test
+    func authCallbackConsumptionTerminatesNavigationAndSurfacesDeliveryFailure() async {
+        let policy = BrowserAuthCallbackNavigationPolicy(
+            trustedSourcePageOrigin: URL(string: "https://cmux.test")!,
+            callbackScheme: "cmux-dev-test"
+        )
+        let callbackURL = URL(string: "cmux-dev-test://auth-callback?refresh_token=secret")!
+        let sourcePageURL = URL(
+            string: "https://cmux.test/handler/after-sign-in?web_return_to=%2Fapp-pricing%3Fcmux_app%3D1"
+        )!
+        var cancellationCount = 0
+        var terminalCancellationReportCount = 0
+
+        let completion = await withCheckedContinuation {
+            (continuation: CheckedContinuation<(Bool, URL?), Never>) in
+            let consumed = policy.consume(
+                disposition: .deliverInApp,
+                callbackURL: callbackURL,
+                sourcePageURL: sourcePageURL,
+                cancelNavigation: { cancellationCount += 1 },
+                reportTerminalCancellation: { terminalCancellationReportCount += 1 },
+                deliver: { _ in false },
+                completion: { delivered, returnURL in
+                    continuation.resume(returning: (delivered, returnURL))
+                }
+            )
+            #expect(consumed)
+            #expect(cancellationCount == 1)
+            #expect(terminalCancellationReportCount == 1)
+        }
+
+        #expect(!completion.0)
+        #expect(completion.1?.absoluteString == "https://cmux.test/app-pricing?cmux_app=1")
+
+        let webView = WKWebView()
+        var presentedFailure = false
+        var preparedReturnURL: URL?
+        var loadedReturnURL: URL?
+        BrowserAuthCallbackNavigationPolicy.finishDelivery(
+            delivered: completion.0,
+            returnURL: completion.1,
+            in: webView,
+            prepareReturnRequest: { preparedReturnURL = $0.url },
+            presentAlert: { _, _, completion, _ in
+                presentedFailure = true
+                completion(.alertFirstButtonReturn)
+            },
+            loadRequest: { request, _ in loadedReturnURL = request.url }
+        )
+
+        #expect(presentedFailure)
+        #expect(preparedReturnURL == completion.1)
+        #expect(loadedReturnURL == completion.1)
+    }
+
+    @Test
+    func blockedAuthCallbackConsumptionStillTerminatesNavigation() {
+        let policy = BrowserAuthCallbackNavigationPolicy(
+            trustedSourcePageOrigin: URL(string: "https://cmux.test")!,
+            callbackScheme: "cmux-dev-test"
+        )
+        let callbackURL = URL(string: "cmux-nightly://auth-callback?refresh_token=secret")!
+        var cancellationCount = 0
+        var terminalCancellationReportCount = 0
+
+        let consumed = policy.consume(
+            disposition: .block,
+            callbackURL: callbackURL,
+            sourcePageURL: nil,
+            cancelNavigation: { cancellationCount += 1 },
+            reportTerminalCancellation: { terminalCancellationReportCount += 1 },
+            deliver: { _ in
+                Issue.record("Blocked callbacks must never be delivered")
+                return false
+            },
+            completion: { _, _ in
+                Issue.record("Blocked callbacks must not complete delivery")
+            }
+        )
+
+        #expect(consumed)
+        #expect(cancellationCount == 1)
+        #expect(terminalCancellationReportCount == 1)
+    }
+
     @Test
     func browserPanelsShareDefaultWebsiteDataStore() {
         let first = BrowserPanel(workspaceId: UUID())
@@ -229,34 +373,38 @@ struct BrowserWebContentProcessTests {
             baseURL: URL(string: "https://example.com/")!
         )
 
-        let result = try await webView.evaluateJavaScript(
+        // The bridge's navigator.credentials.get returns a promise, and
+        // evaluateJavaScript cannot serialize a promise (WKError 5). Call the body
+        // as an async function instead, in the page world that holds the override.
+        let result = try await webView.callAsyncJavaScript(
             """
-            (async () => {
-              const handlerVisible = !!(
-                window.webkit &&
-                window.webkit.messageHandlers &&
-                window.webkit.messageHandlers.cmuxWebAuthn &&
-                typeof window.webkit.messageHandlers.cmuxWebAuthn.postMessage === "function"
-              );
-              const credential = await navigator.credentials.get({
-                publicKey: {
-                  challenge: new Uint8Array([1, 2, 3, 4]).buffer,
-                  rpId: "example.com",
-                  userVerification: "preferred"
-                }
-              });
-              return {
-                handlerVisible,
-                credentialId: credential && credential.id,
-                rawIDLength: credential && credential.rawId && credential.rawId.byteLength,
-                signatureLength:
-                  credential &&
-                  credential.response &&
-                  credential.response.signature &&
-                  credential.response.signature.byteLength
-              };
-            })()
-            """
+            const handlerVisible = !!(
+              window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers.cmuxWebAuthn &&
+              typeof window.webkit.messageHandlers.cmuxWebAuthn.postMessage === "function"
+            );
+            const credential = await navigator.credentials.get({
+              publicKey: {
+                challenge: new Uint8Array([1, 2, 3, 4]).buffer,
+                rpId: "example.com",
+                userVerification: "preferred"
+              }
+            });
+            return {
+              handlerVisible,
+              credentialId: credential && credential.id,
+              rawIDLength: credential && credential.rawId && credential.rawId.byteLength,
+              signatureLength:
+                credential &&
+                credential.response &&
+                credential.response.signature &&
+                credential.response.signature.byteLength
+            };
+            """,
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
         ) as? [String: Any]
 
         #expect(result?["handlerVisible"] as? Bool == false)
@@ -518,8 +666,12 @@ struct BrowserWebContentProcessTests {
 
         #expect(popupWebView.navigationDelegate == nil)
         #expect(popupWebView.uiDelegate == nil)
-        #expect(popupWebView.window == nil)
         #expect(!popupWindow.isVisible)
+        // Teardown closes the panel and unregisters the popup from its opener, but
+        // it never detaches the web view, and this test holds the panel alive
+        // (isReleasedWhenClosed is false), so popupWebView.window still points at
+        // the closed panel.
+        #expect(!panel.hiddenWebViewDiscardSnapshot.hasPopups)
     }
 
 }

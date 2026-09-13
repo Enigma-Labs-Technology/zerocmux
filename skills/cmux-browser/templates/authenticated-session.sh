@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SURFACE="${1:-surface:1}"
+if [[ -z "${1:-}" ]]; then
+  printf 'Usage: %s <surface> [state-file] [dashboard-url]\n' "${0##*/}" >&2
+  exit 2
+fi
+
+SURFACE="$1"
 STATE_FILE="${2:-./auth-state.json}"
 DASHBOARD_URL="${3:-https://app.example.com/dashboard}"
 
 if [ -f "$STATE_FILE" ]; then
-  zerocmux browser "$SURFACE" state load "$STATE_FILE"
+  zerocmux browser --surface "$SURFACE" state load "$STATE_FILE"
 fi
 
-zerocmux browser "$SURFACE" goto "$DASHBOARD_URL"
-zerocmux browser "$SURFACE" get url
-zerocmux browser "$SURFACE" wait --load-state complete --timeout-ms 15000
-zerocmux browser "$SURFACE" snapshot --interactive
+zerocmux browser --surface "$SURFACE" goto "$DASHBOARD_URL"
+zerocmux browser --surface "$SURFACE" get url
+zerocmux browser --surface "$SURFACE" wait --load-state complete --timeout-ms 15000
+zerocmux browser --surface "$SURFACE" snapshot --interactive
 
 echo "If redirected to login, complete login flow then run:"
-echo "  zerocmux browser $SURFACE state save $STATE_FILE"
+printf '  zerocmux browser --surface %q state save %q\n' "$SURFACE" "$STATE_FILE"

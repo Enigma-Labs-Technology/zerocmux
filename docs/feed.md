@@ -84,10 +84,10 @@ Installs supported agent hooks whose binaries are on `PATH`. See [Agent hook int
 | CodeBuddy    | `~/.codebuddy/settings.json`              | PreToolUse               |
 | Factory      | `~/.factory/settings.json`                | PreToolUse               |
 | Qoder        | `~/.qoder/settings.json`                  | PreToolUse               |
-| Kimi Code    | `~/.kimi-code/config.toml`                | PreToolUse / PostToolUse / PermissionRequest |
-| Pi           | `~/.pi/agent/extensions/zerocmux-session.ts`  | tool_execution_start / tool_execution_end telemetry |
-| OMP          | `~/.omp/agent/extensions/zerocmux-omp-session.ts` or `$PI_CODING_AGENT_DIR/extensions/zerocmux-omp-session.ts` | lifecycle only           |
-| Campfire     | `~/.campfire/agent/extensions/zerocmux-campfire-session.ts` or `$CAMPFIRE_CODING_AGENT_DIR/extensions/zerocmux-campfire-session.ts` | lifecycle + collaborative notifications |
+| Kimi Code    | `~/.kimi-code/config.toml` or `~/.kimi/config.toml` | PreToolUse / PostToolUse |
+| Pi           | `~/.pi/agent/extensions/cmux-session.ts`  | tool_execution_start / tool_execution_end telemetry |
+| OMP          | `~/.omp/agent/extensions/cmux-omp-session.ts` or `$PI_CODING_AGENT_DIR/extensions/cmux-omp-session.ts` | lifecycle only           |
+| Campfire     | `~/.campfire/agent/extensions/cmux-campfire-session.ts` or `$CAMPFIRE_CODING_AGENT_DIR/extensions/cmux-campfire-session.ts` | lifecycle + collaborative notifications |
 | Rovo Dev     | `~/.rovodev/config.yml`                   | lifecycle only           |
 
 Individual agents:

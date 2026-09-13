@@ -4,6 +4,18 @@ All notable changes to zerocmux are documented here.
 
 ## [Unreleased]
 
+### Changed
+- Integrated upstream cmux through `309513b408` (4,819 commits), preserving the
+  fork's zero-telemetry policy and exclusions for hosted Cloud and mobile services
+- Kept desktop Git, syntax highlighting, agent restore, sidebar, browser, and
+  terminal improvements independent of the excluded service clients
+- Removed analytics, install reporting, and independent updates from the bundled
+  computer-use helper; added source-revision and built-binary privacy checks
+
+### Fixed
+- Sparkle system profiles stay disabled even when an older preference enabled them
+- Optional runtime debug probes write only to the local tagged log
+
 ## [1.2.4] - 2026-08-05
 
 ### Fixed

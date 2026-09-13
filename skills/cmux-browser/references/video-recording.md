@@ -22,17 +22,11 @@ Why: zerocmux browser automation runs on WKWebView, and the agent-browser style 
 ### 1. Step Screenshots
 
 ```bash
-zerocmux browser surface:7 screenshot > /tmp/step1.b64
-zerocmux browser surface:7 click e3 --snapshot-after --json
-zerocmux browser surface:7 screenshot > /tmp/step2.b64
-```
-
-### 2. Snapshot Timeline
-
-```bash
-zerocmux browser surface:7 snapshot --interactive > /tmp/snap-1.txt
-zerocmux browser surface:7 click e3 --snapshot-after --json > /tmp/action-1.json
-zerocmux browser surface:7 snapshot --interactive > /tmp/snap-2.txt
+zerocmux browser --surface "$SURFACE" screenshot > /tmp/step1.b64
+zerocmux browser --surface "$SURFACE" snapshot --interactive > /tmp/snap-1.txt
+zerocmux --json browser --surface "$SURFACE" click e3 --snapshot-after > /tmp/action-1.json
+zerocmux browser --surface "$SURFACE" screenshot > /tmp/step2.b64
+zerocmux browser --surface "$SURFACE" snapshot --interactive > /tmp/snap-2.txt
 ```
 
 Capture before and after each mutating action, add `--snapshot-after` on state-changing clicks/fills/types, and group artifacts by timestamp or run id. Use an external screen recorder when full-motion capture is genuinely required.

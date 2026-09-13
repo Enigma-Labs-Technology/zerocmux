@@ -30,6 +30,8 @@ Why: WKWebView does not provide CDP-style per-context proxy controls equivalent 
 ## Verification
 
 ```bash
-zerocmux browser open https://httpbin.org/ip --json
-zerocmux browser surface:7 get text body
+OPEN_JSON="$(zerocmux --json browser open https://httpbin.org/ip --focus false)"
+SURFACE="$(printf '%s' "$OPEN_JSON" | jq -r '.surface_ref // .surface_id // empty')"
+[ -n "$SURFACE" ] || { printf '%s\n' 'browser open did not return a surface ref' >&2; exit 1; }
+zerocmux browser --surface "$SURFACE" get text body
 ```
