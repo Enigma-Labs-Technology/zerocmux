@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import struct CMUXMobileCore.MobileBrowserStreamCapability
 
 #if canImport(cmux_DEV)
 @testable import cmux_DEV
@@ -135,18 +134,4 @@ struct ManagedPolicyBrowserGateTests {
         }
     }
 
-    @Test func mobileCapabilitiesDropBrowserEntriesWhileDisabled() {
-        let withBrowser = MobileHostService.mobileHostCapabilities(
-            includingWorkspaceChanges: true,
-            includingBrowser: true
-        )
-        let withoutBrowser = MobileHostService.mobileHostCapabilities(
-            includingWorkspaceChanges: true,
-            includingBrowser: false
-        )
-        #expect(withBrowser.contains(MobileBrowserStreamCapability.createIdentifier))
-        #expect(!withoutBrowser.contains(MobileBrowserStreamCapability.identifier))
-        #expect(!withoutBrowser.contains(MobileBrowserStreamCapability.createIdentifier))
-        #expect(withoutBrowser.contains("terminal.bytes.v1"))
-    }
 }

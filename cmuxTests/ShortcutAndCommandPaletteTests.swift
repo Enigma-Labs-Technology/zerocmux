@@ -841,58 +841,6 @@ final class CommandPaletteRenameSelectionSettingsTests: XCTestCase {
     }
 }
 
-final class CommandPaletteAuthCommandTests: XCTestCase {
-    func testSignedOutContextShowsSignInCommandOnly() {
-        var context = CommandPaletteContextSnapshot()
-        context.setBool(CommandPaletteContextKeys.authSignedIn, false)
-        context.setBool(CommandPaletteContextKeys.authWorking, false)
-
-        let visibleCommandIds = visibleAuthCommandIds(context)
-
-        XCTAssertEqual(visibleCommandIds, [ContentView.commandPaletteAuthSignInCommandId])
-    }
-
-    func testSignedInContextShowsSignOutCommandOnly() {
-        var context = CommandPaletteContextSnapshot()
-        context.setBool(CommandPaletteContextKeys.authSignedIn, true)
-        context.setBool(CommandPaletteContextKeys.authWorking, false)
-
-        let visibleCommandIds = visibleAuthCommandIds(context)
-
-        XCTAssertEqual(visibleCommandIds, [ContentView.commandPaletteAuthSignOutCommandId])
-    }
-
-    func testWorkingAuthContextHidesSignInAndSignOutCommands() {
-        for signedIn in [false, true] {
-            var context = CommandPaletteContextSnapshot()
-            context.setBool(CommandPaletteContextKeys.authSignedIn, signedIn)
-            context.setBool(CommandPaletteContextKeys.authWorking, true)
-
-            XCTAssertTrue(visibleAuthCommandIds(context).isEmpty)
-        }
-    }
-
-    private func visibleAuthCommandIds(_ context: CommandPaletteContextSnapshot) -> [String] {
-        ContentView.commandPaletteAuthCommandContributions()
-            .filter { $0.when(context) }
-            .map(\.commandId)
-    }
-}
-
-final class CommandPaletteCloudCommandTests: XCTestCase {
-    func testCloudCommandPaletteIncludesCloudWorkspaceActions() {
-        let commandIds = Set(ContentView.commandPaletteCloudCommandContributions().map(\.commandId))
-
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudForkCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudSnapshotCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudRestoreCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPromoteTemplateCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudStatusCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudPortsCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudToolsCommandId))
-        XCTAssertTrue(commandIds.contains(ContentView.commandPaletteCloudHandoffCommandId))
-    }
-
 final class CloudVMIdentityMetadataTests: XCTestCase {
     func testCloudVMIdentityIsExplicitMetadata() {
         let cloudConfig = WorkspaceRemoteConfiguration(

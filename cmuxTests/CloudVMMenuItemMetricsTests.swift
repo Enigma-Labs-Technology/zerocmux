@@ -11,25 +11,8 @@ import Testing
 /// plane through `vm.cmux_remote_info` → `VMClient.openCmuxRemote`; the control plane
 /// keys the machine host on them, so only well-formed tokens may leave the Mac.
 @Suite struct CloudVMCmuxTuiClientCapabilityTests {
-    @Test func forwardsWellFormedTokensInOrderWithoutDuplicates() {
-        let tokens = VMClient.sanitizedClientCapabilities([
-            "direct-ws-user-agent",
-            " direct-ws-user-agent ",
-            "Bad Token!",
-            "",
-            "UPPER",
-            String(repeating: "x", count: 65),
-            "other-cap",
-        ])
-        #expect(tokens == ["direct-ws-user-agent", "other-cap"])
-    }
 
-    @Test func capsTheListLikeTheServerValidator() {
-        let tokens = VMClient.sanitizedClientCapabilities((0..<20).map { "cap-\($0)" })
-        #expect(tokens.count == 16)
-        #expect(tokens.first == "cap-0")
-        #expect(tokens.last == "cap-15")
-    }
+
 }
 
 /// A cmux-tui workspace has no `remoteConfiguration`; `workspace.cloud_vm_bind` records

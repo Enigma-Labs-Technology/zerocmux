@@ -606,21 +606,10 @@ struct RemoteTmuxMirrorPaneInputMappingTests {
             harness.workspace.panels[containerPanelId] as? TerminalPanel
         )
 
-        #expect(
-            TerminalController.shared.mobileTerminalPanels(in: harness.workspace).map(\.id)
-                == [originalPanePanel.id],
-            "Mobile must enumerate the live pane rather than the closed workspace container"
+        let initialControlTarget = try #require(
+            harness.workspace.controlSocketTerminalTarget(for: originalPanePanel.id)
         )
-        let initialMobileTarget = try #require(
-            TerminalController.shared.mobileResolveWorkspaceAndSurface(
-                params: [
-                    "workspace_id": harness.workspace.id.uuidString,
-                    "surface_id": originalPanePanel.id.uuidString,
-                ],
-                requireTerminal: true
-            )
-        )
-        #expect(initialMobileTarget.surfaceId == originalPanePanel.id)
+        #expect(initialControlTarget.surfaceID == originalPanePanel.id)
         let scriptTab = ScriptTab(windowId: harness.windowId, tabId: harness.workspace.id)
         #expect(scriptTab.terminals.map(\.stableID) == [originalPanePanel.id.uuidString])
 
@@ -671,10 +660,6 @@ struct RemoteTmuxMirrorPaneInputMappingTests {
         let expectedExternalPanelIDs = mirror.paneIDsInOrder.compactMap {
             mirror.panel(forPane: $0)?.id
         }
-        #expect(
-            TerminalController.shared.mobileTerminalPanels(in: harness.workspace).map(\.id)
-                == expectedExternalPanelIDs
-        )
         #expect(scriptTab.terminals.map(\.stableID) == expectedExternalPanelIDs.map(\.uuidString))
         #expect(scriptTab.focusedTerminal?.stableID == expectedInputPanel.id.uuidString)
         mirror.updatePaneCwd(paneId: 5, path: "/srv/project")

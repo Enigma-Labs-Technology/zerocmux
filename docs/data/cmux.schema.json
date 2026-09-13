@@ -1107,7 +1107,7 @@
         },
         "showPullRequests": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Show pull request metadata in the sidebar."
         },
         "watchGitStatus": {
@@ -1431,7 +1431,7 @@
         },
         "showSearchSuggestions": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Show omnibar search suggestions."
         },
         "theme": {

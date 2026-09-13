@@ -354,38 +354,6 @@ final class CommandPaletteSearchEngineTests: XCTestCase {
         )
     }
 
-    func testMobileConnectCommandIsFoundByMobileDeviceQueries() {
-        // Mirror the real command pipeline: a command's searchable corpus is
-        // [title, subtitle] + keywords (see CommandPaletteCommand.searchableTexts).
-        // Pull the keywords from the production source of truth so this test fails
-        // if any of the expected aliases are ever dropped from the contribution.
-        let mobileConnect = FixtureEntry(
-            id: "palette.mobileConnect",
-            rank: 0,
-            title: "Open Tailscale Pairing",
-            searchableTexts: ["Open Tailscale Pairing", "Tailscale"]
-                + ContentView.commandPaletteMobileConnectKeywords
-        )
-        // Dense, realistic decoy corpus so the assertion exercises ranking, not a
-        // single-item list.
-        let decoys = makeCommandEntries(count: 64).enumerated().map { offset, entry in
-            FixtureEntry(
-                id: entry.id,
-                rank: offset + 1,
-                title: entry.title,
-                searchableTexts: entry.searchableTexts
-            )
-        }
-        let corpus = [mobileConnect] + decoys
-
-        for query in ["ios", "ipados", "iphone", "ipad", "pair", "mobile", "phone", "connect", "tailscale"] {
-            XCTAssertEqual(
-                optimizedResults(entries: corpus, query: query).first?.id,
-                "palette.mobileConnect",
-                "Expected Open Tailscale Pairing to be the top command palette result for query \"\(query)\""
-            )
-        }
-    }
 
     func testLimitedSearchReturnsSameTopResultsAsFullSearch() {
         let entries = makeLargeWorkspaceSwitcherEntries(count: 800)

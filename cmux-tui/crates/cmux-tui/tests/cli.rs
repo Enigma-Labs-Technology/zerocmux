@@ -4300,7 +4300,25 @@ fn write_wg_hub_config(dir: &std::path::Path, mode: u32) -> PathBuf {
 #[test]
 fn wg_hub_reports_readiness_and_removes_its_socket_on_sigterm() {
     let dir = TestTempDir::create("wg-hub");
-    let config = write_wg_hub_config(dir.path(), 0o600);
+    use base64::Engine as _;
+    let runtime =
+        tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+    let pair = runtime.block_on(cmux_wg::testing::loopback_pair()).unwrap();
+    let endpoint = pair.server_socket.local_addr().unwrap();
+    let private_key = base64::engine::general_purpose::STANDARD.encode(*pair.client.private_key);
+    let peer_key = base64::engine::general_purpose::STANDARD.encode(pair.client.peer_public_key);
+    let server = runtime.block_on(cmux_wg::WgNet::start(pair.server, pair.server_socket)).unwrap();
+    let config = dir.path().join("wg.conf");
+    // Readiness now requires an authenticated handshake, so use a real local
+    // peer while preserving the hub's route, permission, and cleanup assertions.
+    fs::write(
+        &config,
+        format!(
+            "[Interface]\nPrivateKey = {private_key}\nAddress = 10.200.0.1/32, fdcc::1/128\nMTU = 1200\n\n[Peer]\nPublicKey = {peer_key}\nAllowedIPs = 10.0.0.0/8, fd00::/8\nEndpoint = {endpoint}\n"
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
     let socket = dir.path().join("hub").join("wg.sock");
     let mut child = Command::new(bin())
         .args(["wg", "hub", "--config"])
@@ -4355,6 +4373,7 @@ fn wg_hub_reports_readiness_and_removes_its_socket_on_sigterm() {
     };
     assert!(status.success(), "hub exited unsuccessfully after SIGTERM: {status}");
     assert!(!socket.exists(), "hub must remove its socket on exit");
+    runtime.block_on(server.shutdown());
 }
 
 #[cfg(unix)]

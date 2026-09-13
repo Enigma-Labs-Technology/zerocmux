@@ -1,0 +1,250 @@
+[
+  [
+    "MachinesPanelModelTests.swift",
+    "entire excluded hosted/mobile suite"
+  ],
+  [
+    "ManagedPolicyRemoteControlTests.swift",
+    "entire excluded hosted/mobile suite"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "irohRuntimeStopsWhenACoveringPolicyIsForced"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "phoneFileMovesAreClassifiedForTheFileTransferPolicy"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "waitForMobileHostRoutesForTesting"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileBrowserCreateReturnsStreamableDescriptorAndKeepsMacSelection"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileTerminalCreateSkipsHiddenMacSideWorkAndKeepsMacSelection"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileWorkspaceCreateSkipsHiddenMacSideWorkAndReturnsCreatedScopeOnly"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileTerminalCreateReturnsBeforeStartingGhostty"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileAttachTicketCreateCanFilterRoutesForQRPairing"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileAttachTicketCreateResolvesTerminalIDAcrossWorkspaces"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileAttachTicketCreateWithoutTerminalStaysWorkspaceScoped"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileWorkspaceListRejectsMissingScopedTargets"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileRPCRejectsMalformedWorkspaceIDBeforeImplicitFallback"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileRPCMethodInventoryReturnsUniqueSortedCatalog"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileHostNetworkStatusDoesNotExposePrivateMetadata"
+  ],
+  [
+    "TerminalAndGhosttyTests.swift",
+    "testMobileTerminalInputReportsRejectedClosedSurface"
+  ],
+  [
+    "BrowserPanelTests.swift",
+    "testBackspaceDeliversToShadowRootInput"
+  ],
+  [
+    "BrowserPanelTests.swift",
+    "testBareBackspaceOutsideEditableIsSuppressed"
+  ],
+  [
+    "BrowserPanelTests.swift",
+    "testReplayedClickFocusesEditableUnderTap"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "liftingIrohPolicyDoesNotSpawnAnEndpointWithoutAnAccount"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "concurrentPolicyTransitionsDrainInOrder"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "irohRuntimeAllowsNetworkingWhenNoPolicyIsForced"
+  ],
+  [
+    "ManagedPolicyBrowserGateTests.swift",
+    "mobileCapabilitiesDropBrowserEntriesWhileDisabled"
+  ],
+  [
+    "SocketTerminalBindingRegressionTests.swift",
+    "liveReplacementArtifactScanUsesCanonicalWorkingDirectory"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceGroupUngroupCanRemoveOnlyGeneratedAnchor"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceGroupCreateWithStableIdentityIsIdempotent"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceGroupCreateTreatsBlankTitleAsAutoName"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceGroupCreateUsesTrimmedTitleAndReturnsWorkspaceList"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceGroupDeleteRejectsGroupContainingEveryWorkspace"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceMoveGroupHeaderPreservesGroupMembership"
+  ],
+  [
+    "WorkspaceGroupMoveToMenuStateTests.swift",
+    "mobileWorkspaceMoveBlankGroupIDUngroupsWorkspace"
+  ],
+  [
+    "WorkspaceCreateReviewRegressionTests.swift",
+    "mobilePerformFailureReleasesAcceptedOperationID"
+  ],
+  [
+    "WorkspaceCreateReviewRegressionTests.swift",
+    "windowFinalizationDuringMobileReservationDoesNotConsumeOperationID"
+  ],
+  [
+    "WorkspaceCreateReviewRegressionTests.swift",
+    "windowFinalizationDuringMobilePreparationDoesNotConsumeOperationID"
+  ],
+  [
+    "WorkspaceCreateReviewRegressionTests.swift",
+    "invalidMobileRequestDoesNotConsumeOperationID"
+  ],
+  [
+    "VMTunnelManagerTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "VMTunnelStalenessTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "SocksV5ClientTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "StackAccountAvatarImageLoaderTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "StackAccountAvatarViewTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "IPNetworkPrefixTests.swift",
+    "entire excluded hosted/auth/tunnel suite"
+  ],
+  [
+    "SurfaceCatalogTests.swift",
+    "`Delete workspace kills its viewed terminals first, spares the rest`"
+  ],
+  [
+    "CommandPaletteSearchEngineTests.swift",
+    "testMobileConnectCommandIsFoundByMobileDeviceQueries"
+  ],
+  [
+    "CloudTunnelTestFakes.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "CmuxTuiSurfaceProviderRegistryDiscoveryTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "NewMachineModelTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "NewMachineModelUncappedPlanTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "CloudVMMenuItemMetricsTests.swift",
+    "capsTheListLikeTheServerValidator"
+  ],
+  [
+    "CloudVMMenuItemMetricsTests.swift",
+    "forwardsWellFormedTokensInOrderWithoutDuplicates"
+  ],
+  [
+    "BrowserDiscardedWebViewRestoreRetryTests.swift",
+    "mobileStreamStartRestoresDiscardedWebView"
+  ],
+  [
+    "AppDelegateShortcutRoutingTests.swift",
+    "testCmdWClosesMobilePairingWindowInsteadOfTerminalTab"
+  ],
+  [
+    "CmuxTuiSurfaceProviderRegistryPollingTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "CmuxTuiSurfaceProviderTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "MachineCreateCoordinatorTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "MachinesPanelUncappedPlanTests.swift",
+    "excluded hosted Cloud implementation"
+  ],
+  [
+    "ManagedCapabilityPolicyGateTests.swift",
+    "telemetry opt-in policy removed with reporting service"
+  ],
+  [
+    "ShortcutAndCommandPaletteTests.swift",
+    "hosted Auth and Cloud command suites"
+  ],
+  [
+    "SurfaceCatalogTests.swift",
+    "Delete of an empty workspace closes it and kills nothing"
+  ],
+  [
+    "CmuxConfigContextMenuTests.swift",
+    "testMobilePairingActionMetadataNamesTailscale"
+  ],
+  [
+    "SurfaceSocketCommandTests.swift",
+    "hosted provider success cases replaced by unavailable-command behavior"
+  ],
+  [
+    "BrowserWebContentProcessTests.swift",
+    "three removed hosted-auth callback policy cases"
+  ]
+]

@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import cmux_DEV
+@testable import cmux
 
 /// Regression coverage for https://github.com/manaflow-ai/cmux/issues/9495:
 /// double-clicking a workspace name on the AppKit sidebar list must open a

@@ -9,6 +9,8 @@ and applies the fork policy to the resulting merge tree; historical upstream
 commits are not rewritten. [The commit ledger](incoming-commits.csv) identifies
 182 non-merge commits whose diffs match telemetry-related terms. Its path counts
 are classification aids, not evidence that every historical tree was telemetry-free.
+Path counts describe the initial merge tree before the integration follow-ups;
+relocated desktop code and later test exclusions can change those counts.
 
 ## Policy changes
 
@@ -17,6 +19,8 @@ are classification aids, not evidence that every historical tree was telemetry-f
 - Sparkle system profiles are forced off at settings initialization and feed
   resolution. Update feeds and download fallbacks use the fork's GitHub releases.
   The fork's universal nightly artifact contract is retained.
+- Remote browser suggestions and GitHub PR polling now require explicit settings
+  opt-in. Existing explicit choices remain effective.
 - External debug-log posting remains removed. Optional debug probes use the
   local tagged log only.
 - Hosted Cloud clients, fleet polling, VPN/tunnel services, mobile pairing,
@@ -58,6 +62,17 @@ override checkout. A built-binary check rejects known reporting/update markers
 and requires the compiled zerocmux policy marker. The helper has the fork's own
 TCC bundle identifier, `com.kernelalex.zerocmux.cua`.
 
+## Bundled TUI source
+
+The upstream reload script fetched a rolling binary from `files.cmux.com`, which
+could differ from the audited source. The fork now compiles the bundled TUI from
+this checkout with Cargo's locked dependencies and the app's architectures.
+External manifest and prebuilt-binary overrides are rejected; the app records the
+TUI source tree identity. Iroh stays excluded from the default feature set.
+
+Tagged builds no longer seed hosted API, Iroh broker, or authentication settings.
+The reload script also preserves real directories at its compatibility-link path.
+
 ## Native dependency builds
 
 - Ghostty: `abd40f6e472d57f2d4bb182004bb5f3fac8df961`.
@@ -70,11 +85,26 @@ incompatible cached artifacts cannot be reused.
 
 ## Verification status
 
-This is a draft integration. GhosttyKit and the privacy-patched helper have built;
-the Git and Settings UI packages have compiled independently. App/CLI integration
-build errors are still being resolved. No tests have been run locally.
+The tagged app/CLI, privacy-patched computer-use helper, and source-built TUI
+have compiled. The full `zerocmux-unit` test target also compiled successfully
+with the tagged derived-data path. No tests
+have been run locally; local validation consists of compilation, project wiring,
+and built-artifact inspection.
 
-The repository currently has no registered macOS runner. A GitHub-hosted macOS
-privacy workflow runs package tests and exercises the built helper's reporting
-and update refusals under an outbound-network-denying sandbox. Full CI and
-runtime egress observation are not yet complete; final results belong in the PR.
+GitHub Actions passed 1,256 package tests covering the updater, local agent launch
+and journal, core, Git, settings, and Settings UI. The helper reporting/update
+refusal tests passed inside an outbound-network-denying sandbox. The opt-in
+regression commit failed on exactly the two new assertions before the fix, then
+passed afterward. The TUI binary unit suite passed 1,655 tests (plus 11 hook
+tests); its broader CLI/integration suite is still being verified.
+
+Tests solely for removed hosted/mobile services are excluded alongside their
+implementations; local tests retain coverage through local action paths.
+[The exclusion ledger](excluded-test-paths.json) records that cleanup.
+
+The repository has no registered macOS self-hosted runner. A GitHub-hosted macOS
+privacy workflow supplies the focused package, helper, and TUI lanes. Legacy CI
+lanes requiring upstream runner infrastructure remain separate from these
+results. A known-endpoint scan of the assembled native binaries found no
+PostHog/Sentry ingest or helper install-event markers; that scan is a supporting
+artifact check, not a complete observation of every runtime network path.

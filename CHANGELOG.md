@@ -15,6 +15,10 @@ All notable changes to zerocmux are documented here.
 ### Fixed
 - Sparkle system profiles stay disabled even when an older preference enabled them
 - Optional runtime debug probes write only to the local tagged log
+- Remote browser suggestions and GitHub PR polling require explicit opt-in
+- Tagged builds compile the bundled TUI from reviewed source and no longer seed
+  hosted service settings
+- Reload preserves existing directories at its temporary compatibility-link path
 
 ## [1.2.4] - 2026-08-05
 

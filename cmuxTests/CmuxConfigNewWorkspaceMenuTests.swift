@@ -44,6 +44,16 @@ struct CmuxConfigNewWorkspaceMenuTests {
     }
 
     @MainActor
+    private func withAgentChatUIFlag<T>(_ enabled: Bool, _ body: () throws -> T) throws -> T {
+        let flags = CmuxFeatureFlags.shared
+        let definition = try #require(CmuxFeatureFlags.allFlags.first { $0.key == "agent-chat-ui-enabled-release" })
+        let previous = flags.overrideValue(for: definition)
+        flags.setOverride(enabled, for: definition)
+        defer { flags.setOverride(previous, for: definition) }
+        return try body()
+    }
+
+    @MainActor
     private func contextMenuActionIDs(_ menu: NSMenu) -> [String] {
         menu.items.compactMap { item in
             (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.id
@@ -149,30 +159,29 @@ struct CmuxConfigNewWorkspaceMenuTests {
         )
         defer { appDelegate.unregisterMainWindowContextForTesting(windowId: windowId) }
 
-            let context = try #require(appDelegate.mainWindowContexts.values.first { $0.windowId == windowId })
-            let menu = try #require(appDelegate.makeNewWorkspaceContextMenu(
-                context: context,
-                cmuxConfigStore: store
-            ))
-            #expect(!store.newWorkspaceContextMenuIsConfigured)
-            let newWorkspaceIndex = try #require(menu.items.firstIndex { item in
-                (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.id
-                    == CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID
-            })
-            let agentChatItem = try #require(menu.items.first { item in
-                (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.action == .builtIn(.newAgentChat)
-            })
-            let agentChatIndex = try #require(menu.items.firstIndex { $0 === agentChatItem })
-            let agentChatBox = try #require(agentChatItem.representedObject as? NewWorkspaceContextMenuActionBox)
+        let context = try #require(appDelegate.mainWindowContexts.values.first { $0.windowId == windowId })
+        let menu = try #require(appDelegate.makeNewWorkspaceContextMenu(
+            context: context,
+            cmuxConfigStore: store
+        ))
+        #expect(!store.newWorkspaceContextMenuIsConfigured)
+        let newWorkspaceIndex = try #require(menu.items.firstIndex { item in
+            (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.id
+                == CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID
+        })
+        let agentChatItem = try #require(menu.items.first { item in
+            (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.action == .builtIn(.newAgentChat)
+        })
+        let agentChatIndex = try #require(menu.items.firstIndex { $0 === agentChatItem })
+        let agentChatBox = try #require(agentChatItem.representedObject as? NewWorkspaceContextMenuActionBox)
 
-            #expect(newWorkspaceIndex < agentChatIndex)
-            let target = try #require(agentChatItem.target as? AppDelegate)
-            #expect(target === appDelegate)
-            #expect(agentChatItem.action == Selector(("performNewWorkspaceContextMenuItem:")))
-            #expect(agentChatBox.windowId == windowId)
-            #expect(agentChatBox.action.id == CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID)
-            #expect(agentChatBox.action.title == String(localized: "command.newAgentChat.title", defaultValue: "New agent chat"))
-        }
+        #expect(newWorkspaceIndex < agentChatIndex)
+        let target = try #require(agentChatItem.target as? AppDelegate)
+        #expect(target === appDelegate)
+        #expect(agentChatItem.action == Selector(("performNewWorkspaceContextMenuItem:")))
+        #expect(agentChatBox.windowId == windowId)
+        #expect(agentChatBox.action.id == CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID)
+        #expect(agentChatBox.action.title == String(localized: "command.newAgentChat.title", defaultValue: "New agent chat"))
     }
 
     @MainActor

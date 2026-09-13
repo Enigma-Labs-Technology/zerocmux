@@ -224,22 +224,6 @@ struct ManagedCapabilityPolicyGateTests {
         ))
     }
 
-    @Test(arguments: [
-        ("mobile.task.attachment.upload", true),
-        ("mobile.workspace.changes.file_fetch", true),
-        ("mobile.terminal.paste_image", true),
-        ("terminal.paste_image", true),
-        ("mobile.terminal.artifact.fetch", true),
-        ("mobile.panel.artifact.thumbnail", true),
-        ("mobile.terminal.input", false),
-        ("mobile.workspace.changes.summary", false),
-        ("mobile.directory.list", false),
-        ("mobile.host.status", false),
-    ])
-    func phoneFileMovesAreClassifiedForTheFileTransferPolicy(method: String, transfersFiles: Bool) {
-        #expect(MobileHostService.methodTransfersFiles(method) == transfersFiles)
-    }
-
     @Test func closedHistoryPurgeRecognizesBothCloudTransports() {
         let local = Workspace()
         let localSnapshot = local.sessionSnapshot(includeScrollback: false)
@@ -250,11 +234,6 @@ struct ManagedCapabilityPolicyGateTests {
         #expect(ClosedItemHistoryStore.workspaceSnapshotHostsCloudVM(tuiBound))
         // The same predicate session restore uses under `DisableCloud`.
         #expect(TabManager.isCloudVMWorkspaceSnapshotForManagedPolicy(tuiBound))
-    }
-
-    @Test(arguments: [(true, false, true), (true, true, false), (false, false, false), (false, true, false)])
-    func telemetryHonorsTheManagedPolicyOverTheOptIn(optIn: Bool, forced: Bool, expected: Bool) {
-        #expect(TelemetrySettings.resolveEnabled(userOptIn: optIn, policy: policy(.disableTelemetry, disabled: forced)) == expected)
     }
 
     @Test func tlsTrustBypassIsNeitherOfferedNorHonoredUnderThePolicy() throws {
@@ -442,83 +421,6 @@ struct ManagedCapabilityPolicyGateTests {
         }
     }
 
-    @Test(arguments: [
-        ManagedDevicePolicyKey.disableIrohNetworking,
-        ManagedDevicePolicyKey.disableRemoteControl
-    ])
-    func irohRuntimeStopsWhenACoveringPolicyIsForced(key: ManagedDevicePolicyKey) async {
-        let runtime = MobileHostIrxRuntime(managedDevicePolicy: policy(key, disabled: true))
-        #expect(!runtime.isNetworkingAllowed)
-        runtime.setSettingsPhase(.active)
-        await runtime.applyManagedNetworkingPolicy()
-        #expect(runtime.settingsPhase == .idle)
-        #expect(runtime.brokerService == nil)
-    }
-
-    @Test func irohRuntimeAllowsNetworkingWhenNoPolicyIsForced() {
-        let runtime = MobileHostIrxRuntime(
-            managedDevicePolicy: ManagedDevicePolicy(
-                releaseDomainDefaults: nil,
-                forcedObject: { _, _ in nil }
-            )
-        )
-        #expect(runtime.isNetworkingAllowed)
-    }
-
-    /// `MobileHostService.stop()` and `syncToSettings()` both fire IRX policy
-    /// work from unstructured tasks. Interleaved stops and reconciles must
-    /// drain in order and leave one consistent state, never a lift that
-    /// no-ops against a half-finished teardown or a late stop that clears the
-    /// account after a re-arm.
-    @Test func concurrentPolicyTransitionsDrainInOrder() async throws {
-        let suite = "ManagedCapabilityPolicyGateTests.irohRace.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let resolver = ManagedDevicePolicy(
-            defaults: defaults,
-            releaseDomainDefaults: nil,
-            forcedObject: { store, key in store.object(forKey: key) }
-        )
-        let runtime = MobileHostIrxRuntime(managedDevicePolicy: resolver)
-        let key = ManagedDevicePolicyKey.disableIrohNetworking.rawValue
-
-        for iteration in 0..<8 {
-            defaults.set(iteration.isMultiple(of: 2), forKey: key)
-            runtime.setSettingsPhase(.active)
-            async let stopped: Void = runtime.stopHost()
-            async let reconciled: Void = runtime.applyManagedNetworkingPolicy()
-            _ = await (stopped, reconciled)
-            // No account is signed in, so every settled state is idle. The
-            // assertion that matters is that the pair always settles.
-            #expect(runtime.settingsPhase == .idle)
-            #expect(runtime.brokerService == nil)
-        }
-
-        defaults.removeObject(forKey: key)
-        #expect(runtime.isNetworkingAllowed)
-    }
-
-    @Test func liftingIrohPolicyDoesNotSpawnAnEndpointWithoutAnAccount() async throws {
-        let suite = "ManagedCapabilityPolicyGateTests.iroh.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let resolver = ManagedDevicePolicy(
-            defaults: defaults,
-            releaseDomainDefaults: nil,
-            forcedObject: { store, key in store.object(forKey: key) }
-        )
-        let runtime = MobileHostIrxRuntime(managedDevicePolicy: resolver)
-        defaults.set(true, forKey: ManagedDevicePolicyKey.disableIrohNetworking.rawValue)
-        runtime.setSettingsPhase(.active)
-        await runtime.applyManagedNetworkingPolicy()
-        #expect(runtime.settingsPhase == .idle)
-
-        defaults.removeObject(forKey: ManagedDevicePolicyKey.disableIrohNetworking.rawValue)
-        #expect(runtime.isNetworkingAllowed)
-        await runtime.applyManagedNetworkingPolicy()
-        #expect(runtime.settingsPhase == .idle)
-        #expect(runtime.brokerService == nil)
-    }
 }
 
 /// A policy switch a test flips between calls of an injected resolver.

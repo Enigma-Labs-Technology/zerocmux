@@ -2901,7 +2901,7 @@ import Testing
         XCTAssertFalse(result.stderr.contains("No live cmux socket found"), result.diagnostics)
     }
 
-    @Test func testThemesSetReloadsRunningAppAfterEveryThemeWrite() async throws {
+    func verifyThemesSetReloadsRunningAppAfterEveryThemeWrite() async throws {
         let cliPath = try bundledCLIPath()
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory
@@ -4412,8 +4412,8 @@ import Testing
 
 @Suite(.serialized)
 struct CMUXCLIThemeReloadRegressionTests {
-    @Test func testThemesSetReloadsRunningAppAfterEveryThemeWrite() throws {
-        try CMUXCLIErrorOutputRegressionTests()
+    @Test func testThemesSetReloadsRunningAppAfterEveryThemeWrite() async throws {
+        try await CMUXCLIErrorOutputRegressionTests()
             .verifyThemesSetReloadsRunningAppAfterEveryThemeWrite()
     }
 

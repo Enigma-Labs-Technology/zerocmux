@@ -1507,6 +1507,12 @@ extension CLINotifyProcessIntegrationRegressionTests {
         ))
     }
 
+    private func writeShellFile(at url: URL, lines: [String]) throws {
+        try lines.joined(separator: "\n")
+            .appending("\n")
+            .write(to: url, atomically: true, encoding: .utf8)
+    }
+
     private func waitForSSHSignalLifecycleLog(
         _ url: URL,
         timeout: TimeInterval = 2,
