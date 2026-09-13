@@ -152,7 +152,7 @@ fn nested_non_hyphenated_actions_have_specific_help() {
 }
 
 #[test]
-fn old_action_first_commands_are_all_usage_errors() {
+fn removed_action_first_commands_are_usage_errors() {
     let missing_socket = unique_temp_dir("removed-actions").join("missing.sock");
     for removed in [
         "identify",
@@ -176,7 +176,6 @@ fn old_action_first_commands_are_all_usage_errors() {
         "send-key",
         "copy",
         "ids",
-        "notify",
         "list-agents",
         "report-agent",
         "vt-state",
@@ -235,6 +234,23 @@ fn old_action_first_commands_are_all_usage_errors() {
         assert!(output.stdout.is_empty(), "{removed:?} wrote success output");
         assert!(!output.stderr.is_empty(), "{removed:?} omitted its usage diagnostic");
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn notify_compatibility_command_uses_the_resource_notification_path() {
+    let result = json!({"id": "notification_77777777777777777777777777777777"});
+    let (output, requests) = fake_resource_cli(
+        &["notify", "--workspace", "current", "--title", "Build", "--body", "Ready"],
+        FakeReply::Success(result.clone()),
+    );
+    assert_success(&output);
+    assert_eq!(parse_single_json(&output.stdout), result);
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["operation"], "notification.create");
+    assert_eq!(requests[0]["params"]["title"], "Build");
+    assert_eq!(requests[0]["params"]["body"], "Ready");
+    assert_mutation_has_idempotency_key(&requests[0]);
 }
 
 #[test]
