@@ -45,6 +45,15 @@ impl HeadlessServer {
         config_contents: Option<&str>,
         launch_cwd: Option<&std::path::Path>,
     ) -> Self {
+        Self::start_with_command_configuration(name, config_contents, launch_cwd, |_, _| {})
+    }
+
+    fn start_with_command_configuration(
+        name: &str,
+        config_contents: Option<&str>,
+        launch_cwd: Option<&std::path::Path>,
+        configure: impl FnOnce(&mut Command, &std::path::Path),
+    ) -> Self {
         let dir = unique_temp_dir(name);
         fs::create_dir_all(&dir).unwrap();
         let socket = dir.join("mux.sock");
@@ -68,6 +77,7 @@ impl HeadlessServer {
         if let Some(launch_cwd) = launch_cwd {
             command.current_dir(launch_cwd);
         }
+        configure(&mut command, &dir);
         let child = command.spawn().unwrap();
         let server = Self { child, socket, state, dir };
         server.wait_for_socket();
@@ -212,6 +222,59 @@ impl HeadlessServer {
         Err(format!(
             "close failures: {close_failures:?}; records: {record_paths:?}; live hosts: {live_hosts:?}; live terminals or groups: {live_terminals:?}"
         ))
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn inherited_cloud_settings_do_not_start_hosted_usage_requests() {
+    use std::net::TcpListener;
+
+    for use_env_file in [false, true] {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let mut server = HeadlessServer::start_with_command_configuration(
+            "cloud-usage-privacy",
+            None,
+            None,
+            |command, dir| {
+                command
+                    .env("HOME", dir)
+                    .env("XDG_CONFIG_HOME", dir.join(".config"))
+                    .env("XDG_DATA_HOME", dir.join("data"))
+                    .env_remove("CMUX_CODEROUTER_URL")
+                    .env_remove("CMUX_VM_ID");
+                if use_env_file {
+                    let config_dir = dir.join(".config/cmux");
+                    fs::create_dir_all(&config_dir).unwrap();
+                    fs::write(
+                        config_dir.join("model-plane.env"),
+                        format!(
+                            "export CMUX_CODEROUTER_URL='{origin}'\nexport CMUX_VM_ID='legacy-vm'\n"
+                        ),
+                    )
+                    .unwrap();
+                } else {
+                    command.env("CMUX_CODEROUTER_URL", &origin).env("CMUX_VM_ID", "legacy-vm");
+                }
+            },
+        );
+        // The removed Cloud poller made its first request five seconds after
+        // startup. Observe the actual process beyond that interval for both
+        // legacy configuration sources, without any external network service.
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            assert!(server.child.try_wait().unwrap().is_none(), "privacy fixture exited early");
+            match listener.accept() {
+                Ok(_) => panic!(
+                    "hosted usage request from legacy configuration (env file: {use_env_file})"
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(error) => panic!("observe privacy fixture connection: {error}"),
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
     }
 }
 
