@@ -85,7 +85,7 @@ jobs:
           CMUX_GHOSTTY_VT_ZIG_CPU: baseline
         run: |
           mkdir -p target
-          cargo test --workspace --locked --no-run --message-format=json > target/cargo-test-binaries.jsonl
+          cargo test --workspace --locked --no-run --message-format=json-render-diagnostics > target/cargo-test-binaries.jsonl
           python3 <<'PY'
           import json
           import sys
@@ -336,6 +336,7 @@ jobs:
 
       - name: Install Rust GNU target
         shell: bash
+        working-directory: cmux-tui
         run: |
           rustup target add x86_64-pc-windows-gnu
           printf '%s\n' 'C:\msys64\mingw64\bin' >> "$GITHUB_PATH"

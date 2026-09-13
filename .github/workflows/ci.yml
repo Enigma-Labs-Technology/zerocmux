@@ -22,7 +22,6 @@ jobs:
     outputs:
       macos: ${{ steps.detect.outputs.macos }}
       web: ${{ steps.detect.outputs.web }}
-      go: ${{ steps.detect.outputs.go }}
       agent_session_web: ${{ steps.detect.outputs.agent_session_web }}
     steps:
       - name: Checkout
@@ -43,7 +42,6 @@ jobs:
             {
               echo "macos=true"
               echo "web=true"
-              echo "go=true"
               echo "agent_session_web=true"
             } >> "$GITHUB_OUTPUT"
           }
@@ -272,27 +270,6 @@ jobs:
       - name: Validate test determinism gate
         run: python3 scripts/check-test-determinism.py --strict
 
-  remote-daemon-tests:
-    needs: changes
-    if: ${{ needs.changes.outputs.go == 'true' }}
-    runs-on: runs-on=${{ github.run_id }}-remote-daemon-tests/runner=4cpu-linux-x64/family=c7a+c7i+m7a+m7i/volume=100gb/spot=pco
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version-file: daemon/remote/go.mod
-          cache-dependency-path: daemon/remote/go.sum
-
-      - name: Run remote daemon tests
-        working-directory: daemon/remote
-        run: go test ./...
-
-      - name: Validate remote daemon release assets
-        run: ./tests/test_remote_daemon_release_assets.sh
-
   # Checks for in-app React webviews (currently the diff viewer; more zerocmux
   # React surfaces will live alongside it).
   react-apps-check:
@@ -372,7 +349,7 @@ jobs:
       - linux-preflight
     # !cancelled() disables the implicit success() gate, which GitHub evaluates
     # over the transitive needs chain: linux-preflight runs behind routed linux
-    # jobs that legitimately skip (web/go/agent-session paths), and that
+    # jobs that legitimately skip (web/agent-session paths), and that
     # transitive skip otherwise marks every macOS job skipped even when
     # linux-preflight itself succeeds. Require the direct needs explicitly.
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.linux-preflight.result == 'success' && needs.changes.outputs.macos == 'true' }}
@@ -1117,7 +1094,7 @@ jobs:
       - linux-preflight
     # !cancelled() disables the implicit success() gate, which GitHub evaluates
     # over the transitive needs chain: linux-preflight runs behind routed linux
-    # jobs that legitimately skip (web/go/agent-session paths), and that
+    # jobs that legitimately skip (web/agent-session paths), and that
     # transitive skip otherwise marks every macOS job skipped even when
     # linux-preflight itself succeeds. Require the direct needs explicitly.
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.linux-preflight.result == 'success' && needs.changes.outputs.macos == 'true' }}
@@ -1363,7 +1340,6 @@ jobs:
     needs:
       - changes
       - workflow-guard-tests
-      - remote-daemon-tests
       - react-apps-check
       - diff-sidecar-check
       - agent-session-web-resources
@@ -1383,7 +1359,6 @@ jobs:
           needs = json.loads(os.environ["PREFLIGHT_NEEDS"])
           required = ("changes", "workflow-guard-tests")
           allowed_routed = {
-              "remote-daemon-tests",
               "react-apps-check",
               "diff-sidecar-check",
               "agent-session-web-resources",
@@ -1397,7 +1372,6 @@ jobs:
 
           outputs = needs["changes"].get("outputs", {})
           routed_outputs = {
-              "remote-daemon-tests": "go",
               "react-apps-check": "web",
               "diff-sidecar-check": "macos",
               "agent-session-web-resources": "agent_session_web",
@@ -1420,7 +1394,6 @@ jobs:
               "routes: "
               f"macos={outputs.get('macos')} "
               f"web={outputs.get('web')} "
-              f"go={outputs.get('go')} "
               f"agent_session_web={outputs.get('agent_session_web')}"
           )
           for name, data in sorted(needs.items()):
@@ -1433,7 +1406,7 @@ jobs:
       - linux-preflight
     # !cancelled() disables the implicit success() gate, which GitHub evaluates
     # over the transitive needs chain: linux-preflight runs behind routed linux
-    # jobs that legitimately skip (web/go/agent-session paths), and that
+    # jobs that legitimately skip (web/agent-session paths), and that
     # transitive skip otherwise marks every macOS job skipped even when
     # linux-preflight itself succeeds. Require the direct needs explicitly.
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.linux-preflight.result == 'success' && needs.changes.outputs.macos == 'true' }}
@@ -2385,7 +2358,6 @@ jobs:
     needs:
       - changes
       - workflow-guard-tests
-      - remote-daemon-tests
       - react-apps-check
       - diff-sidecar-check
       - linux-preflight

@@ -1139,6 +1139,7 @@ fn acknowledged_stream_remains_open_past_the_request_timeout() {
     let client =
         cmux::Client::connect(Config::from_socket_path(&path).with_timeout(request_timeout))
             .unwrap();
+    let options = RequestOptions::new().with_timeout(request_timeout).unwrap();
     let mut events = client
         .with_request_options(options, || {
             client.session(SessionId::parse(SESSION).unwrap()).events(EventStreamOptions::default())

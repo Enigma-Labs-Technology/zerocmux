@@ -125,8 +125,8 @@ jobs:
             -p 'test_*.py' \
             -v
 
-      - name: Test SDK publishing workflow guards
-        run: python3 tests/test_tui_publish_workflow_security.py -v
+      # Hosted registry publishers are excluded in zerocmux. Their workflow-
+      # shape suite is recorded in the integration exclusion ledger.
 
       - name: Test PyPI post-upload reconciliation helper
         run: bash tests/test_tui_pypi_postpublish_reconcile.sh
