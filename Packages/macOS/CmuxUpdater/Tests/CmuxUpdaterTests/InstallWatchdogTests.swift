@@ -177,10 +177,9 @@ import Testing
             infoFeedURLProvider: { nightlyFeed }
         )
 
-        // The passive path resolves the build's own nightly channel, for this machine's architecture.
+        // The passive path resolves the fork's published universal nightly feed.
         let resolvedFeed = try #require(driver.resolvedFeedURLString())
-        #expect(resolvedFeed.hasPrefix("https://github.com/manaflow-ai/cmux/releases/download/nightly/appcast-"))
-        #expect(resolvedFeed.hasSuffix("\(UpdateHostArchitecture.current.rawValue).xml"))
+        #expect(resolvedFeed == "https://github.com/Enigma-Labs-Technology/zerocmux/releases/download/nightly/appcast.xml")
 
         let didNotStart = NSError(domain: UpdateStateModel.updateErrorDomain, code: UpdateStateModel.installDidNotStartCode)
         let recoveryURL = try #require(UpdateManualDownloadRecovery().url(

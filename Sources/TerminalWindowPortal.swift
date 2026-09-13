@@ -1033,6 +1033,19 @@ final class WindowTerminalPortal: NSObject {
         }
     }
 
+    private func scheduleImmediateExternalGeometrySynchronize() {
+        guard !hasPendingImmediateExternalGeometrySync else { return }
+        hasPendingImmediateExternalGeometrySync = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hasPendingImmediateExternalGeometrySync = false
+            guard self.hasExternalGeometrySyncScheduled else { return }
+            self.hasExternalGeometrySyncScheduled = false
+            self.pendingExternalGeometrySyncRequiresImmediate = false
+            self.synchronizeAllEntriesFromExternalGeometryChange()
+        }
+    }
+
     @discardableResult
     private func synchronizeLayoutHierarchy() -> Bool {
         // Idempotence at the choke point. Several paths funnel here (window

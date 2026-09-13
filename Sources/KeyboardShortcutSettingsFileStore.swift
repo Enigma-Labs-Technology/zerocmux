@@ -88,7 +88,6 @@ final class CmuxSettingsFileStore {
         userDefaults: UserDefaults = .standard,
         languageSettingsStore: LanguageSettingsStore? = nil,
         passwordStore: SocketControlPasswordStore = SocketControlPasswordStore(),
-        userDefaults: UserDefaults = .standard,
         startWatching: Bool = true,
         isUserDefaultsKeyForcedByProfile: @escaping (String) -> Bool = { key in
             let policy = ManagedDevicePolicy()
@@ -1190,7 +1189,7 @@ final class CmuxSettingsFileStore {
         applyLiveDefaultSideEffects: Bool
     ) {
         var backups = loadBackups()
-        var importedManagedDefaults = Self.loadImportedManagedDefaults()
+        var importedManagedDefaults = importedManagedDefaults
         var sideEffects = ManagedDefaultBatchSideEffects()
         let currentManagedIdentifiers = Set(backups.keys)
         let nextManagedIdentifiers = Set(snapshot.managedUserDefaults.keys)

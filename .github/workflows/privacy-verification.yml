@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for package in CmuxUpdater CMUXAgentLaunch CmuxCore CmuxGit CmuxSettings CmuxSettingsUI; do
+          for package in CmuxUpdater CMUXAgentLaunch CmuxAgentJournal CmuxCore CmuxGit CmuxSettings CmuxSettingsUI; do
             swift test --package-path "Packages/macOS/$package"
           done
 
