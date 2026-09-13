@@ -3259,7 +3259,7 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
         _ snapshot: SessionRestorableAgentSnapshot?,
         panelId: UUID
     ) {
-        restoredAgentSnapshotsByPanelId[panelId] = snapshot
+        restoredAgentLifecycle.setSnapshot(snapshot, panelId: panelId)
     }
 
 

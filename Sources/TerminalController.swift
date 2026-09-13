@@ -392,14 +392,6 @@ class TerminalController {
     ) {
         let uniqueSurfaceIds = Set(surfaceIds)
         socketFastPathState.removeShellActivity(panelIds: uniqueSurfaceIds)
-        if let workspaceID {
-            for surfaceId in uniqueSurfaceIds {
-                panelArtifactAuthorizationStore.invalidate(
-                    workspaceID: workspaceID.uuidString,
-                    surfaceID: surfaceId.uuidString
-                )
-            }
-        }
         for surfaceId in uniqueSurfaceIds {
             v2BrowserFrameSelectorBySurface.removeValue(forKey: surfaceId)
             v2BrowserDialogQueueBySurface.removeValue(forKey: surfaceId)
@@ -1196,37 +1188,6 @@ class TerminalController {
                     await self.v2SurfaceReadSelection(params: parsedRequest.params)
                 }
             }
-            if request.method == "mobile.task.models.list" {
-                return v2AsyncResultCall(
-                    id: request.id,
-                    timeoutSeconds: 7
-                ) {
-                    guard let result = await self.controlCommandCoordinator
-                        .handleMobileHostAsync(
-                            parsedRequest,
-                            context: self
-                        ) else {
-                        return .err(
-                            code: "method_not_found",
-                            message: String(
-                                localized: "socket.error.unknownMethod",
-                                defaultValue: "Unknown method"
-                            ),
-                            data: nil
-                        )
-                    }
-                    switch result {
-                    case .ok(let payload):
-                        return .ok(payload.foundationObject)
-                    case let .err(code, message, data):
-                        return .err(
-                            code: code,
-                            message: message,
-                            data: data?.foundationObject
-                        )
-                    }
-                }
-            }
             if let feedResult = controlCommandCoordinator.handleSocketWorkerFeed(
                 parsedRequest,
                 context: self
@@ -1682,31 +1643,6 @@ class TerminalController {
 #if DEBUG
         case "debug.sidebar.simulate_drag":
             return v2Result(id: request.id, v2DebugSidebarSimulateDrag(params: request.params))
-        case "debug.cloudtree.gallery":
-            // `{style?: id, show?: bool}`: optionally select a Cloud tree style
-            // preset, then (by default) present the side-by-side gallery window.
-            let requestedStyle = (request.params["style"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let requestedStyle, !requestedStyle.isEmpty, CloudTreeStyle.preset(id: requestedStyle) == nil {
-                return v2Error(
-                    id: request.id,
-                    code: "invalid_params",
-                    message: "unknown style '\(requestedStyle)'; expected one of \(CloudTreeStyle.presets.map(\.id).joined(separator: ", "))"
-                )
-            }
-            let show = Self.surfaceBool(request.params["show"]) ?? true
-            let selected: String = v2MainSync {
-                if let requestedStyle, let style = CloudTreeStyle.preset(id: requestedStyle) {
-                    CloudTreeStyleStore.current = style
-                }
-                if show {
-                    CloudTreeStyleGalleryWindowController.shared.show()
-                }
-                return CloudTreeStyleStore.current.id
-            }
-            return v2Ok(id: request.id, result: [
-                "styles": CloudTreeStyle.presets.map(\.id),
-                "selected": selected,
-            ])
         case "debug.window.screenshot":
             let label = (request.params["label"] as? String) ?? ""
             let response = captureScreenshot(label)
@@ -1732,29 +1668,6 @@ class TerminalController {
                 "screenshot_id": parts[0],
                 "path": parts[1],
             ])
-        case "debug.mobile.transport.disconnect":
-            let selectedConnectionID: UUID?
-            if let rawConnectionID = request.params["connection_id"] {
-                guard let value = rawConnectionID as? String,
-                      let parsed = UUID(uuidString: value) else {
-                    return v2Error(
-                        id: request.id,
-                        code: "invalid_params",
-                        message: "connection_id must be a UUID"
-                    )
-                }
-                selectedConnectionID = parsed
-            } else {
-                selectedConnectionID = nil
-            }
-            return v2AsyncResultCall(id: request.id, timeoutSeconds: 10) {
-                let closed = await MobileHostConnectionRegistry.shared
-                    .debugCloseConnections(connectionID: selectedConnectionID)
-                return .ok([
-                    "closed_connection_ids": closed.map(\.uuidString),
-                    "closed_count": closed.count,
-                ])
-            }
 #endif
         case "surface.catalog", "surface.project", "surface.new_terminal":
             return socketWorkerSurfaceResponse(method: request.method, id: request.id, params: request.params)
@@ -1765,7 +1678,7 @@ class TerminalController {
         case let method where method.hasPrefix("aiAccounts."):
             return socketWorkerAIAccountsResponse(method: method, id: request.id, params: request.params)
         case let method where method.hasPrefix("coderouter."):
-            return socketWorkerCoderouterResponse(method: method, id: request.id, params: request.params)
+            return hostedSurfaceUnavailable(id: request.id)
         default:
 #if !DEBUG
             // debug.sidebar.simulate_drag stays policy-listed in Release but
@@ -3228,12 +3141,8 @@ class TerminalController {
             "browser.input_keyboard",
             "browser.input_touch",
         ]
-        if !Self.mobileTaskComposerFeatureEnabled {
-            let taskComposerMethods: Set<String> = [
-                "mobile.task.attachment.upload",
-                "mobile.task.models.list",
-            ]
-            methods.removeAll { taskComposerMethods.contains($0) }
+        methods.removeAll { method in
+            ["mobile.", "vm.", "coderouter.", "aiAccounts.", "remotes."].contains { method.hasPrefix($0) }
         }
         methods.append(contentsOf: ControlCommandExecutionPolicy.simulatorMethods)
 #if DEBUG
@@ -5115,20 +5024,7 @@ class TerminalController {
 
         v2MainSync {
             if action == "cloud_vpn_setup" {
-                // Pane creation belongs to the main actor. The socket focus
-                // policy controls selection, just as for the mobile setup pane.
-                guard let workspace = AppDelegate.shared?.openCloudVPNSetupWorkspace(
-                    preferredTabManager: tabManager,
-                    focus: v2FocusAllowed()
-                ) else {
-                    result = .err(code: "unavailable", message: String(localized: "cloud.vpn.setup.openUnavailable", defaultValue: "Cloud VPN setup is unavailable"), data: nil)
-                    return
-                }
-                result = .ok([
-                    "action": action,
-                    "workspace_id": workspace.id.uuidString,
-                    "workspace_ref": v2Ref(kind: .workspace, uuid: workspace.id)
-                ])
+                result = .err(code: "unavailable", message: VMClientUnavailable.message, data: nil)
                 return
             }
             if action == "mobile_connect" {

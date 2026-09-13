@@ -124,7 +124,6 @@ struct cmuxApp: App {
         let notificationStore = TerminalNotificationStore.shared
         let closedItemHistoryStore = ClosedItemHistoryStore.shared
         let sidebarState = SidebarState()
-        let focusHistoryMenuInvalidator = FocusHistoryMenuInvalidator()
 
         // If invoked with CLI-style arguments (e.g. `zerocmux hooks setup`), exec the
         // bundled CLI at Contents/Resources/bin/zerocmux. The GUI binary and the CLI
@@ -672,9 +671,6 @@ struct cmuxApp: App {
                     }
                     Button("Browser Import Hint Debug…") {
                         BrowserImportHintDebugWindowController.shared.show()
-                    }
-                    Button("Cloud Tree Style Gallery…") {
-                        CloudTreeStyleGalleryWindowController.shared.show()
                     }
                     Button(
                         String(

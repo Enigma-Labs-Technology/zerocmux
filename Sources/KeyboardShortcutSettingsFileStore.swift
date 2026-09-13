@@ -112,7 +112,6 @@ final class CmuxSettingsFileStore {
         // there is no safe way to infer a suite name from a UserDefaults instance.
         self.languageSettingsStore = languageSettingsStore
         self.passwordStore = passwordStore
-        self.userDefaults = userDefaults
         self.onWatchedFileReload = onWatchedFileReload
         importedManagedDefaults = Self.loadImportedManagedDefaults(defaults: userDefaults)
         bootstrapPrimaryTemplateIfNeeded()

@@ -278,7 +278,7 @@ final class HostSettingsActions: SettingsHostActions {
                 RightSidebarTabPreferences.didChangeNotification,
                 KeyboardShortcutSettings.didChangeNotification,
             ].map { name in
-                MobileHostStatusObserverToken(
+                NotificationObserverToken(
                     NotificationCenter.default.addObserver(
                         forName: name,
                         object: nil,

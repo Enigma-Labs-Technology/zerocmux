@@ -6836,7 +6836,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         for key in removedKeys {
             mainWindowContexts.removeValue(forKey: key)
         }
-        rememberRecoverableMainWindowRoute(windowId: removed.windowId, tabManager: removed.tabManager, window: removed.window)
+        rememberRecoverableMainWindowRoute(windowId: removed.windowId, tabManager: removed.tabManager, window: removed.window, sidebarSnapshot: sessionSidebarSnapshot(for: removed))
         notifyMainWindowContextsDidChange()
         return removed
     }
@@ -7660,7 +7660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             } else {
                 state.setVisible(true)
                 state.mode = .customSidebar
-                context?.keyboardFocusCoordinator.rememberRightSidebarMode(.customSidebar)
+                context?.keyboardFocusCoordinator.noteRightSidebarModeSelection(mode: .customSidebar)
             }
             return .ok
         case .getState:
@@ -8654,42 +8654,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         preferredWindow: NSWindow? = nil,
         debugSource: String = "cloudVM.current"
     ) -> Bool {
-        let authState = CloudVMPanelAuthState.resolve(
-            isAuthenticated: auth?.accountFlow.isAuthenticated == true,
-            isWorkingOnAuth: auth?.accountFlow.isWorkingOnAuth == true
-        )
-        guard authState.allowsAuthenticatedOperation else {
-            _ = performAccountSignInWorkspaceAction(
-                preferredWindow: preferredWindow,
-                debugSource: "\(debugSource).auth"
-            )
-            return false
-        }
-        let context = preferredTabManager.flatMap { mainWindowContext(for: $0) }
-            ?? preferredWindow.flatMap { contextForMainWindow($0) }
-            ?? preferredMainWindowContextForWorkspaceCreation(event: nil, debugSource: debugSource)
-        guard let context else {
-            NSSound.beep()
-            return false
-        }
-        guard let vmId = currentCloudVMId(tabManager: context.tabManager) else {
-            presentCloudVMNotice(
-                title: String(localized: "command.cloudVM.current.missing.title", defaultValue: "No Cloud VM Selected"),
-                message: String(localized: "command.cloudVM.current.missing.message", defaultValue: "Select a Cloud VM workspace first, then retry this command."),
-                preferredWindow: resolvedWindow(for: context) ?? preferredWindow
-            )
-            return false
-        }
-        let socketPath = TerminalController.shared.activeSocketPath(
-            preferredPath: SocketControlSettings.socketPath()
-        )
-        return CloudVMActionLauncher.shared.start(
-            socketPath: socketPath,
-            preferredWindow: resolvedWindow(for: context) ?? preferredWindow,
-            arguments: command.arguments(vmId: vmId),
-            successTitle: command.successTitle,
-            presentOutputOnSuccess: command.presentOutputOnSuccess
-        )
+        false
     }
 
     @discardableResult
@@ -8697,37 +8662,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         preferredWindow: NSWindow? = nil,
         debugSource: String = "cloudVM.restore"
     ) -> Bool {
-        let authState = CloudVMPanelAuthState.resolve(
-            isAuthenticated: auth?.accountFlow.isAuthenticated == true,
-            isWorkingOnAuth: auth?.accountFlow.isWorkingOnAuth == true
-        )
-        guard authState.allowsAuthenticatedOperation else {
-            _ = performAccountSignInWorkspaceAction(
-                preferredWindow: preferredWindow,
-                debugSource: "\(debugSource).auth"
-            )
-            return false
-        }
-        let context = preferredWindow.flatMap { contextForMainWindow($0) }
-            ?? preferredMainWindowContextForWorkspaceCreation(event: nil, debugSource: debugSource)
-        guard let context else {
-            NSSound.beep()
-            return false
-        }
-        let window = resolvedWindow(for: context) ?? preferredWindow
-        guard let snapshotId = promptForCloudVMSnapshotId(preferredWindow: window) else {
-            return false
-        }
-        let socketPath = TerminalController.shared.activeSocketPath(
-            preferredPath: SocketControlSettings.socketPath()
-        )
-        return CloudVMActionLauncher.shared.start(
-            socketPath: socketPath,
-            preferredWindow: window,
-            arguments: ["vm", "restore", snapshotId],
-            successTitle: String(localized: "command.cloudVM.restore.result.title", defaultValue: "Cloud VM Restored"),
-            presentOutputOnSuccess: true
-        )
+        false
     }
 
     enum CurrentCloudVMCommand {
@@ -8862,7 +8797,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// attach entrypoint, closed-history record, launcher child, or managed
     /// VPN configuration behind.
     func endCloudVMAccess(reason: CloudVMAccessEndReason) {
-        CloudVMActionLauncher.shared.cancelAllForAuthTransition()
         let disconnectedDetail: String
         switch reason {
         case .signOut:
@@ -8904,8 +8838,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // entrypoint; remove only Cloud VM records while preserving local tab
         // history for the next account/session.
         ClosedItemHistoryStore.shared.removeManagedCloudVMRecords()
-        cloudTunnelAccessDidEnd()
-        NotificationCenter.default.post(name: .cmuxCloudVMAccessDidEnd, object: self)
         _ = saveSessionSnapshotUsingCachedProcessDetectedIndexes(
             includeScrollback: false,
             removeWhenEmpty: false
