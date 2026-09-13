@@ -254,5 +254,13 @@
   [
     "cmux-tui/scripts/test_verify_published_manifest.py",
     "test_machine_manifest_builder_copies_dependency_before_directory_change"
+  ],
+  [
+    "tests/test_tui_publish_workflow_security.py",
+    "CI invocation excluded: removed hosted SDK/TUI registry publisher workflows and upstream workflow source-shape assertions; executable protocol, SDK artifact, digest and provenance suites retained"
+  ],
+  [
+    "cmux-tui/crates/cmux-tui/src/coderouter_usage.rs",
+    "hosted Cloud VM usage poller and its service-only unit tests; replaced by process-level no-egress coverage for legacy environment and model-plane.env settings"
   ]
 ]

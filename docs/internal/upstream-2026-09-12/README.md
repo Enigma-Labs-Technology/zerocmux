@@ -74,6 +74,11 @@ The hosted `cmux-tui-artifacts.yml` publisher and web installer remain excluded.
 Their two source-text tests are recorded in the exclusion ledger; executable
 manifest digest, artifact-set, size, and provenance validation tests are retained.
 
+The bundled TUI no longer starts the hosted Cloud VM usage poller from inherited
+`CMUX_CODEROUTER_URL` / `CMUX_VM_ID` or `model-plane.env` settings. A process-level
+loopback regression observed the unwanted request on the test-only commit
+`72dc73db88` before removal; the test remains to guard both legacy inputs.
+
 Tagged builds no longer seed hosted API, Iroh broker, or authentication settings.
 The reload script also preserves real directories at its compatibility-link path.
 
@@ -112,3 +117,13 @@ lanes requiring upstream runner infrastructure remain separate from these
 results. A known-endpoint scan of the assembled native binaries found no
 PostHog/Sentry ingest or helper install-event markers; that scan is a supporting
 artifact check, not a complete observation of every runtime network path.
+
+## Background CI review
+
+The stale Go daemon lane was removed after upstream deleted its implementation.
+The real CI aggregate remains authoritative; the imported fallback that falsely
+reported successful skipped CI was removed. Windows target setup now selects the
+TUI pinned Rust toolchain, and Cargo build diagnostics remain visible in the
+Valgrind lane. Generated webview assets were rebuilt from the merged sources.
+Obsolete hosted SDK publisher workflow assertions are recorded in the exclusion
+ledger; runtime protocol, SDK artifact, and provenance checks remain enabled.
