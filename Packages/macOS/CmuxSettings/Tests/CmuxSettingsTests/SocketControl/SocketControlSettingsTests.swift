@@ -204,7 +204,7 @@ import CmuxSettings
         var didProbeReclaimability = false
         let path = SocketControlSettings.initialSocketPathBeforeListenerStart(
             preferredPath: SocketControlSettings.stableDefaultSocketPath,
-            bundleIdentifier: "com.cmuxterm.app",
+            bundleIdentifier: "com.kernelalex.zerocmux",
             isDebugBuild: false,
             currentUserID: 501,
             probeStableDefaultPathEntry: { _ in .socket(ownerUserID: 501) },
@@ -221,7 +221,7 @@ import CmuxSettings
     @Test func initialStableLaunchFailsClosedWithoutReclaimabilityProbe() {
         let path = SocketControlSettings.initialSocketPathBeforeListenerStart(
             preferredPath: SocketControlSettings.stableDefaultSocketPath,
-            bundleIdentifier: "com.cmuxterm.app",
+            bundleIdentifier: "com.kernelalex.zerocmux",
             isDebugBuild: false,
             currentUserID: 501,
             probeStableDefaultPathEntry: { _ in .socket(ownerUserID: 501) }

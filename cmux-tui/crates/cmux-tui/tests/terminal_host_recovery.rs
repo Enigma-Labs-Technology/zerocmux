@@ -4012,6 +4012,17 @@ fn wait_for_socket(path: &Path) {
         if transport::connect(path).is_ok() {
             return;
         }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    panic!("server did not accept connections at {}", path.display());
+}
+
+fn wait_for_daemon_socket(path: &Path, child: &mut Child, stderr_log: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        if transport::connect(path).is_ok() {
+            return;
+        }
         if let Some(status) = child.try_wait().unwrap() {
             panic!(
                 "daemon exited with {status} before accepting connections at {}\nstderr:\n{}",

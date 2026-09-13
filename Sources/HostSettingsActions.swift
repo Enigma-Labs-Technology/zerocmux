@@ -114,7 +114,6 @@ final class HostSettingsActions: SettingsHostActions {
         LanguageSettingsStore(defaults: .standard).applyLanguageOverride(.system)
         PaneChromeSettings.notifyDidChange()
         TerminalAdaptiveDefaultThemeSettings.notifyDidChange()
-        PhonePushClient.shared.reloadConfigurationFromDefaults()
         AppDelegate.shared?.reconcileSocketListenerConfiguration(source: "settings.reset_all")
     }
 

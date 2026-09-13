@@ -499,15 +499,6 @@ private final class PopupUIDelegate: BrowserPDFPreviewActionUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         if let url = navigationAction.request.url {
-            if navigationAction.navigationType == .linkActivated,
-               navigationAction.targetFrame?.isMainFrame != false,
-               let appLink = BrowserAppLinkOpenRequest(
-                   url: url,
-                   webOrigin: AuthEnvironment.appSessionHandoffOrigin
-               ),
-               openAppLinkInBrowserSplit?(appLink.destinationURL) == true {
-                return nil
-            }
             switch externalNavigationHandler.openConfiguredExternallyResult(
                 url,
                 navigationType: navigationAction.navigationType,

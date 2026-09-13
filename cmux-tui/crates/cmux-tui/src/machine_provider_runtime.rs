@@ -4456,7 +4456,6 @@ mod tests {
         );
         controller.provider.reconnect_control().unwrap();
         let result = controller.perform_request(provider_connect("PAIR 4J7K")).unwrap();
-        drop(release_retry_connection);
 
         let connected =
             result.ui.snapshot.machines.iter().find(|machine| machine.id == "machine-1").unwrap();

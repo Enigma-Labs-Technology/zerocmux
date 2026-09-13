@@ -355,7 +355,7 @@ private struct NeverDirectoryProbe: GitReferenceStorageProbing {
         environment["GIT_CONFIG_KEY_0"] = "core.worktree"
         environment["GIT_CONFIG_VALUE_0"] = unrelated.path
         let reader = SystemGitReferenceReader(
-            runner: SystemWorkspaceChangesGitRunner(environment: environment)
+            runner: SystemWorkspaceChangesGitRunner(executableURL: fixture.gitExecutableURL, environment: environment)
         )
 
         let snapshot = reader.snapshot(repository: intendedRepository)

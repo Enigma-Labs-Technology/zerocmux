@@ -107,10 +107,12 @@ import Testing
 
         // The complete tree carries a couple of hundred AppKit-backed
         // controls; the pass that blocks window creation may hold only the
-        // sidebar plus the section the window opens on.
+        // sidebar plus the section the window opens on. The fork opens
+        // on App after removing Account, so allow its larger control set
+        // while requiring more than two thirds of the tree to stay deferred.
         #expect(mountedControls > 100, "progressive mounting must still deliver every section (\(mountedControls) controls)")
         #expect(
-            synchronousControls * 4 < mountedControls,
+            synchronousControls * 3 < mountedControls,
             "window creation materialized \(synchronousControls) of \(mountedControls) controls synchronously"
         )
     }
@@ -121,7 +123,7 @@ import Testing
         let window = Self.host(SettingsWindowRoot(runtime: fixture.runtime, mountModel: model), in: fixture)
         defer { window.orderOut(nil) }
 
-        #expect(model.mounted == [.account])
+        #expect(model.mounted == [.app])
 
         // Every run-loop turn may add at most one section: sample the
         // mounted set as the chain advances and reject any jump of two.
@@ -181,16 +183,16 @@ import Testing
 
     @Test func targetedOpenMountsTheTargetSectionFirst() {
         let fixture = Self.makeFixture()
-        let accountWindow = Self.host(SettingsWindowRoot(runtime: fixture.runtime, initialSection: .account), in: fixture)
-        defer { accountWindow.orderOut(nil) }
-        let accountControls = Self.controlCount(in: accountWindow.contentView)
+        let resetWindow = Self.host(SettingsWindowRoot(runtime: fixture.runtime, initialSection: .reset), in: fixture)
+        defer { resetWindow.orderOut(nil) }
+        let resetControls = Self.controlCount(in: resetWindow.contentView)
 
         // `browserImport` is an anchor inside the Browser section, whose
-        // rows carry far more controls than the Account section.
+        // rows carry far more controls than the Reset section.
         let browserWindow = Self.host(SettingsWindowRoot(runtime: fixture.runtime, initialSection: .browserImport), in: fixture)
         defer { browserWindow.orderOut(nil) }
         let browserControls = Self.controlCount(in: browserWindow.contentView)
 
-        #expect(browserControls > accountControls + 10, "browser: \(browserControls), account: \(accountControls)")
+        #expect(browserControls > resetControls + 10, "browser: \(browserControls), reset: \(resetControls)")
     }
 }

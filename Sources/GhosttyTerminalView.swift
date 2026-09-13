@@ -6631,6 +6631,22 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
     }
 
+    private func performStandardTerminalPasteShortcutFallback(for event: NSEvent) -> Bool {
+        let flags = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting([.numericPad, .function, .capsLock])
+        guard flags == [.command] || flags == [.command, .shift] else { return false }
+        guard event.keyCode == 9 || event.charactersIgnoringModifiers?.lowercased() == "v" else {
+            return false
+        }
+
+        let selector: Selector = flags.contains(.shift)
+            ? #selector(pasteAsPlainText(_:))
+            : #selector(paste(_:))
+        _ = perform(selector, with: nil)
+        return true
+    }
+
     override func keyDown(with event: NSEvent) {
         if routeInputDuringClipboardRead(event) { return }
         let cancelledDeferredAdmission = terminalSurface?.didReceiveExplicitInput() == true
@@ -6664,18 +6680,12 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
         let ensureSurfaceStart = ProcessInfo.processInfo.systemUptime
 #endif
-#if DEBUG
-        let dismissNotificationStart = ProcessInfo.processInfo.systemUptime
-#endif
         if let terminalSurface {
             AppDelegate.shared?.tabManager?.dismissNotificationOnDirectInteraction(
                 tabId: terminalSurface.tabId,
                 surfaceId: terminalSurface.id
             )
         }
-#if DEBUG
-        dismissNotificationMs = (ProcessInfo.processInfo.systemUptime - dismissNotificationStart) * 1000.0
-#endif
         guard let surface = ensureSurfaceReadyForInput() else {
             if cancelledDeferredAdmission ||
                 pendingExplicitKeyDownKeyCodes.isEmpty == false ||

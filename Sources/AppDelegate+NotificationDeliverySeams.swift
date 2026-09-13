@@ -146,22 +146,24 @@ extension AppDelegate {
         // remain separate. `surface.send_text` plus a trailing carriage return
         // writes a raw byte, which full-screen agent editors render as a
         // newline instead of treating it as Return.
-        switch TerminalController.shared.v2MobileTerminalPaste(params: [
-            "workspace_id": target.tabId.uuidString,
-            "surface_id": surfaceId.uuidString,
-            "text": text,
-            "submit_key": "return",
-        ]) {
-        case .ok:
-            // The text is applied before the named key. A false `submitted`
-            // flag is still a successful paste, and returning false here would
-            // reopen the notification with text already sitting in the prompt.
-            // Treat a missing field as success for older hosts that only
-            // acknowledged the paste.
-            return true
-        case .err:
+        guard !text.isEmpty,
+              let workspace = surfaceCatalogWorkspaces().first(where: { $0.id == target.tabId }),
+              let terminalTarget = workspace.controlSocketTerminalTarget(for: surfaceId) else {
             return false
         }
+        let submitKey = TextBoxAgentDetection.composedPromptSubmitKey(
+            containsNewline: text.contains("\n") || text.contains("\r"),
+            context: WorkspaceContentView.terminalAgentContext(
+                panel: terminalTarget.panel,
+                workspace: workspace
+            )
+        )
+        guard terminalTarget.sendText(text) else { return false }
+        _ = terminalTarget.sendNamedKeyResult(submitKey)
+        terminalTarget.forceRefresh(reason: "notification.terminalReply")
+        // Once pasted, treat a failed submit key as partial success to avoid
+        // presenting the draft again and duplicating the accepted text.
+        return true
     }
 
     private static func workstreamDecision(from decision: NotificationFeedDecision) -> WorkstreamDecision {

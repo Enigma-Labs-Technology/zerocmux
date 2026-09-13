@@ -148,26 +148,6 @@ extension TerminalController {
         return workspace.controlSocketTerminalInputTarget(for: panelID)
     }
 
-    /// Resolves a mobile terminal request to its structural workspace and
-    /// canonical live socket target in one main-actor hop.
-    func mobileCanonicalTerminalTarget(
-        params: [String: Any]
-    ) -> (
-        workspace: Workspace,
-        surfaceID: UUID,
-        target: ControlTerminalSocketTarget
-    )? {
-        guard let resolved = mobileResolveWorkspaceAndSurface(
-            params: params,
-            requireTerminal: true
-        ), let surfaceID = resolved.surfaceId,
-              let target = resolved.workspace.controlSocketTerminalInputTarget(
-                  for: surfaceID
-              ) else {
-            return nil
-        }
-        return (resolved.workspace, surfaceID, target)
-    }
 }
 
 @MainActor

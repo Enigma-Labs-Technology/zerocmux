@@ -1792,23 +1792,9 @@ final class TerminalNotificationStore: ObservableObject {
             tabId: notification.tabId,
             surfaceId: notification.surfaceId
         )
-        let shouldAttemptPhone = !shouldSuppressExternalDelivery
-            && Self.shouldAttemptPhoneForward(
-                effects: effects,
-                phoneForwardingEnabled: PhonePushClient.shared
-                    .configuration().forwardingEnabled,
-                categoryAllowsDelivery: true
-            )
-        if shouldAttemptPhone {
-            PhonePushClient.shared.forward(
-                notification,
-                badgeCount: indexes.unreadCount
-            )
-        }
         let superseded = supersededPhoneDismissBuffer.flush(forKey: key)
         if !superseded.isEmpty {
-            // The replacement enqueue above and this dismissal enter the same
-            // serial delivery queue synchronously, so ordering already holds.
+            // Only local dismissal bookkeeping remains.
             emitNotificationsDismissed(ids: superseded)
         }
     }
