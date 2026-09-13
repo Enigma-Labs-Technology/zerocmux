@@ -23,9 +23,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          status=0
           for package in CmuxUpdater CMUXAgentLaunch CmuxAgentJournal CmuxCore CmuxGit CmuxSettings CmuxSettingsUI; do
-            swift test --package-path "Packages/macOS/$package"
+            swift test --package-path "Packages/macOS/$package" || status=1
           done
+          exit "$status"
 
   computer-use-privacy:
     runs-on: macos-15

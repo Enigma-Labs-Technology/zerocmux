@@ -51,8 +51,8 @@ import Testing
         return Fixture(runtime: runtime, defaults: UserDefaults(suiteName: suiteName)!)
     }
 
-    static func makeMountModel(initial: SettingsSectionID = .account) -> SettingsSectionMountModel {
-        SettingsSectionMountModel(initial: initial, order: SettingsWindowRoot.mountOrder(cloudAvailable: false))
+    static func makeMountModel(initial: SettingsSectionID = .app) -> SettingsSectionMountModel {
+        SettingsSectionMountModel(initial: initial, order: SettingsWindowRoot.mountOrder())
     }
 
     /// AppKit-backed controls (`NSSwitch`, `NSPopUpButton`, `NSStepper`,

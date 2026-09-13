@@ -72,13 +72,13 @@ struct SettingsSectionMountModelTests {
 
     @Test func sectionsOutsideTheOrderCountAsMounted() {
         let model = SettingsSectionMountModel(initial: .account, order: [.account, .app])
-        #expect(model.isMounted(.cloudMachines))
-        #expect(model.ensureMounted(.cloudMachines))
+        #expect(model.isMounted(.customSidebars))
+        #expect(model.ensureMounted(.customSidebars))
         #expect(model.mounted == [.account])
     }
 
     @Test func initialSectionOutsideTheOrderFallsBackToTheFirstSlot() {
-        let model = SettingsSectionMountModel(initial: .cloudMachines, order: [.account, .app])
+        let model = SettingsSectionMountModel(initial: .customSidebars, order: [.account, .app])
         #expect(model.mounted == [.account])
         #expect(model.sectionDidAppear(.account) == .app)
     }
@@ -122,6 +122,6 @@ struct SettingsSectionMountModelTests {
         #expect(!model.isAbove(.reset, .account))
         #expect(!model.isAbove(.app, .app))
         #expect(model.isAbove(.terminal, .browserImport))
-        #expect(!model.isAbove(.cloudMachines, .reset))
+        #expect(!model.isAbove(.customSidebars, .reset))
     }
 }

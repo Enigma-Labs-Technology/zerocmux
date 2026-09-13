@@ -1686,8 +1686,10 @@
 		D6069002D6069002D6069002 /* MarkdownMermaidZoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6069001D6069001D6069001 /* MarkdownMermaidZoomTests.swift */; };
 		FFC108C8FD07CF3A1C2470E7 /* MarkdownPanel+Focus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95528F9C36831CC37BC6C483 /* MarkdownPanel+Focus.swift */; };
 		D3664002D3664002D3664002 /* MarkdownPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3664001D3664001D3664001 /* MarkdownPanelTests.swift */; };
+		9FE0B26BED2CB5CC2933380F /* MarkdownRemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9255FA2121BB903C41C3F0 /* MarkdownRemoteImageLoader.swift */; };
 		F5168A020000000000000001 /* MarkdownTypographyControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5168A020000000000000002 /* MarkdownTypographyControl.swift */; };
 		F5168A060000000000000001 /* MarkdownTypographyDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5168A060000000000000002 /* MarkdownTypographyDefaults.swift */; };
+		C308CDE878B0279C4C757883 /* MarkdownWebViewerScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01F7191478451AF8DF1DCF8 /* MarkdownWebViewerScheme.swift */; };
 		A42100010000000000000003 /* MemoryPressureAggregatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42100010000000000000004 /* MemoryPressureAggregatePolicy.swift */; };
 		A42100010000000000000005 /* MemoryPressureAggregateSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42100010000000000000006 /* MemoryPressureAggregateSampler.swift */; };
 		7490C0027490C0027490C002 /* MemoryPressureFootprintSampling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7490D0027490D0027490D002 /* MemoryPressureFootprintSampling.swift */; };
@@ -4772,8 +4774,10 @@
 		D6069001D6069001D6069001 /* MarkdownMermaidZoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMermaidZoomTests.swift; sourceTree = "<group>"; };
 		95528F9C36831CC37BC6C483 /* MarkdownPanel+Focus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Panels/MarkdownPanel+Focus.swift"; sourceTree = "<group>"; };
 		D3664001D3664001D3664001 /* MarkdownPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPanelTests.swift; sourceTree = "<group>"; };
+		9D9255FA2121BB903C41C3F0 /* MarkdownRemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Panels/MarkdownRemoteImageLoader.swift"; sourceTree = "<group>"; };
 		F5168A020000000000000002 /* MarkdownTypographyControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/MarkdownTypographyControl.swift; sourceTree = "<group>"; };
 		F5168A060000000000000002 /* MarkdownTypographyDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/MarkdownTypographyDefaults.swift; sourceTree = "<group>"; };
+		C01F7191478451AF8DF1DCF8 /* MarkdownWebViewerScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Panels/MarkdownWebViewerScheme.swift"; sourceTree = "<group>"; };
 		A42100010000000000000004 /* MemoryPressureAggregatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MemoryPressureAggregatePolicy.swift; sourceTree = "<group>"; };
 		A42100010000000000000006 /* MemoryPressureAggregateSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MemoryPressureAggregateSampler.swift; sourceTree = "<group>"; };
 		7490D0027490D0027490D002 /* MemoryPressureFootprintSampling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MemoryPressureFootprintSampling.swift; sourceTree = "<group>"; };
@@ -8372,6 +8376,8 @@
 				3DF502308C36A256E92D266A /* SurfaceResourceDragPayload.swift */,
 				FC6E6EEFB2628CC2C0D41F4B /* SurfaceResourceDragRegistry.swift */,
 				43E18E7960B12C0C7DE199F7 /* ChatSessionKind.swift */,
+				9D9255FA2121BB903C41C3F0 /* MarkdownRemoteImageLoader.swift */,
+				C01F7191478451AF8DF1DCF8 /* MarkdownWebViewerScheme.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -10841,8 +10847,10 @@
 				F5168A030000000000000001 /* MarkdownFontSizeSettings.swift in Sources */,
 				F5168A050000000000000001 /* MarkdownMaxWidthSettings.swift in Sources */,
 				FFC108C8FD07CF3A1C2470E7 /* MarkdownPanel+Focus.swift in Sources */,
+				9FE0B26BED2CB5CC2933380F /* MarkdownRemoteImageLoader.swift in Sources */,
 				F5168A020000000000000001 /* MarkdownTypographyControl.swift in Sources */,
 				F5168A060000000000000001 /* MarkdownTypographyDefaults.swift in Sources */,
+				C308CDE878B0279C4C757883 /* MarkdownWebViewerScheme.swift in Sources */,
 				A42100010000000000000003 /* MemoryPressureAggregatePolicy.swift in Sources */,
 				A42100010000000000000005 /* MemoryPressureAggregateSampler.swift in Sources */,
 				7490C0027490C0027490C002 /* MemoryPressureFootprintSampling.swift in Sources */,

@@ -49,32 +49,32 @@ struct GitHubPullRequestRequestTests {
         let request = try #require(GitHubPullRequestStubURLProtocol.capturedRequests().first)
         #expect(
             request.value(forHTTPHeaderField: "User-Agent")
-                == "cmux-workspace-pr-poller/\(expectedVersion)"
+                == "zerocmux-workspace-pr-poller/\(expectedVersion)"
         )
     }
 
     @Test func userAgentValueAppendsApplicationVersion() {
         #expect(
             GitHubPullRequestRequestCoordinator.userAgentValue(appVersion: "1.2.3")
-                == "cmux-workspace-pr-poller/1.2.3"
+                == "zerocmux-workspace-pr-poller/1.2.3"
         )
     }
 
     @Test func userAgentValueTrimsSurroundingWhitespace() {
         #expect(
             GitHubPullRequestRequestCoordinator.userAgentValue(appVersion: "  1.2.3  ")
-                == "cmux-workspace-pr-poller/1.2.3"
+                == "zerocmux-workspace-pr-poller/1.2.3"
         )
     }
 
     @Test func userAgentValueFallsBackWhenApplicationVersionIsUnavailable() {
         #expect(
             GitHubPullRequestRequestCoordinator.userAgentValue(appVersion: nil)
-                == "cmux-workspace-pr-poller/unknown"
+                == "zerocmux-workspace-pr-poller/unknown"
         )
         #expect(
             GitHubPullRequestRequestCoordinator.userAgentValue(appVersion: "  ")
-                == "cmux-workspace-pr-poller/unknown"
+                == "zerocmux-workspace-pr-poller/unknown"
         )
     }
 

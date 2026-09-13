@@ -3,8 +3,8 @@ import SwiftUI
 import WebKit
 
 struct MarkdownWebRenderer: NSViewRepresentable {
-    static let localImageURLScheme = "zerocmux-local-image"
-    static let remoteImageURLScheme = "zerocmux-remote-image"
+    static let localImageURLScheme = MarkdownWebViewerScheme.localImage
+    static let remoteImageURLScheme = MarkdownWebViewerScheme.remoteImage
 
     let markdown: String
     let theme: MarkdownWebTheme
