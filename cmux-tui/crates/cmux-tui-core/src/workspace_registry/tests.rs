@@ -3848,14 +3848,20 @@ fn batch_terminal_close_rolls_back_every_tab_on_mid_transaction_failure() {
 #[test]
 fn startup_repairs_legacy_terminal_close_dangling_resource_rows() {
     for active_survivor in [None, Some(false), Some(true)] {
-        assert_startup_repairs_legacy_terminal_close(active_survivor);
+        for partial_repair_committed in [false, true] {
+            assert_startup_repairs_legacy_terminal_close(active_survivor, partial_repair_committed);
+        }
     }
 }
 
-fn assert_startup_repairs_legacy_terminal_close(active_survivor: Option<bool>) {
+fn assert_startup_repairs_legacy_terminal_close(
+    active_survivor: Option<bool>,
+    partial_repair_committed: bool,
+) {
     let root = temp_root("terminal-close-dangling-resource");
     let initial_revision = if active_survivor.is_some() { 2 } else { 1 };
-    let repair_revision = initial_revision + 1;
+    let before_reopen_revision = initial_revision + u64::from(partial_repair_committed);
+    let repair_revision = before_reopen_revision + 1;
     {
         let mut registry = WorkspaceRegistry::open(&root, "session").unwrap();
         commit_terminal_topology(&mut registry, "seed-terminal-close-dangling");
@@ -3914,6 +3920,50 @@ fn assert_startup_repairs_legacy_terminal_close(active_survivor: Option<bool>) {
             )
             .unwrap();
         assert_eq!(live_terminals, if active_survivor.is_some() { 2 } else { 1 });
+        if partial_repair_committed {
+            // Older startup repair committed terminal and identity tombstones before
+            // validation rejected the still-live tabs. Persist that failed-open state.
+            let tx = registry.connection.transaction().unwrap();
+            let public_id = terminal_resource(TERMINAL_ONE);
+            let sqlite_revision = i64::try_from(before_reopen_revision).unwrap();
+            tx.execute(
+                "UPDATE resource_terminals
+                 SET lifecycle = 'tombstoned', updated_revision = ?1, deleted_revision = ?1
+                 WHERE public_id = ?2",
+                params![sqlite_revision, public_id.as_str()],
+            )
+            .unwrap();
+            tx.execute(
+                "UPDATE resource_identities
+                 SET updated_revision = ?1, deleted_revision = ?1
+                 WHERE public_id = ?2",
+                params![sqlite_revision, public_id.as_str()],
+            )
+            .unwrap();
+            tx.execute(
+                "UPDATE meta SET value = ?1 WHERE key = 'resource_revision'",
+                [before_reopen_revision.to_string()],
+            )
+            .unwrap();
+            append_resource_journal_record(
+                &tx,
+                before_reopen_revision,
+                initial_revision,
+                "cmux-startup-repair",
+                &format!("terminal-close-repair-{before_reopen_revision}"),
+                "terminal.close.repair",
+                None,
+                &json!({"repaired_terminals": [public_id]}),
+                &json!([{
+                    "kind": "delete",
+                    "sequence": 0,
+                    "resource": "terminal",
+                    "id": public_id,
+                }]),
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
     }
 
     let reopened = WorkspaceRegistry::open(&root, "session").unwrap();
@@ -3932,7 +3982,7 @@ fn assert_startup_repairs_legacy_terminal_close(active_survivor: Option<bool>) {
         topology.panes[0].active_tab,
         active_survivor.map(|keep_active| tab_id(if keep_active { 3 } else { 2 }))
     );
-    let events = reopened.resource_events_after(initial_revision).unwrap();
+    let events = reopened.resource_events_after(before_reopen_revision).unwrap();
     assert_eq!(events.batches.len(), 1);
     assert_eq!(events.batches[0].revision, repair_revision);
     assert_eq!(events.batches[0].changes[0]["resource"], "terminal");
@@ -3961,7 +4011,7 @@ fn assert_startup_repairs_legacy_terminal_close(active_survivor: Option<bool>) {
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .unwrap();
-    assert!(resource_deleted.is_some());
+    assert_eq!(resource_deleted, Some(i64::try_from(repair_revision).unwrap()));
     assert_eq!(identity_deleted, resource_deleted);
     drop(reopened);
     let reopened_again = WorkspaceRegistry::open(&root, "session").unwrap();
