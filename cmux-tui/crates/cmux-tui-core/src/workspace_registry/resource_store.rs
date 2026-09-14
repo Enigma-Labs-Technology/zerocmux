@@ -2525,8 +2525,8 @@ pub(super) fn complete_terminal_close_patch(
     Ok((patch, deltas))
 }
 
-/// Repair terminal rows left live by older close implementations. This is a
-/// load-time migration for the durable invariant: a terminal resource is live
+/// Repair terminal rows and tab references left live by older close implementations.
+/// This is a load-time migration for the durable invariant: a terminal resource is live
 /// only while both its host and identity ledger are live. The repair advances
 /// the resource revision and emits a resource journal batch so revision-based
 /// consumers observe the tombstones after restart.
@@ -2544,12 +2544,33 @@ pub(super) fn repair_dangling_terminal_resources(
                         h.terminal_id IS NULL OR h.lifecycle = 'tombstoned'
                     ))
                 OR (rt.deleted_revision IS NULL AND ri.deleted_revision IS NOT NULL)
-                OR (rt.deleted_revision IS NOT NULL AND ri.deleted_revision IS NULL)",
+                OR (rt.deleted_revision IS NOT NULL AND ri.deleted_revision IS NULL)
+                OR (rt.deleted_revision IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM resource_tabs t
+                    WHERE t.content_id = rt.public_id AND t.deleted_revision IS NULL
+                ))",
         )?;
         statement.query_map([], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?
     };
     if dangling.is_empty() {
         return Ok(());
+    }
+
+    let mut affected_panes = HashSet::new();
+    {
+        let mut statement = transaction.prepare(
+            "SELECT DISTINCT p.public_id
+             FROM resource_panes p
+             JOIN resource_tabs t ON t.pane_id = p.public_id
+             WHERE t.content_id = ?1 AND t.deleted_revision IS NULL
+               AND p.deleted_revision IS NULL",
+        )?;
+        for public_id in &dangling {
+            let panes = statement
+                .query_map([public_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            affected_panes.extend(panes);
+        }
     }
 
     let repair_revision = current_revision
@@ -2573,6 +2594,8 @@ pub(super) fn repair_dangling_terminal_resources(
     );
 
     for public_id in &dangling {
+        tombstone_resource_terminal(transaction, public_id, None, sqlite_revision)?;
+        // Align both ledgers even when an older failed launch already tombstoned one or both.
         transaction.execute(
             "UPDATE resource_terminals
              SET lifecycle = 'tombstoned', updated_revision = ?1, deleted_revision = ?1
@@ -2585,6 +2608,31 @@ pub(super) fn repair_dangling_terminal_resources(
              WHERE public_id = ?2",
             params![sqlite_revision, public_id],
         )?;
+    }
+    // Normal terminal-close patches supply tab order and active-tab changes.
+    // Startup has no patch, so restore those invariants in the affected panes.
+    for pane_id in affected_panes {
+        let pane_id = PanePublicId::parse(pane_id)?;
+        let tab_ids = {
+            let mut statement = transaction.prepare(
+                "SELECT public_id FROM resource_tabs
+                 WHERE pane_id = ?1 AND deleted_revision IS NULL ORDER BY position",
+            )?;
+            statement
+                .query_map([pane_id.as_str()], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(TabPublicId::parse)
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        set_resource_tab_order(transaction, &pane_id, &tab_ids, sqlite_revision)?;
+        if let Some(first_tab_id) = tab_ids.first() {
+            transaction.execute(
+                "UPDATE resource_panes SET active_tab_id = ?1, updated_revision = ?2
+                 WHERE public_id = ?3 AND deleted_revision IS NULL AND active_tab_id IS NULL",
+                params![first_tab_id.as_str(), sqlite_revision, pane_id.as_str()],
+            )?;
+        }
     }
     transaction.execute(
         "UPDATE meta SET value = ?1 WHERE key = 'resource_revision'",

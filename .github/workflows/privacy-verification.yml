@@ -132,3 +132,5 @@ jobs:
         run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib unix_process_scope::tests
       - name: Test legacy terminal close startup recovery
         run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib workspace_registry::tests::startup_repairs_legacy_terminal_close_dangling_resource_rows -- --exact
+      - name: Test complete core regression suite
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib

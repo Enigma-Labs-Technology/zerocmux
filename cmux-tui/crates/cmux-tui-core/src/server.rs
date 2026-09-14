@@ -13653,20 +13653,20 @@ mod tests {
     fn serve_paused_preserves_explicit_socket_parent_permissions() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = TestSocketDir::create("explicit-runtime-directory");
-        let directory = root.path().join("socket-parent");
+        let root = TestSocketDir::create("perm");
+        let directory = root.path().join("p");
         std::fs::create_dir(&directory).unwrap();
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let pending = serve_paused(test_mux(), Some(directory.join("mux.sock"))).unwrap();
+        let pending = serve_paused(test_mux(), Some(directory.join("m.sock"))).unwrap();
         drop(pending);
         assert_eq!(std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777, 0o755);
     }
 
     #[test]
     fn serve_paused_creates_missing_explicit_socket_parent() {
-        let root = TestSocketDir::create("explicit-runtime-directory-missing");
-        let directory = root.path().join("missing").join("nested");
-        let socket = directory.join("mux.sock");
+        let root = TestSocketDir::create("mkdir");
+        let directory = root.path().join("m").join("n");
+        let socket = directory.join("m.sock");
         let pending = serve_paused(test_mux(), Some(socket.clone())).unwrap();
         drop(pending);
         assert!(directory.is_dir());
