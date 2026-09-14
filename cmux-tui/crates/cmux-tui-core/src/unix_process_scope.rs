@@ -1141,7 +1141,8 @@ fn scan_registered_processes(
                 else {
                     continue;
                 };
-                let Ok(fdinfo) = std::fs::read_to_string(process.join("fdinfo").join(fd.to_string()))
+                let Ok(fdinfo) =
+                    std::fs::read_to_string(process.join("fdinfo").join(fd.to_string()))
                 else {
                     continue;
                 };
@@ -1647,7 +1648,9 @@ mod tests {
                 loop {
                     // SAFETY: this probe is the sole wait owner for its child.
                     let result = unsafe { libc::waitpid(self.pid, &mut status, 0) };
-                    if result >= 0 || io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+                    if result >= 0
+                        || io::Error::last_os_error().kind() != io::ErrorKind::Interrupted
+                    {
                         break;
                     }
                 }
@@ -1713,7 +1716,11 @@ mod tests {
         assert!(owned_after_exec, "an explicitly inherited marker must remain owned after exec");
         assert!(inherited_after_exec, "inherited marker ownership must survive exec");
         assert_eq!(owned_signal, Some(libc::SIGKILL), "the scope root must be terminated");
-        assert_eq!(inherited_signal, Some(libc::SIGKILL), "tracked inherited children must terminate");
+        assert_eq!(
+            inherited_signal,
+            Some(libc::SIGKILL),
+            "tracked inherited children must terminate"
+        );
         assert!(!unrelated_owned_after_exec, "exec must drop the unrelated child's marker copy");
         assert!(
             !unrelated_owned_before_exec,
