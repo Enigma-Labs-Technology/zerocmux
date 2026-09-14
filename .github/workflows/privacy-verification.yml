@@ -3,6 +3,11 @@ name: Privacy verification
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      repeat_tab_drag:
+        description: Repeat the pending pointer-map tab drag regression 100 times
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -63,6 +68,16 @@ jobs:
         run: ./scripts/install-rust-ci.sh
       - name: Test local TUI integration
         run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui
+      - name: Repeat pending pointer-map tab drag regression
+        if: ${{ always() && !cancelled() && inputs.repeat_tab_drag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for iteration in $(seq 1 100); do
+            echo "Tab drag regression iteration $iteration/100"
+            cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui --bin cmux-tui \
+              app::tests::admitted_tab_drag_survives_a_pending_pointer_map_refresh -- --exact
+          done
       - name: Verify detach and reattach behavior
         working-directory: cmux-tui
         timeout-minutes: 5

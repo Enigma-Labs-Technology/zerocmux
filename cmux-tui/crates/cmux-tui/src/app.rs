@@ -34750,7 +34750,23 @@ mod tests {
             app.handle(events.recv_timeout(Duration::from_secs(1)).unwrap()).unwrap();
         }
         let order = mux.with_state(|state| state.panes[&pane].tabs.clone());
-        assert_eq!(order, vec![second.id, first.id]);
+        assert_eq!(
+            order,
+            vec![second.id, first.id],
+            "placements: {:?}; first: present={}, dead={}, exit={:?}; \
+             second: present={}, dead={}, exit={:?}",
+            mux.with_state(|state| state
+                .panes
+                .iter()
+                .map(|(id, pane)| (*id, pane.tabs.clone()))
+                .collect::<Vec<_>>()),
+            mux.surface(first.id).is_some(),
+            first.is_dead(),
+            first.terminal_exit(),
+            mux.surface(second.id).is_some(),
+            second.is_dead(),
+            second.terminal_exit(),
+        );
 
         let workspace = mux.with_state(|state| state.workspaces[state.active_workspace].id);
         mux.close_workspace(workspace);
