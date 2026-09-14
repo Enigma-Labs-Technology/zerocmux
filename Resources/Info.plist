@@ -6,14 +6,6 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CMUXSidebarExtensionPointIdentifier</key>
-	<string>$(CMUX_SIDEBAR_EXTENSION_POINT_ID)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -53,6 +45,12 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -78,10 +76,56 @@
 	<string>A program running within zerocmux would like to use your microphone.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>A program running within zerocmux would like to use your camera.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A program running within cmux would like to access your calendars.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A program running within cmux would like to access your reminders.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A program running within cmux would like to access your contacts.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>A program running within cmux would like to access your location.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>A program running within cmux would like to access your photo library.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>A program running within cmux would like to discover devices on your local network.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>A program running within cmux would like to access your system's audio.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>A program running within cmux would like to use speech recognition.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>A program running within cmux would like to access motion data.</string>
+	<key>NSSystemAdministrationUsageDescription</key>
+	<string>A program running within cmux would like to perform system administration tasks.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>A program running within zerocmux would like to use Bluetooth to discover passkeys and security keys.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>A program running within zerocmux would like to use AppleScript.</string>
+	<key>NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac</key>
+	<true/>
+	<key>NSAppBundlesUsageDescription</key>
+	<string>A program running within cmux would like to access the contents of other apps.</string>
+	<key>NSAppDataUsageDescription</key>
+	<string>A program running within cmux would like to access data from other apps.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>A program running within cmux would like to access files in your Desktop folder.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>A program running within cmux would like to access files in your Documents folder.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>A program running within cmux would like to access files in your Downloads folder.</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>A program running within cmux would like to access files managed by a file provider.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>A program running within cmux would like to access files on a network volume.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>A program running within cmux would like to access files on a removable volume.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>A program running within cmux would like to read and write your calendars.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>A program running within cmux would like to add events to your calendars.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>A program running within cmux would like to read and write your reminders.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>A program running within cmux would like to access your location.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -122,12 +166,27 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
+	<key>CMUXSidebarExtensionPointIdentifier</key>
+	<string>$(CMUX_SIDEBAR_EXTENSION_POINT_ID)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>cmux-loopback.localtest.me</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSAppleScriptEnabled</key>
 	<true/>
-	<key>OSAScriptingDefinition</key>
-	<string>zerocmux.sdef</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
@@ -169,27 +228,20 @@
 			</array>
 		</dict>
 	</array>
-	<key>UTImportedTypeDeclarations</key>
-	<array>
-		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.apple.terminal.shell-script</string>
-			<key>UTTypeDescription</key>
-			<string>Terminal shell script</string>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.shell-script</string>
-			</array>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>command</string>
-					<string>tool</string>
-				</array>
-			</dict>
-		</dict>
-	</array>
+	<key>OSAScriptingDefinition</key>
+	<string>zerocmux.sdef</string>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/Enigma-Labs-Technology/zerocmux/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUSendProfileInfo</key>
+	<false/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -197,6 +249,26 @@
 			<string>com.splittabbar.tabtransfer</string>
 			<key>UTTypeDescription</key>
 			<string>Bonsplit Tab Transfer</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.cmux.right-sidebar-mode-reorder</string>
+			<key>UTTypeDescription</key>
+			<string>cmux Right Sidebar Tab Reorder</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.zerocmux.surface-resource</string>
+			<key>UTTypeDescription</key>
+			<string>cmux Surface Resource</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
@@ -223,32 +295,26 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-		<key>NSExceptionDomains</key>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
 		<dict>
-			<key>cmux-loopback.localtest.me</key>
+			<key>UTTypeIdentifier</key>
+			<string>com.apple.terminal.shell-script</string>
+			<key>UTTypeDescription</key>
+			<string>Terminal shell script</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.shell-script</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
 			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
+				<key>public.filename-extension</key>
+				<array>
+					<string>command</string>
+					<string>tool</string>
+				</array>
 			</dict>
 		</dict>
-	</dict>
-	<key>SUAutomaticallyUpdate</key>
-	<false/>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://github.com/Enigma-Labs-Technology/zerocmux/releases/latest/download/appcast.xml</string>
-	<key>SUScheduledCheckInterval</key>
-	<integer>86400</integer>
-	<key>SUSendProfileInfo</key>
-	<false/>
-	<key>SUPublicEDKey</key>
-	<string>$(SPARKLE_PUBLIC_KEY)</string>
+	</array>
 </dict>
 </plist>

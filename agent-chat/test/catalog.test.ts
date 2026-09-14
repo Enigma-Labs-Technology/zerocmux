@@ -78,6 +78,8 @@ test("catalog validation and provider merges", () => {
   const catchModel = catchOptions.find((option) => option.id === "model");
   expect(catchModel?.value).toBe("gpt-new");
   expect(catchModel?.choices?.map((choice) => choice.value)).toContain("gpt-new");
+  expect(catchModel?.choices?.find((choice) => choice.value === "gpt-new")?.efforts?.map((effort) => effort.value)).toEqual(["xhigh"]);
+  expect(catchModel?.choices?.find((choice) => choice.value === "gpt-new")?.defaultEffort).toBe("xhigh");
 
   expect(selectEnabledModel("gated", [
     { id: "gated", disabled: true },

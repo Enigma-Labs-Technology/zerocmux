@@ -1745,9 +1745,6 @@ fn prepare_unix_stat(
 #[cfg(unix)]
 enum PreparedUnixSearchEntry {
     Directory(UnixWorkspaceDirectory),
-    // Metadata is boxed to keep the variant sizes balanced
-    // (clippy::large_enum_variant fires on Linux, where std::fs::Metadata is
-    // a full stat64).
     File { target: UnixWorkspaceTarget, file: File, metadata: Box<std::fs::Metadata> },
     Other,
 }

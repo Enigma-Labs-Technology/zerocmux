@@ -1,3 +1,5 @@
+import CmuxSettings
+import CmuxWorkspaces
 import Foundation
 import Testing
 
@@ -9,6 +11,25 @@ import Testing
 
 @MainActor
 @Suite(.serialized) struct WorkspaceCreateReviewRegressionTests {
+    @Test("worktree creation result preserves filesystem identity")
+    func worktreeCreationResultPreservesFilesystemIdentity() {
+        let result = CmuxExtensionWorktreeCreationResult(
+            projectRootPath: "/tmp/project",
+            worktreePath: "/tmp/project/.cmux/worktrees/created",
+            branchName: "cmux-sidebar-created",
+            workspaceTitle: "cmux-sidebar-created",
+            createdHead: String(repeating: "0", count: 40),
+            generatedArtifactRelativePath: "cmux-sample-dev/index.html",
+            generatedArtifactContents: Data(),
+            worktreeDeviceID: 17,
+            worktreeFileID: 29,
+            setupCommand: ""
+        )
+
+        #expect(result.worktreeDeviceID == 17)
+        #expect(result.worktreeFileID == 29)
+    }
+
     @Test func oversizedWorkingDirectoryIsRejectedBeforeClassification() async {
         let classifierCalls = LockedInvocationCount()
         let service = TerminalController.WorkspaceCreateWorkingDirectoryValidationService(
@@ -63,6 +84,36 @@ import Testing
     private static func errorCode(_ result: TerminalController.V2CallResult) -> String? {
         guard case let .err(code, _, _) = result else { return nil }
         return code
+    }
+}
+
+@MainActor
+private final class RejectingWorkspaceCreationTabManager: TabManager {
+    override func addWorkspaceIfActive(
+        id: UUID?,
+        title: String?,
+        titleSource: Workspace.CustomTitleSource,
+        workingDirectory overrideWorkingDirectory: String?,
+        initialSurface: NewWorkspaceInitialSurface,
+        initialTerminalCommand: String?,
+        initialTerminalInput: String?,
+        initialTerminalStartupRestoreAgent: SessionRestorableAgentSnapshot?,
+        initialTerminalEnvironment: [String: String],
+        initialBrowserURL: URL?,
+        initialBrowserOmnibarVisible: Bool,
+        initialBrowserTransparentBackground: Bool,
+        workspaceEnvironment: [String: String],
+        inheritWorkingDirectory: Bool,
+        select: Bool,
+        eagerLoadTerminal: Bool,
+        placementOverride: WorkspacePlacement?,
+        autoWelcomeIfNeeded: Bool,
+        autoRefreshMetadata: Bool,
+        normalizeWorkspaceGroupsAfterInsert: Bool,
+        applyCreationTitleAsCustomTitle: Bool,
+        allowTextBoxFocusDefault: Bool
+    ) -> Workspace? {
+        nil
     }
 }
 

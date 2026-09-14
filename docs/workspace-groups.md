@@ -14,7 +14,9 @@ Closing the anchor workspace closes only that workspace and **promotes the group
 
 ### Group identity
 
-A group has a `name`, `iconSymbol` (an SF Symbol, default `folder.fill`), and an optional `customColor` (hex string). Both are independent of the anchor workspace's own customizations. The anchor's color and icon are seeded from the group on creation, but they can diverge afterwards.
+A group has a `name`, `iconSymbol` (an SF Symbol, default `folder.fill`), and an optional `customColor` (hex string). Automation can also provide an `external_id` (or `idempotency_key`) as a caller-owned identity scoped to the window. Repeating `workspace.group.create` with that identity returns the existing group instead of creating another anchor. Names are not identities: users may have multiple groups with the same name.
+
+The current anchor carries explicit provenance. Only an anchor created by cmux can be removed through the guarded anchor-cleanup option; a user-selected or promoted anchor is never inferred to be disposable.
 
 ### Pinning
 
@@ -56,9 +58,10 @@ All group operations are scriptable via `zerocmux workspace-group <subcommand>`.
 
 ```bash
 zerocmux workspace-group list [--json]
-zerocmux workspace-group create --name "manaflow" [--cwd ~/projects/manaflow] [--from <id>,<id>]
-zerocmux workspace-group ungroup <group-id>
-zerocmux workspace-group delete  <group-id>   # destructive: closes every member workspace
+zerocmux workspace-group create --name "manaflow" [--cwd ~/projects/manaflow] [--from <id>,<id>] [--idempotency-key <key>]
+zerocmux workspace-group ungroup <group-id> [--remove-generated-anchor]
+zerocmux workspace-group delete <group-id>                         # dissolve; keep workspaces
+zerocmux workspace-group delete <group-id> --close-workspaces      # explicitly destructive
 zerocmux workspace-group rename <group-id> --name "new name"
 zerocmux workspace-group collapse <group-id>
 zerocmux workspace-group expand <group-id>
@@ -71,6 +74,8 @@ zerocmux workspace-group new-workspace <group-id> [--placement afterCurrent|top|
 ```
 
 `create` returns a group handle (`workspace_group:N` by default). Omitting `--from` creates an anchor-only group; existing workspaces are never inferred from selection or caller context. Pass `--json` for the full structured payload.
+
+Use a stable `--idempotency-key` (or `--external-id`) when more than one controller can reconcile the same logical group. The key is atomic within the target window and is persisted with the group. `--remove-generated-anchor` is an explicit cleanup path for an anchor-only group whose current anchor still has cmux-generated provenance; it refuses groups with child workspaces or user-selected anchors.
 
 `delete` dissolves the group and keeps its workspaces by default. Pass `--close-workspaces` only when you intend to close every member workspace and terminate its processes. The response reports whether the group was dissolved or its workspaces were closed, including the affected count.
 
@@ -149,4 +154,4 @@ Neither knob is wired up yet. The current build keeps the sidebar's existing iMe
 
 ## Persistence
 
-Groups (name, anchor, pin state, collapse state, color, icon) round-trip through `~/Library/Application Support/zerocmux/session-<bundle-id>.json` alongside workspaces. Membership lives on `Workspace.groupId`. Writes are atomic via the existing `SessionPersistenceStore` rename-into-place pattern.
+Groups (name, anchor, pin state, collapse state, color, icon, external identity, and anchor provenance) round-trip through `~/Library/Application Support/cmux/session-<bundle-id>.json` alongside workspaces. Membership lives on `Workspace.groupId`. Writes are atomic via the existing `SessionPersistenceStore` rename-into-place pattern.

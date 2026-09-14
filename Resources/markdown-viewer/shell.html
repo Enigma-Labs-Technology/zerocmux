@@ -88,7 +88,7 @@ body {
   color: var(--fgColor-default);
   background: var(--bgColor-muted);
 }
-.cmux-remote-image-placeholder {
+.zerocmux-remote-image-placeholder {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -102,18 +102,18 @@ body {
   color: var(--fgColor-muted);
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-.cmux-remote-image-placeholder strong {
+.zerocmux-remote-image-placeholder strong {
   color: var(--fgColor-default);
   font-weight: 600;
 }
-.cmux-remote-image-url {
+.zerocmux-remote-image-url {
   flex-basis: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
   font: 12px/1.4 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color: var(--fgColor-muted);
 }
-.cmux-remote-image-placeholder button {
+.zerocmux-remote-image-placeholder button {
   padding: 3px 7px;
   border: 1px solid var(--borderColor-default);
   border-radius: 6px;
@@ -122,8 +122,8 @@ body {
   font: inherit;
   cursor: pointer;
 }
-.cmux-remote-image-placeholder button:hover,
-.cmux-remote-image-placeholder button:focus-visible {
+.zerocmux-remote-image-placeholder button:hover,
+.zerocmux-remote-image-placeholder button:focus-visible {
   background: var(--bgColor-neutral-muted);
 }
 /* Mermaid + Vega-Lite blocks. Both libs render into these containers
@@ -1755,7 +1755,7 @@ html { scroll-behavior: smooth; }
     if (el) { resolveMarkdownCandidate(el, false); }
   });
   contentEl.addEventListener('click', function(ev) {
-    if (ev.target && ev.target.closest && ev.target.closest('.cmux-remote-image-placeholder')) {
+    if (ev.target && ev.target.closest && ev.target.closest('.zerocmux-remote-image-placeholder')) {
       if (ev.target.closest('button')) { return; }
       ev.preventDefault();
       ev.stopPropagation();
@@ -1808,7 +1808,7 @@ html { scroll-behavior: smooth; }
     clone.querySelectorAll('.cmux-code-copy-button').forEach(function(el) {
       el.remove();
     });
-    clone.querySelectorAll('.cmux-remote-image-placeholder').forEach(function(el) {
+    clone.querySelectorAll('.zerocmux-remote-image-placeholder').forEach(function(el) {
       el.remove();
     });
     clone.querySelectorAll('img[data-cmux-original-src]').forEach(function(el) {

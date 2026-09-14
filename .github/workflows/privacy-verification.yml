@@ -1,0 +1,136 @@
+name: Privacy verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      repeat_tab_drag:
+        description: Repeat the pending pointer-map tab drag regression 100 times
+        type: boolean
+        default: false
+      process_scope_only:
+        description: Run focused Linux and macOS process ownership regressions
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privacy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-package-tests:
+    if: ${{ !inputs.process_scope_only }}
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Run privacy and local-state tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          for package in CmuxUpdater CMUXAgentLaunch CmuxAgentJournal CmuxCore CmuxGit CmuxSettings CmuxSettingsUI; do
+            swift test --package-path "Packages/macOS/$package" || status=1
+          done
+          exit "$status"
+
+  computer-use-privacy:
+    if: ${{ !inputs.process_scope_only }}
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Install Rust
+        run: ./scripts/install-rust-ci.sh
+      - name: Build the privacy-patched helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/build-cmux-cua.sh --output "$RUNNER_TEMP/zerocmux-cua" --archs "$(uname -m)"
+      - name: Verify compiled policy and unavailable reporting commands
+        env:
+          CUA_PRIVACY_BINARY: ${{ runner.temp }}/zerocmux-cua
+        run: python3 tests/test_cua_bundled_privacy.py
+
+  tui-integration:
+    if: ${{ !inputs.process_scope_only }}
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        run: ./scripts/select-ci-xcode.sh
+      - name: Initialize terminal dependency
+        run: git submodule update --init --depth 1 ghostty
+      - name: Install Zig
+        run: ./scripts/install-zig-ci.sh
+      - name: Install Rust
+        run: ./scripts/install-rust-ci.sh
+      - name: Test local TUI integration
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui
+      - name: Repeat pending pointer-map tab drag regression
+        if: ${{ always() && !cancelled() && inputs.repeat_tab_drag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for iteration in $(seq 1 100); do
+            echo "Tab drag regression iteration $iteration/100"
+            cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui --bin cmux-tui \
+              app::tests::admitted_tab_drag_survives_a_pending_pointer_map_refresh -- --exact
+          done
+      - name: Verify detach and reattach behavior
+        working-directory: cmux-tui
+        timeout-minutes: 5
+        run: python3 scripts/smoke-attach.py
+
+  ssh-daemon:
+    if: ${{ !inputs.process_scope_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: daemon/remote/go.sum
+      - name: Test retained SSH daemon
+        working-directory: daemon/remote
+        run: go test ./...
+      - name: Verify built remote release assets
+        run: ./tests/test_remote_daemon_release_assets.sh
+
+  process-scope:
+    if: ${{ inputs.process_scope_only }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Select Xcode
+        if: runner.os == 'macOS'
+        run: ./scripts/select-ci-xcode.sh
+      - name: Initialize terminal dependency
+        run: git submodule update --init --depth 1 ghostty
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev pkg-config
+      - name: Install Zig
+        run: ./scripts/install-zig-ci.sh
+      - name: Install Rust
+        run: ./scripts/install-rust-ci.sh
+      - name: Test process ownership through fork and exec
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib unix_process_scope::tests
+      - name: Test legacy terminal close startup recovery
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib workspace_registry::tests::startup_repairs_legacy_terminal_close_dangling_resource_rows -- --exact
+      - name: Test complete core regression suite
+        run: cargo test --locked --manifest-path cmux-tui/Cargo.toml -p cmux-tui-core --lib

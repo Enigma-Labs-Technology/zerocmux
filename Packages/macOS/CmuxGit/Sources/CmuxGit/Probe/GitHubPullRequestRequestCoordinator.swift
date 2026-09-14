@@ -16,6 +16,27 @@ public actor GitHubPullRequestRequestCoordinator {
     private static let maximumConcurrentTransportCount = 3
     private static let maximumRateLimitIdentityCount = 32
 
+    /// Product token identifying cmux's pull-request poller in GitHub requests.
+    private static let userAgentProductToken = "zerocmux-workspace-pr-poller"
+
+    /// User-Agent sent with every pull-request probe, formatted as Product/Version.
+    private static let userAgentHeaderValue = userAgentValue(
+        appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    )
+
+    /// Builds the pull-request poller's versioned User-Agent value.
+    ///
+    /// The product token remains the leading component so server-side matching
+    /// continues to work. Missing or blank versions use `unknown` to preserve
+    /// the conventional Product/Version shape.
+    static func userAgentValue(appVersion: String?) -> String {
+        let version = appVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let version, !version.isEmpty else {
+            return "\(userAgentProductToken)/unknown"
+        }
+        return "\(userAgentProductToken)/\(version)"
+    }
+
     internal struct RequestKey: Hashable, Sendable {
         let endpoint: String
         let authorizationFingerprint: Data
@@ -173,7 +194,7 @@ public actor GitHubPullRequestRequestCoordinator {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("zerocmux-workspace-pr-poller", forHTTPHeaderField: "User-Agent")
+        request.setValue(Self.userAgentHeaderValue, forHTTPHeaderField: "User-Agent")
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         let cachedResponse = cachedResponseByRequestKey[requestKey]
         if let cachedResponse {
@@ -287,11 +308,15 @@ public actor GitHubPullRequestRequestCoordinator {
         }
 
         if response.statusCode == 403 || response.statusCode == 429,
-           let rawRetryAfter = response.value(forHTTPHeaderField: "Retry-After"),
-           let retryAfter = TimeInterval(rawRetryAfter),
-           retryAfter > 0 {
+           let retryAfterSeconds = PullRequestRetryAfterPolicy.seconds(
+               from: response,
+               now: now(),
+               defaultSeconds: response.statusCode == 429
+                   ? PullRequestRetryAfterPolicy.defaultRateLimitSeconds
+                   : nil
+           ) {
             extendRateLimitRetryDate(
-                to: now().addingTimeInterval(retryAfter),
+                to: now().addingTimeInterval(TimeInterval(retryAfterSeconds)),
                 authorizationFingerprint: authorizationFingerprint
             )
         }

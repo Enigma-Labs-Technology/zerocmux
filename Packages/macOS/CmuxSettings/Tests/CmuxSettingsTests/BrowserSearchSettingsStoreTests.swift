@@ -78,6 +78,29 @@ struct BrowserSearchSettingsStoreTests {
         #expect(store.normalizedCustomSearchEngineName(" \n\t ") == nil)
     }
 
+    @Test func remoteSuggestionsRequireExplicitOptIn() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserSearchSettingsStore(defaults: defaults)
+        #expect(!store.currentSearchSuggestionsEnabled)
+        defaults.set(true, forKey: BrowserSearchSettingsStore.searchSuggestionsEnabledKey)
+        #expect(store.currentSearchSuggestionsEnabled)
+        defaults.set(false, forKey: BrowserSearchSettingsStore.searchSuggestionsEnabledKey)
+        #expect(!store.currentSearchSuggestionsEnabled)
+    }
+
+    @Test func pullRequestPollingRequiresExplicitOptIn() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsSettingsClient(defaults: defaults)
+        let key = SidebarCatalogSection().showPullRequests
+        #expect(!store.value(for: key))
+        defaults.set(true, forKey: key.userDefaultsKey)
+        #expect(store.value(for: key))
+        defaults.set(false, forKey: key.userDefaultsKey)
+        #expect(!store.value(for: key))
+    }
+
     private func makeDefaults() throws -> (UserDefaults, String) {
         let suiteName = "cmux.browserSearchSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

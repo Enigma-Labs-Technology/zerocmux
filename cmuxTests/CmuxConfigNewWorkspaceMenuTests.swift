@@ -44,6 +44,16 @@ struct CmuxConfigNewWorkspaceMenuTests {
     }
 
     @MainActor
+    private func withAgentChatUIFlag<T>(_ enabled: Bool, _ body: () throws -> T) throws -> T {
+        let flags = CmuxFeatureFlags.shared
+        let definition = try #require(CmuxFeatureFlags.allFlags.first { $0.key == "agent-chat-ui-enabled-release" })
+        let previous = flags.overrideValue(for: definition)
+        flags.setOverride(enabled, for: definition)
+        defer { flags.setOverride(previous, for: definition) }
+        return try body()
+    }
+
+    @MainActor
     private func contextMenuActionIDs(_ menu: NSMenu) -> [String] {
         menu.items.compactMap { item in
             (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.id
@@ -155,11 +165,6 @@ struct CmuxConfigNewWorkspaceMenuTests {
             cmuxConfigStore: store
         ))
         #expect(!store.newWorkspaceContextMenuIsConfigured)
-        #expect(store.newWorkspaceMenuSectionOrder == .cloudFirst)
-        // zerocmux: hosted Cloud VM services are removed, so no "Open Base"
-        // cloud section appears ahead of the built-in items.
-        let cloudOpenTitle = String(localized: "command.cloudVM.open.title", defaultValue: "Open Base")
-        #expect(!menu.items.contains { !$0.isSeparatorItem && $0.title == cloudOpenTitle })
         let newWorkspaceIndex = try #require(menu.items.firstIndex { item in
             (item.representedObject as? NewWorkspaceContextMenuActionBox)?.action.id
                 == CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID
@@ -177,6 +182,16 @@ struct CmuxConfigNewWorkspaceMenuTests {
         #expect(agentChatBox.windowId == windowId)
         #expect(agentChatBox.action.id == CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID)
         #expect(agentChatBox.action.title == String(localized: "command.newAgentChat.title", defaultValue: "New agent chat"))
+    }
+
+    @MainActor
+    @Test func contextMenuHidesBuiltInAgentChatWhenFeatureFlagOff() throws {
+        try withAgentChatUIFlag(false) {
+            let (store, root) = try loadStore(globalJSON: "{}")
+            defer { try? FileManager.default.removeItem(at: root) }
+            let ids = try withNewWorkspaceContextMenu(store: store) { contextMenuActionIDs($0) }
+            #expect(!ids.contains(CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID))
+        }
     }
 
     @MainActor
@@ -242,27 +257,32 @@ struct CmuxConfigNewWorkspaceMenuTests {
         let (store, root) = try loadStore(globalJSON: twoLayoutConfig(defaultActionID: "review-layout"))
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try withNewWorkspaceContextMenu(store: store) { menu in
-            let layoutsHeader = String(localized: "menu.newWorkspace.layoutsHeader", defaultValue: "Layouts")
-            let headerIndex = try #require(menu.items.firstIndex { $0.title == layoutsHeader })
-            let saveTitle = String(localized: "menu.newWorkspace.saveWorkspaceAsLayout", defaultValue: "Save Workspace as Layout…")
-            let saveIndex = try #require(menu.items.firstIndex { $0.title == saveTitle })
-            let newWorkspaceIndex = try #require(firstContextMenuIndex(menu, actionID: CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID))
-            let agentChatIndex = try #require(firstContextMenuIndex(menu, actionID: CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID))
-            let reviewIndex = try #require(firstContextMenuIndex(menu, actionID: "review-layout"))
-            let devIndex = try #require(firstContextMenuIndex(menu, actionID: "dev-layout"))
+        // Agent chat is behind a default-off flag, and this test is about where
+        // the create entries sit relative to the Layouts section rather than
+        // about that default, so turn it on to get the item into the menu.
+        try withAgentChatUIFlag(true) {
+            try withNewWorkspaceContextMenu(store: store) { menu in
+                let layoutsHeader = String(localized: "menu.newWorkspace.layoutsHeader", defaultValue: "Layouts")
+                let headerIndex = try #require(menu.items.firstIndex { $0.title == layoutsHeader })
+                let saveTitle = String(localized: "menu.newWorkspace.saveWorkspaceAsLayout", defaultValue: "Save Workspace as Layout…")
+                let saveIndex = try #require(menu.items.firstIndex { $0.title == saveTitle })
+                let newWorkspaceIndex = try #require(firstContextMenuIndex(menu, actionID: CmuxSurfaceTabBarBuiltInAction.newWorkspace.configID))
+                let agentChatIndex = try #require(firstContextMenuIndex(menu, actionID: CmuxSurfaceTabBarBuiltInAction.newAgentChat.configID))
+                let reviewIndex = try #require(firstContextMenuIndex(menu, actionID: "review-layout"))
+                let devIndex = try #require(firstContextMenuIndex(menu, actionID: "dev-layout"))
 
-            #expect(newWorkspaceIndex < headerIndex)
-            #expect(agentChatIndex < headerIndex)
-            #expect(headerIndex < reviewIndex)
-            #expect(headerIndex < devIndex)
-            #expect(reviewIndex < saveIndex)
-            #expect(devIndex < saveIndex)
-            let layoutRange = (headerIndex + 1)..<saveIndex
-            let nonLayoutIDs = menu.items[layoutRange].compactMap(contextMenuActionID).filter {
-                $0 != "review-layout" && $0 != "dev-layout"
+                #expect(newWorkspaceIndex < headerIndex)
+                #expect(agentChatIndex < headerIndex)
+                #expect(headerIndex < reviewIndex)
+                #expect(headerIndex < devIndex)
+                #expect(reviewIndex < saveIndex)
+                #expect(devIndex < saveIndex)
+                let layoutRange = (headerIndex + 1)..<saveIndex
+                let nonLayoutIDs = menu.items[layoutRange].compactMap(contextMenuActionID).filter {
+                    $0 != "review-layout" && $0 != "dev-layout"
+                }
+                #expect(nonLayoutIDs.isEmpty)
             }
-            #expect(nonLayoutIDs.isEmpty)
         }
     }
 

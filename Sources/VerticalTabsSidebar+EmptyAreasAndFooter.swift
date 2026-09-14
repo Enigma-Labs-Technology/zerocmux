@@ -169,9 +169,9 @@ struct SidebarFooterCircularIcon: View {
         CmuxSystemSymbolImage(
             systemName: systemName,
             pointSize: style.pointSize,
-            weight: style.weight
+            weight: style.weight,
+            tint: .secondary
         )
-        .foregroundStyle(Color(nsColor: .secondaryLabelColor))
     }
 }
 
@@ -318,7 +318,7 @@ struct SidebarEmptyArea: View {
                         debugSource: "sidebar.emptyArea.remoteTmux"
                     )
                 } else {
-                    tabManager.addWorkspace(placementOverride: .end)
+                    tabManager.addWorkspaceIfActive(placementOverride: .end)
                 }
                 if let selectedId = tabManager.selectedTabId {
                     selectedTabIds = [selectedId]
@@ -339,6 +339,9 @@ struct SidebarEmptyArea: View {
     @ViewBuilder
     private var hitTarget: some View {
         if expandsVertically {
+            // This full-height background extends behind the rows. Keep it
+            // SwiftUI-only so native hit testing cannot steal row presses;
+            // the AppKit table and clip view own native-sidebar window drags.
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())

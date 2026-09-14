@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-URL="${1:-https://example.com/form}"
-SURFACE="${2:-surface:1}"
+if [[ -z "${1:-}" || -z "${2:-}" ]]; then
+  printf 'Usage: %s <url> <surface>\n' "${0##*/}" >&2
+  exit 2
+fi
 
-zerocmux browser "$SURFACE" goto "$URL"
-zerocmux browser "$SURFACE" get url
-zerocmux browser "$SURFACE" wait --load-state complete --timeout-ms 15000
-zerocmux browser "$SURFACE" snapshot --interactive
+URL="$1"
+SURFACE="$2"
+
+zerocmux browser --surface "$SURFACE" goto "$URL"
+zerocmux browser --surface "$SURFACE" get url
+zerocmux browser --surface "$SURFACE" wait --load-state complete --timeout-ms 15000
+zerocmux browser --surface "$SURFACE" snapshot --interactive
 
 echo "Now run fill/click commands using refs from the snapshot above."

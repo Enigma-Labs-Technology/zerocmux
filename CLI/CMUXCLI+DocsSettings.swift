@@ -39,6 +39,18 @@ extension CMUXCLI {
             ]
         ),
         DocsReference(
+            topic: "managed-policies",
+            aliases: ["mdm", "managed", "policy", "policies", "enterprise", "managed-device-policies"],
+            summary: "MDM-enforceable managed policies: disable the embedded browser, iOS remote control, and Cloud on managed Macs.",
+            webURL: "https://cmux.com/docs/managed-policies",
+            rawResources: [
+                DocsResource(label: "managed device policies", url: "https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/managed-device-policies.md"),
+            ],
+            commands: [
+                "cmux browser status --json",
+            ]
+        ),
+        DocsReference(
             topic: "shortcuts",
             aliases: ["keyboard", "keybindings", "keys"],
             summary: "zerocmux-owned keyboard shortcuts and two-step chord syntax.",
@@ -149,7 +161,7 @@ extension CMUXCLI {
         }
 
         guard args.count == 1 else {
-            throw CLIError(message: "Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]")
+            throw CLIError(message: "Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock|managed-policies]")
         }
 
         if topic == "list" || topic == "all" {
@@ -174,7 +186,7 @@ extension CMUXCLI {
 
     func docsUsage() -> String {
         return """
-        Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock]
+        Usage: zerocmux docs [settings|shortcuts|api|browser|agents|dock|managed-policies]
 
         Print the canonical docs URL, raw GitHub resources, and useful commands for a zerocmux topic.
         This command does not require a running zerocmux app or socket.
@@ -358,10 +370,10 @@ extension CMUXCLI {
           docs                Print the same output as `zerocmux docs settings`.
 
         Targets:
-          account, app, terminal, sidebar-appearance, custom-sidebars,
-          automation, browser, browser-import, global-hotkey,
-          keyboard-shortcuts, shortcuts, workspace-colors, cmux-json,
-          json, reset
+          account, app, terminal, networking, sidebar-appearance,
+          custom-sidebars, automation, browser, browser-import,
+          global-hotkey, keyboard-shortcuts, shortcuts, workspace-colors,
+          cmux-json, json, reset
 
         Config file:
           \(Self.primarySettingsDisplayPath)
@@ -397,6 +409,8 @@ extension CMUXCLI {
             return "automation"
         case "browser":
             return "browser"
+        case "networking", "network", "iroh":
+            return "networking"
         case "browser-import", "browserimport", "import-browser-data":
             return "browserImport"
         case "global-hotkey", "globalhotkey", "hotkey":

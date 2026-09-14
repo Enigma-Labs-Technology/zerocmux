@@ -38,7 +38,7 @@ final class CmuxFeatureFlags {
     private static let agentChatUIDefault = true
     private nonisolated static let mobileWorkspaceChangesDefault = false
     private static let sidebarWorkspaceAgentSpinnerDefault = false
-    private static let simulatorDefault = true
+    private nonisolated static let simulatorDefault = true
     private static let workspaceTodoControlsDefault = false
     private static let appKitSidebarListDefault = true
 
@@ -87,7 +87,7 @@ final class CmuxFeatureFlags {
     //      reviewBy: 2026-10-01, defaultWhenUnavailable: true)
     // Controls every Simulator entrypoint and active pane. The enabled local
     // default preserves access unless a user explicitly overrides it.
-    static let simulatorFlag = CmuxFeatureFlagDefinition(
+    nonisolated static let simulatorFlag = CmuxFeatureFlagDefinition(
         key: "simulator-enabled-release",
         title: String(
             localized: "featureFlags.simulator.title",
@@ -98,6 +98,18 @@ final class CmuxFeatureFlags {
             defaultValue: "Enables iPhone and iPad Simulator panes, commands, and automation."
         ),
         defaultWhenUnavailable: CmuxFeatureFlags.simulatorDefault
+    )
+
+    // FLAG(key: computer-use-ux-enabled-release, owner: austinwang,
+    //      reviewBy: 2026-10-01, defaultWhenUnavailable: true)
+    static let computerUseUXFlag = CmuxFeatureFlagDefinition(
+        key: "computer-use-ux-enabled-release",
+        title: String(localized: "featureFlags.computerUseUX.title", defaultValue: "Computer Use UX"),
+        flagDescription: String(
+            localized: "featureFlags.computerUseUX.description",
+            defaultValue: "Shows the Computer Use menu-bar item and automatic onboarding."
+        ),
+        defaultWhenUnavailable: true
     )
 
     // Order is load-bearing for the positional typed accessors below. Flags
@@ -219,6 +231,7 @@ final class CmuxFeatureFlags {
             CmuxFeatureFlags.appKitSidebarListFlag,
 
             CmuxFeatureFlags.mobileWorkspaceChangesFlag,
+            CmuxFeatureFlags.computerUseUXFlag,
         ]
     }()
 
@@ -260,6 +273,10 @@ final class CmuxFeatureFlags {
 
     var isMobileWorkspaceChangesEnabled: Bool {
         effectiveValue(for: Self.mobileWorkspaceChangesFlag)
+    }
+
+    var isComputerUseUXEnabled: Bool {
+        effectiveValue(for: Self.computerUseUXFlag)
     }
 
     /// Effective values mirrored for nonisolated readers: the mobile host

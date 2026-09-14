@@ -7,6 +7,10 @@ extension UpdateDriver: @preconcurrency SPUUpdaterDelegate {
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
+        // Sparkle resolves the feed before reading sendsSystemProfile to construct query
+        // parameters. Reassert the policy here for manual and scheduled checks alike,
+        // even if the stored preference changes after startup.
+        updater.sendsSystemProfile = false
 #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if let override = env["CMUX_UI_TEST_FEED_URL"], !override.isEmpty {

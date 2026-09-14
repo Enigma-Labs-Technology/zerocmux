@@ -3,16 +3,21 @@ import Foundation
 import Network
 import Security
 
-struct MarkdownRemoteImageFetchResult {
+struct MarkdownRemoteImageFetchResult: Sendable {
     let data: Data
     let mimeType: String
+
+    init(data: Data, mimeType: String) {
+        self.data = data
+        self.mimeType = mimeType
+    }
 }
 
 enum MarkdownRemoteImageSecurity {
     static let maximumRemoteImageBytes = 8 * 1024 * 1024
 
     static func remoteImageURL(from requestURL: URL) -> URL? {
-        guard requestURL.scheme?.lowercased() == MarkdownWebRenderer.remoteImageURLScheme,
+        guard requestURL.scheme?.lowercased() == MarkdownWebViewerScheme.remoteImage,
               let components = URLComponents(url: requestURL, resolvingAgainstBaseURL: false),
               let rawRemoteURL = components.queryItems?.first(where: { $0.name == "url" })?.value,
               let remoteURL = URL(string: rawRemoteURL),
@@ -65,7 +70,7 @@ enum MarkdownRemoteImageSecurity {
             "GET \(pathAndQuery(for: url)) HTTP/1.1",
             "Host: \(hostHeader)",
             "Accept: image/png,image/jpeg,image/gif,image/webp,image/avif;q=0.9,image/svg+xml;q=0.9,*/*;q=0.1",
-            "User-Agent: zerocmux-markdown-image-loader",
+            "User-Agent: cmux-markdown-image-loader",
             "Connection: close",
             "",
             ""
@@ -269,11 +274,18 @@ enum MarkdownRemoteImageSecurity {
     }
 }
 
-struct MarkdownRemoteImageFetchTarget {
+struct MarkdownRemoteImageFetchTarget: Sendable {
     let url: URL
     let serverName: String
     let endpointHost: NWEndpoint.Host
     let port: UInt16
+
+    init(url: URL, serverName: String, endpointHost: NWEndpoint.Host, port: UInt16) {
+        self.url = url
+        self.serverName = serverName
+        self.endpointHost = endpointHost
+        self.port = port
+    }
 }
 
 enum MarkdownRemoteImageFetcher {
@@ -328,7 +340,9 @@ private enum MarkdownRemoteImageLoadOutcome {
     case redirect(URL)
 }
 
-private final class MarkdownPinnedRemoteImageLoader {
+/// Thread-safe by construction: all mutable state is guarded by `lock` and
+/// connection callbacks run on the private serial `queue`.
+private final class MarkdownPinnedRemoteImageLoader: @unchecked Sendable {
     private let maximumBytes: Int
     private let target: MarkdownRemoteImageFetchTarget
     private let lock = NSLock()

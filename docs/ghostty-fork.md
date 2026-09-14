@@ -1,5 +1,15 @@
 # Ghostty Fork Changes (manaflow-ai/ghostty)
 
+## September 2026 integration
+
+The upstream integration uses Ghostty `abd40f6e472d57f2d4bb182004bb5f3fac8df961`,
+verified reachable from `manaflow-ai/ghostty`'s `main`. No extra submodule commit
+was needed. `scripts/build-ghosttykit-xcframework.sh` builds the universal
+framework with `ReleaseFast`, native Sentry disabled, Ghostty localization
+bundling disabled, and crash files confined to `zerocmux/crash`. The cache/build
+flavor includes these options (`sentry-off-noi18n-crashsubdir-zerocmux-crash-v2`).
+
+
 This repo uses a fork of Ghostty for local patches that aren't upstream yet.
 When we change the fork, update this document and the parent submodule SHA.
 
@@ -10,9 +20,9 @@ When we change the fork, update this document and the parent submodule SHA.
 3) Update this file with the new change summary + conflict notes.
 4) In the parent repo: `git add ghostty` and commit the submodule SHA.
 
-## Current fork changes
+## Historical fork changes (through July 2026)
 
-Current zerocmux pinned fork head: `bb30526cd`. It advances the previous zerocmux pin
+The July 2026 integration pinned `bb30526cd`. It advances the previous zerocmux pin
 `b4b6d69c8` through the already-merged theme, render-grid, and wrap-aware URL
 updates, then preserves authoritative sprite-font shaping runs. The commit is
 reachable from fork `main` through the merged

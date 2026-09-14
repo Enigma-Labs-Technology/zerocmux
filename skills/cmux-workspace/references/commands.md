@@ -43,9 +43,12 @@ zerocmux tree --workspace "$CMUX_WORKSPACE_ID"
 
 zerocmux new-split right --workspace "$CMUX_WORKSPACE_ID"
 zerocmux new-split down --workspace "$CMUX_WORKSPACE_ID" --surface "$CMUX_SURFACE_ID"
+zerocmux new-split down --workspace "$CMUX_WORKSPACE_ID" --command "npm run dev"
 zerocmux new-pane --workspace "$CMUX_WORKSPACE_ID" --type terminal --direction right
+zerocmux new-pane --workspace "$CMUX_WORKSPACE_ID" --type terminal --direction right --command "tail -f logs/dev.log"
 zerocmux new-pane --workspace "$CMUX_WORKSPACE_ID" --type browser --url http://localhost:3000
 zerocmux new-surface --workspace "$CMUX_WORKSPACE_ID" --type terminal --pane pane:1
+zerocmux new-surface --workspace "$CMUX_WORKSPACE_ID" --type terminal --pane pane:1 --working-directory "$PWD" --command "npm test"
 zerocmux new-surface --workspace "$CMUX_WORKSPACE_ID" --type browser --pane pane:1 --url http://localhost:3000
 
 zerocmux focus-pane --workspace "$CMUX_WORKSPACE_ID" --pane pane:2
@@ -55,6 +58,8 @@ zerocmux move-surface --surface surface:7 --pane pane:2 --focus true
 zerocmux reorder-surface --surface surface:7 --before surface:3
 zerocmux move-tab-to-new-workspace --surface surface:7 --title "browser"
 ```
+
+`--command <text>` (also on `new-workspace`) types the text plus one Enter into the new terminal's interactive shell at spawn time, so no follow-up `send` or `send-key enter` is needed and the shell stays alive after the command exits. It is terminal-only (`--type browser|simulator|agent-session` rejects it), blank text is ignored, and `new-workspace --layout` ignores it.
 
 ## Input
 
@@ -83,9 +88,11 @@ zerocmux sidebar-state --workspace "$CMUX_WORKSPACE_ID" --json
 ## Notifications and Attention
 
 ```bash
-zerocmux notify --title "Done" --body "Task complete"
+notification_id="$(zerocmux notify --title "Done" --body "Task complete" --id-format uuids | awk '$1 == "OK" {print $2}')"
+zerocmux dismiss-notification --id "$notification_id"
+zerocmux notify --clear
 zerocmux list-notifications --json
-zerocmux clear-notifications
+zerocmux clear-notifications --workspace "$CMUX_WORKSPACE_ID" --surface "$CMUX_SURFACE_ID"
 zerocmux trigger-flash --workspace "$CMUX_WORKSPACE_ID" --surface "$CMUX_SURFACE_ID"
 zerocmux surface-health --workspace "$CMUX_WORKSPACE_ID" --json
 ```

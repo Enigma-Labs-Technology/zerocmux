@@ -127,6 +127,7 @@ struct BrowserDiscardedWebViewRestoreRetryTests {
         #expect(panel.restoreDiscardedWebViewIfNeeded(reason: "test.restore2"))
     }
 
+
     @Test func remoteSessionRestoreQueuedForProxyEndpointDoesNotMarkNavigationPending() throws {
         let url = try #require(URL(string: "http://localhost:3000/cmux-issue-7504"))
         let workspaceId = UUID()

@@ -18,6 +18,7 @@ args=(
   -Dxcframework-target=universal
   -Doptimize=ReleaseFast
   -Dsentry=false
+  -Di18n=false
 )
 
 if grep -Fq '"crash-report-subdir"' "$GHOSTTY_DIR/src/build/Config.zig" 2>/dev/null; then

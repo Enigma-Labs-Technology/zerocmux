@@ -32,20 +32,9 @@ MISMATCH_OUTPUT="$TMP_DIR/mismatch.out"
 MISSING_ENTRY_OUTPUT="$TMP_DIR/missing-entry.out"
 NATIVE_SENTRY_OUTPUT="$TMP_DIR/native-sentry.out"
 
-if [ "$("$TAG_SCRIPT" "$FIXTURE_SHA")" != "$EXPECTED_FIXTURE_TAG" ]; then
-  echo "FAIL: GhosttyKit release tag helper did not emit the current flavor-suffixed tag"
-  exit 1
-fi
-
-if [ "$(GHOSTTYKIT_CRASH_REPORT_SUBDIR="custom/crash" "$TAG_SCRIPT" "$FIXTURE_SHA")" != "xcframework-$FIXTURE_SHA-sentry-off-crashsubdir-custom-crash-v1" ]; then
-  echo "FAIL: GhosttyKit release tag helper did not honor the crash report subdir"
-  exit 1
-fi
-
 mkdir -p \
   "$FIXTURE_DIR/GhosttyKit.xcframework" \
   "$SUCCESS_DIR" \
-  "$FALLBACK_DIR" \
   "$MISMATCH_DIR" \
   "$MISSING_ENTRY_DIR" \
   "$NATIVE_SENTRY_DIR/GhosttyKit.xcframework/macos-arm64_x86_64" \

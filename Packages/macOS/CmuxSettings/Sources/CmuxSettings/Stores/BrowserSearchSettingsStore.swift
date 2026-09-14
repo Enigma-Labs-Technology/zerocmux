@@ -28,8 +28,8 @@ public struct BrowserSearchSettingsStore: BrowserSearchSettingsReading {
     /// Legacy default custom search URL template.
     public static let defaultCustomSearchEngineURLTemplate = "https://www.google.com/search?q={query}"
 
-    /// Legacy default search suggestions toggle value.
-    public static let defaultSearchSuggestionsEnabled: Bool = true
+    /// Remote suggestions require explicit opt-in before typed text leaves the app.
+    public static let defaultSearchSuggestionsEnabled: Bool = false
 
     // UserDefaults is documented thread-safe and the reference is immutable.
     private nonisolated(unsafe) let defaults: UserDefaults
@@ -59,7 +59,7 @@ public struct BrowserSearchSettingsStore: BrowserSearchSettingsReading {
 
     public var currentSearchSuggestionsEnabled: Bool {
         // Mirror @AppStorage behavior: bool(forKey:) returns false if key doesn't exist.
-        // Default to enabled unless user explicitly set a value.
+        // Keep remote suggestions off unless the user explicitly enables them.
         if defaults.object(forKey: Self.searchSuggestionsEnabledKey) == nil {
             return Self.defaultSearchSuggestionsEnabled
         }

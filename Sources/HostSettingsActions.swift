@@ -30,6 +30,9 @@ final class NotificationObserverToken: @unchecked Sendable {
 @MainActor
 final class HostSettingsActions: SettingsHostActions {
     private let configFileURL: URL
+    private let computerUseRuntimeService: ComputerUseRuntimeService
+    private var runComputerUseOnboardingAction:
+        @MainActor (ComputerUseOnboardingWindowController.StartingPoint) -> Void = { _ in }
 
     /// Serializes font-size config writes so rapid slider saves persist in order.
     private let fontConfigWriter = FontConfigWriter()
@@ -55,14 +58,23 @@ final class HostSettingsActions: SettingsHostActions {
     /// window instead of stacking duplicates.
     private var configWindow: NSWindow?
     private var configWindowCloseObserver: WindowCloseObserver?
+    /// Owns the currently requested sound preview so a new selection cancels
+    /// the old one and closing Settings does not leave an untracked playback
+    /// task behind.
+    private var notificationSoundPreviewTask: Task<Void, Never>?
 
-    init(configFileURL: URL) {
+    init(
+        configFileURL: URL,
+        computerUseRuntimeService: ComputerUseRuntimeService
+    ) {
         self.configFileURL = configFileURL
+        self.computerUseRuntimeService = computerUseRuntimeService
         startObservingAppIconMode()
     }
 
     deinit {
         appIconModeObservation?.invalidate()
+        notificationSoundPreviewTask?.cancel()
     }
 
     private func startObservingAppIconMode() {
@@ -101,7 +113,12 @@ final class HostSettingsActions: SettingsHostActions {
     func resetAllSettingsSideEffects() {
         LanguageSettingsStore(defaults: .standard).applyLanguageOverride(.system)
         PaneChromeSettings.notifyDidChange()
+        TerminalAdaptiveDefaultThemeSettings.notifyDidChange()
         AppDelegate.shared?.reconcileSocketListenerConfiguration(source: "settings.reset_all")
+    }
+
+    func terminalAdaptiveDefaultThemeDidChange() {
+        TerminalAdaptiveDefaultThemeSettings.notifyDidChange()
     }
 
     func notifyShortcutSettingsDidChange() {
@@ -109,8 +126,8 @@ final class HostSettingsActions: SettingsHostActions {
         // contents changed; posting again here double-notified every
         // listener. Only post when the reload saw no change, so callers
         // still get exactly one notification either way.
-        if !KeyboardShortcutSettings.settingsFileStore.reload() {
-            KeyboardShortcutSettings.notifySettingsFileDidChange()
+        if !KeyboardShortcutSettings.settingsFileStore.reload(notificationSourceURL: configFileURL) {
+            KeyboardShortcutSettings.notifySettingsFileDidChange(sourceURL: configFileURL)
         }
     }
 
@@ -124,6 +141,44 @@ final class HostSettingsActions: SettingsHostActions {
 
     func applyLanguageOverride(_ language: AppLanguage) {
         LanguageSettingsStore(defaults: .standard).applyLanguageOverride(language)
+    }
+
+    func refreshComputerUsePermissions() async {
+        _ = await computerUseRuntimeService.refreshHelperStatus()
+    }
+
+    func computerUseAccessibilityGranted() -> Bool {
+        computerUseRuntimeService.status().accessibility
+    }
+
+    func computerUseScreenRecordingGranted() -> Bool {
+        computerUseRuntimeService.status().screenRecording
+    }
+
+    func computerUsePermissionStatusIsKnown() -> Bool {
+        computerUseRuntimeService.permissionStatusIsKnown
+    }
+
+    func requestComputerUseAccessibility() {
+        runComputerUseOnboardingAction(.accessibility)
+    }
+
+    func requestComputerUseScreenRecording() {
+        runComputerUseOnboardingAction(.screenRecording)
+    }
+
+    func openComputerUseAccessibilitySettings() {
+        runComputerUseOnboardingAction(.accessibility)
+    }
+
+    func openComputerUseScreenRecordingSettings() {
+        runComputerUseOnboardingAction(.screenRecording)
+    }
+
+    func setRunComputerUseOnboardingAction(
+        _ action: @escaping @MainActor (ComputerUseOnboardingWindowController.StartingPoint) -> Void
+    ) {
+        runComputerUseOnboardingAction = action
     }
 
     func openConfigInExternalEditor() {
@@ -191,6 +246,79 @@ final class HostSettingsActions: SettingsHostActions {
 
     func refreshDesktopNotificationAuthorizationStatus() {
         TerminalNotificationStore.shared.refreshAuthorizationStatus()
+    }
+
+    // MARK: - Right sidebar tabs
+
+    func rightSidebarTabs() -> [RightSidebarTabSettingsItem] {
+        Self.rightSidebarTabItems()
+    }
+
+    @discardableResult
+    func setRightSidebarTabVisible(id: String, visible: Bool) -> Bool {
+        guard let mode = RightSidebarMode(rawValue: id) else { return false }
+        return RightSidebarTabPreferences.setHidden(!visible, mode: mode)
+    }
+
+    func moveRightSidebarTab(id: String, offset: Int) {
+        guard let mode = RightSidebarMode(rawValue: id) else { return }
+        RightSidebarTabPreferences.move(mode, offset: offset)
+    }
+
+    func rightSidebarTabsUpdates() -> AsyncStream<[RightSidebarTabSettingsItem]> {
+        AsyncStream { continuation in
+            let (signals, signalContinuation) = AsyncStream<Void>.makeStream(
+                bufferingPolicy: .bufferingNewest(1)
+            )
+            // Shortcut rebinds change the displayed digit labels, so both
+            // notifications refresh the card. Tab-preference mutations post
+            // both; the newest-1 buffer coalesces the pair into one refresh.
+            let observers = [
+                RightSidebarTabPreferences.didChangeNotification,
+                KeyboardShortcutSettings.didChangeNotification,
+            ].map { name in
+                NotificationObserverToken(
+                    NotificationCenter.default.addObserver(
+                        forName: name,
+                        object: nil,
+                        queue: nil
+                    ) { _ in
+                        signalContinuation.yield(())
+                    }
+                )
+            }
+            let drainTask = Task { @MainActor in
+                continuation.yield(Self.rightSidebarTabItems())
+                for await _ in signals {
+                    if Task.isCancelled { break }
+                    continuation.yield(Self.rightSidebarTabItems())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                drainTask.cancel()
+                signalContinuation.finish()
+                observers.forEach { $0.remove() }
+            }
+        }
+    }
+
+    private static func rightSidebarTabItems() -> [RightSidebarTabSettingsItem] {
+        let available = RightSidebarMode.availableModes()
+        let hidden = RightSidebarTabPreferences.hiddenModes()
+        return RightSidebarTabPreferences.orderedModes()
+            .filter(available.contains)
+            .map { mode in
+                let shortcut = mode.shortcutAction.map { KeyboardShortcutSettings.shortcut(for: $0) }
+                    ?? .unbound
+                return RightSidebarTabSettingsItem(
+                    id: mode.rawValue,
+                    title: mode.label,
+                    symbolName: mode.symbolName,
+                    isVisible: !hidden.contains(mode),
+                    shortcutLabel: shortcut.isUnbound ? "" : shortcut.displayString
+                )
+            }
     }
 
     func restartApp() {
@@ -281,7 +409,16 @@ final class HostSettingsActions: SettingsHostActions {
     }
 
     func previewNotificationSound(value: String, customFilePath: String) {
-        NotificationSoundSettings.previewSound(value: value, customFilePath: customFilePath)
+        notificationSoundPreviewTask?.cancel()
+        let task = Task { @MainActor [weak self] in
+            _ = await NotificationSoundSettings.previewSound(
+                value: value,
+                customFilePath: customFilePath
+            )
+            guard !Task.isCancelled else { return }
+            self?.notificationSoundPreviewTask = nil
+        }
+        notificationSoundPreviewTask = task
     }
 
     func browserHistoryEntryCount() -> Int? {
@@ -293,7 +430,7 @@ final class HostSettingsActions: SettingsHostActions {
         // Reads the in-memory cache (kept current by config reloads) rather than
         // forcing a synchronous disk read on the main actor when Settings opens.
         SettingsFontSize(
-            points: Double(GhosttyConfig.load().sidebarFontSize),
+            points: Double(GhosttyConfig.loadForCmux().sidebarFontSize),
             minimum: CmuxGhosttyConfigSettingEditor.minSidebarFontSize,
             maximum: CmuxGhosttyConfigSettingEditor.maxSidebarFontSize,
             defaultValue: CmuxGhosttyConfigSettingEditor.defaultSidebarFontSize
@@ -311,7 +448,7 @@ final class HostSettingsActions: SettingsHostActions {
     func surfaceTabBarFontSize() -> SettingsFontSize {
         // See ``sidebarFontSize()`` — uses the cached config to avoid main-actor disk I/O.
         SettingsFontSize(
-            points: Double(GhosttyConfig.load().surfaceTabBarFontSize),
+            points: Double(GhosttyConfig.loadForCmux().surfaceTabBarFontSize),
             minimum: CmuxGhosttyConfigSettingEditor.minSurfaceTabBarFontSize,
             maximum: CmuxGhosttyConfigSettingEditor.maxSurfaceTabBarFontSize,
             defaultValue: CmuxGhosttyConfigSettingEditor.defaultSurfaceTabBarFontSize

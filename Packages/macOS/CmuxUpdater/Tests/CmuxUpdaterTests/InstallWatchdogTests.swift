@@ -177,7 +177,9 @@ import Testing
             infoFeedURLProvider: { nightlyFeed }
         )
 
-        #expect(driver.resolvedFeedURLString() == nightlyFeed)
+        // The passive path resolves the fork's published universal nightly feed.
+        let resolvedFeed = try #require(driver.resolvedFeedURLString())
+        #expect(resolvedFeed == "https://github.com/Enigma-Labs-Technology/zerocmux/releases/download/nightly/appcast.xml")
 
         let didNotStart = NSError(domain: UpdateStateModel.updateErrorDomain, code: UpdateStateModel.installDidNotStartCode)
         let recoveryURL = try #require(UpdateManualDownloadRecovery().url(
