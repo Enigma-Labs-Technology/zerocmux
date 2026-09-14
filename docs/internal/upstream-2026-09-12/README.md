@@ -144,10 +144,14 @@ produced all four target binaries with matching manifest checksums. The official
 Go vulnerability scanner found no reachable vulnerabilities using Go 1.27.1.
 The release and SSH CI lanes pin that compiler version.
 
-An isolated unsigned arm64 Release build completed successfully on the local
-macOS 27 SDK before the packaging fixes. Its updater feed, disabled profile
-reporting, computer-use binary policy, and bundled license checks passed. That
-compile is not a signed/notarized universal release validation on SDK 26.
+Tagged Debug and isolated unsigned arm64 Release builds at `0291533169`
+completed successfully on the local macOS 27 SDK. Updater feed, disabled profile
+reporting, computer-use binary policy, TUI source provenance, and canonical
+bundled license-file checks passed. All 14 native Release binaries were checked
+for known removed reporting markers. The Release packaging steps installed the
+reviewed TUI and injected the four-platform SSH manifest with verified checksums.
+This is not a signed/notarized universal release validation on SDK 26 or a
+complete observation of every runtime network path.
 
 Focused package/helper/TUI checks passed the preceding privacy changes. CI
 repairs in `48cb64e825` and `616f26ae84` preserve executable coverage; all 17 SDK
@@ -156,10 +160,36 @@ Native tests and signing verification remain deferred at the user's request.
 The focused hosted TUI lane now runs a bounded detach/reattach smoke instead of
 relying on the older opt-in gate.
 
-Dependency audit: agent-chat's Bun lockfile had no advisories. Root and webviews
-reported 4 and 33 advisories respectively, mostly build/development dependencies
-(e.g. picomatch through Tailwind, fast-uri/brace-expansion through react-doctor,
-undici through jsdom, and nanoid/postcss through Vite). The root file-type finding
-is a transitive Jimp/OpenTUI dependency and needs reachability/remediation review;
-no blanket vulnerability-free or production-ready claim is made from these
-checks. These audits did not execute app tests locally.
+The final hosted pass exposed a process ownership defect in the TUI: unrelated
+children temporarily inherit close-on-exec marker descriptors during fork. The
+cleanup scanner could retain that false ownership evidence and kill another
+terminal's process. The deterministic test-only commit `f13fc51baf` failed on
+both Linux and macOS in Actions run `34824968380`. The repair ignores
+close-on-exec markers on both platforms while preserving explicitly inherited
+markers and descendant cleanup. Both platforms passed the focused suite in run
+`34830546645`; final commit `0291533169`, including the descriptor-read
+optimization and formatting, also passed on both platforms in run
+`34832091517`. The regression exercises actual cleanup: scope roots and
+explicitly tracked children terminate, while unrelated children survive.
+
+Dependency audit: agent-chat's Bun lockfile had no advisories. The webview
+lockfile initially reported 33; narrow updates to the affected build/test
+dependencies now pass `bun audit` with none. The frozen install, typecheck, and
+production bundle build pass, and every generated shipped webview file is
+byte-identical. Root picomatch is also updated, clearing its two advisories.
+No new dependency names or reporting SDKs are introduced by these lock changes.
+
+Two advisories remain in OpenTUI 0.1.106's dependency graph:
+
+- `diff` 8.0.2: the affected `parsePatch` implementation is embedded in
+  OpenTUI's `DiffRenderable`. The Feed uses Box, ScrollBox, and Text; it never
+  constructs that renderable or supplies input to the patch parser.
+- `file-type` 16.5.4: Jimp and its affected ASF parser are embedded in the
+  separate `@opentui/core/3d` entry point. The Feed imports the default entry
+  point; its JavaScript import graph does not load the 3D module.
+
+This is a source reachability assessment for the fork's Feed, not a claim that
+the dependency packages themselves are patched. Overriding the transitive npm
+versions alone would not replace the vulnerable code embedded inside OpenTUI.
+Any future Diff/3D Feed usage must first replace or patch that code. No local
+tests were executed; runtime regression coverage remains in hosted CI.
