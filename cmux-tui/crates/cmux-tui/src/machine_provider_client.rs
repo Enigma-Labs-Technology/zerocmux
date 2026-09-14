@@ -1600,23 +1600,6 @@ mod tests {
         BearerToken::new(value).expect("valid test token")
     }
 
-    fn write_or_peer_closed(result: io::Result<()>, context: &str) -> bool {
-        match result {
-            Ok(()) => true,
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::BrokenPipe
-                        | io::ErrorKind::ConnectionAborted
-                        | io::ErrorKind::ConnectionReset
-                ) =>
-            {
-                false
-            }
-            Err(error) => panic!("{context}: {error}"),
-        }
-    }
-
     fn received(event: ProviderEvent) -> ReceivedProviderEvent {
         ReceivedProviderEvent { event, delivery: None }
     }
