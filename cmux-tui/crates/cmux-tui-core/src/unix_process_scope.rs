@@ -1507,6 +1507,149 @@ fn process_identity(pid: u32) -> Option<ProcessIdentity> {
 mod tests {
     use super::*;
 
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn process_scope_excludes_unrelated_cloexec_children_before_and_after_exec() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixStream;
+
+        struct Probe {
+            pid: libc::pid_t,
+            gate: Option<UnixStream>,
+            ready: UnixStream,
+        }
+
+        impl Probe {
+            fn spawn(marker_fd: libc::c_int, retain_marker: bool) -> Self {
+                let (gate, child_gate) = UnixStream::pair().unwrap();
+                let (ready, child_ready) = UnixStream::pair().unwrap();
+                ready.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                // SAFETY: the child uses only async-signal-safe calls until
+                // exec. It never runs Rust destructors or touches a mutex.
+                let pid = unsafe { libc::fork() };
+                assert!(pid >= 0, "fork failed: {}", io::Error::last_os_error());
+                if pid == 0 {
+                    unsafe {
+                        if libc::setsid() < 0 {
+                            libc::_exit(125);
+                        }
+                        libc::close(gate.as_raw_fd());
+                        libc::close(ready.as_raw_fd());
+                        if retain_marker {
+                            let flags = libc::fcntl(marker_fd, libc::F_GETFD);
+                            if flags < 0
+                                || libc::fcntl(marker_fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC)
+                                    < 0
+                            {
+                                libc::_exit(125);
+                            }
+                        }
+                        if libc::write(child_ready.as_raw_fd(), b"b".as_ptr().cast(), 1) != 1 {
+                            libc::_exit(125);
+                        }
+                        let mut byte = 0_u8;
+                        if libc::read(child_gate.as_raw_fd(), (&mut byte as *mut u8).cast(), 1) != 1
+                        {
+                            libc::_exit(0);
+                        }
+                        if libc::dup2(child_gate.as_raw_fd(), libc::STDIN_FILENO) < 0
+                            || libc::dup2(child_ready.as_raw_fd(), libc::STDOUT_FILENO) < 0
+                        {
+                            libc::_exit(125);
+                        }
+                        libc::execl(
+                            c"/bin/sh".as_ptr(),
+                            c"sh".as_ptr(),
+                            c"-c".as_ptr(),
+                            c"printf a; IFS= read -r _".as_ptr(),
+                            std::ptr::null::<libc::c_char>(),
+                        );
+                        libc::_exit(127);
+                    }
+                }
+                drop(child_gate);
+                drop(child_ready);
+                let mut probe = Self { pid, gate: Some(gate), ready };
+                let mut byte = [0];
+                probe.ready.read_exact(&mut byte).unwrap();
+                assert_eq!(byte, *b"b");
+                probe
+            }
+
+            fn exec(&mut self) {
+                self.gate.as_mut().unwrap().write_all(b"x").unwrap();
+                let mut byte = [0];
+                self.ready.read_exact(&mut byte).unwrap();
+                assert_eq!(byte, *b"a", "the fixture must acknowledge actual exec");
+            }
+
+            fn alive(&self) -> bool {
+                let mut status = 0;
+                // SAFETY: this PID belongs to the child created by this probe.
+                unsafe { libc::waitpid(self.pid, &mut status, libc::WNOHANG) == 0 }
+            }
+        }
+
+        impl Drop for Probe {
+            fn drop(&mut self) {
+                // EOF releases both the pre-exec gate and the executed shell.
+                // Cleanup never signals a process that was not our fixture.
+                drop(self.gate.take());
+                let mut status = 0;
+                loop {
+                    // SAFETY: this probe is the sole wait owner for its child.
+                    let result = unsafe { libc::waitpid(self.pid, &mut status, 0) };
+                    if result >= 0 || io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let scope = UnixProcessScope::prepare().unwrap();
+        // Explicit inheritance models the selected command's configure()
+        // pre-exec handoff. The other child keeps the parent's CLOEXEC copy.
+        let mut owned = Probe::spawn(scope._marker_fd.as_raw_fd(), true);
+        owned.exec();
+        let registration = ScopeRegistration {
+            marker: scope.marker.clone(),
+            file_marker: scope.file_marker,
+            root: process_identity(owned.pid as u32).unwrap(),
+            tracked: scope.tracked.clone(),
+            track_before_finalization: true,
+            final_scan_gate: None,
+        };
+        let mut unrelated = Probe::spawn(scope._marker_fd.as_raw_fd(), false);
+        let scan_owns = |pid: libc::pid_t| {
+            let identity = process_identity(pid as u32).unwrap();
+            let mut cursor = ProcessScanCursor::default();
+            loop {
+                let scan = scan_registered_processes(std::slice::from_ref(&registration), cursor);
+                if scan.matches.contains(&(0, identity)) {
+                    break true;
+                }
+                let Some(next) = scan.next else { break false };
+                cursor = next;
+            }
+        };
+        let unrelated_owned_before_exec = scan_owns(unrelated.pid);
+        let unrelated_alive_before_exec = unrelated.alive();
+        unrelated.exec();
+        let unrelated_owned_after_exec = scan_owns(unrelated.pid);
+        let owned_after_exec = scan_owns(owned.pid);
+        let unrelated_alive_after_exec = unrelated.alive();
+        drop(unrelated);
+        drop(owned);
+
+        assert!(unrelated_alive_before_exec && unrelated_alive_after_exec);
+        assert!(owned_after_exec, "an explicitly inherited marker must remain owned after exec");
+        assert!(!unrelated_owned_after_exec, "exec must drop the unrelated child's marker copy");
+        assert!(
+            !unrelated_owned_before_exec,
+            "a CLOEXEC marker inherited during fork must not claim an unrelated live child"
+        );
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_process_identity_uses_start_time_after_a_parenthesized_name() {
