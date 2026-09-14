@@ -1134,6 +1134,13 @@ fn scan_registered_processes(
                 }
                 remaining_file_descriptors -= 1;
                 last_fd = fd;
+                let Some(candidate) = std::fs::metadata(&path)
+                    .ok()
+                    .map(|metadata| FileMarker { device: metadata.dev(), inode: metadata.ino() })
+                    .filter(|marker| file_markers.contains_key(marker))
+                else {
+                    continue;
+                };
                 let Ok(fdinfo) = std::fs::read_to_string(process.join("fdinfo").join(fd.to_string()))
                 else {
                     continue;
@@ -1154,7 +1161,7 @@ fn scan_registered_processes(
                 let Some(marker) = std::fs::metadata(path)
                     .ok()
                     .map(|metadata| FileMarker { device: metadata.dev(), inode: metadata.ino() })
-                    .filter(|marker| Some(marker.inode) == inode)
+                    .filter(|marker| *marker == candidate && Some(marker.inode) == inode)
                 else {
                     continue;
                 };
