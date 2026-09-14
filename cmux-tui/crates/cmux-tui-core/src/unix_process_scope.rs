@@ -1134,9 +1134,27 @@ fn scan_registered_processes(
                 }
                 remaining_file_descriptors -= 1;
                 last_fd = fd;
+                let Ok(fdinfo) = std::fs::read_to_string(process.join("fdinfo").join(fd.to_string()))
+                else {
+                    continue;
+                };
+                // fdinfo captures inode and flags from the same kernel file
+                // reference. A fork's transient CLOEXEC copy is not the
+                // explicit inheritance performed by configure().
+                let flags = fdinfo.lines().find_map(|line| {
+                    line.strip_prefix("flags:")
+                        .and_then(|value| u32::from_str_radix(value.trim(), 8).ok())
+                });
+                let inode = fdinfo.lines().find_map(|line| {
+                    line.strip_prefix("ino:").and_then(|value| value.trim().parse::<u64>().ok())
+                });
+                if flags.is_none_or(|flags| flags & libc::O_CLOEXEC as u32 != 0) {
+                    continue;
+                }
                 let Some(marker) = std::fs::metadata(path)
                     .ok()
                     .map(|metadata| FileMarker { device: metadata.dev(), inode: metadata.ino() })
+                    .filter(|marker| Some(marker.inode) == inode)
                 else {
                     continue;
                 };
@@ -1278,7 +1296,7 @@ fn scan_registered_processes(
 #[repr(C)]
 struct ProcFileInfo {
     _open_flags: u32,
-    _status: u32,
+    status: u32,
     _offset: libc::off_t,
     _file_type: i32,
     _guard_flags: u32,
@@ -1318,7 +1336,7 @@ unsafe extern "C" {
 #[cfg(target_os = "macos")]
 #[repr(C)]
 struct VnodeFdInfo {
-    _file: ProcFileInfo,
+    file: ProcFileInfo,
     vnode: libc::vnode_info,
 }
 
@@ -1335,6 +1353,7 @@ fn mac_process_file_markers(
     remaining: &mut usize,
 ) -> MacFileMarkerScan {
     const PROC_PIDFDVNODEINFO: libc::c_int = 1;
+    const PROC_FP_CLEXEC: u32 = 2;
     let empty = || MacFileMarkerScan { markers: Vec::new(), next_fd: None };
     let Ok(pid_int) = libc::c_int::try_from(pid) else { return empty() };
     let bytes =
@@ -1386,6 +1405,12 @@ fn mac_process_file_markers(
             }
             // SAFETY: proc_pidfdinfo initialized the full structure.
             let info = unsafe { info.assume_init() };
+            // The inode and descriptor flags come from one kernel snapshot.
+            // Only the selected command clears CLOEXEC before exec; other
+            // concurrent fork children temporarily carry the parent's copy.
+            if info.file.status & PROC_FP_CLEXEC != 0 {
+                return None;
+            }
             Some(FileMarker {
                 device: u64::from(info.vnode.vi_stat.vst_dev),
                 inode: info.vnode.vi_stat.vst_ino,
@@ -1588,6 +1613,22 @@ mod tests {
                 // SAFETY: this PID belongs to the child created by this probe.
                 unsafe { libc::waitpid(self.pid, &mut status, libc::WNOHANG) == 0 }
             }
+
+            fn wait_for_signal(&self) -> Option<libc::c_int> {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                loop {
+                    let mut status = 0;
+                    // SAFETY: this is the fixture's owned child PID.
+                    let result = unsafe { libc::waitpid(self.pid, &mut status, libc::WNOHANG) };
+                    if result == self.pid {
+                        return libc::WIFSIGNALED(status).then(|| libc::WTERMSIG(status));
+                    }
+                    if result < 0 || Instant::now() >= deadline {
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
         }
 
         impl Drop for Probe {
@@ -1606,19 +1647,26 @@ mod tests {
             }
         }
 
-        let scope = UnixProcessScope::prepare().unwrap();
+        let mut scope = UnixProcessScope::prepare().unwrap();
         // Explicit inheritance models the selected command's configure()
         // pre-exec handoff. The other child keeps the parent's CLOEXEC copy.
         let mut owned = Probe::spawn(scope._marker_fd.as_raw_fd(), true);
         owned.exec();
+        scope.root = process_identity(owned.pid as u32);
+        #[cfg(target_os = "linux")]
+        {
+            scope.root_pidfd = Some(pidfd_open(owned.pid as u32).unwrap());
+        }
         let registration = ScopeRegistration {
             marker: scope.marker.clone(),
             file_marker: scope.file_marker,
-            root: process_identity(owned.pid as u32).unwrap(),
+            root: scope.root.unwrap(),
             tracked: scope.tracked.clone(),
             track_before_finalization: true,
             final_scan_gate: None,
         };
+        let mut inherited = Probe::spawn(scope._marker_fd.as_raw_fd(), true);
+        inherited.exec();
         let mut unrelated = Probe::spawn(scope._marker_fd.as_raw_fd(), false);
         let scan_owns = |pid: libc::pid_t| {
             let identity = process_identity(pid as u32).unwrap();
@@ -1637,12 +1685,28 @@ mod tests {
         unrelated.exec();
         let unrelated_owned_after_exec = scan_owns(unrelated.pid);
         let owned_after_exec = scan_owns(owned.pid);
+        let inherited_after_exec = scan_owns(inherited.pid);
         let unrelated_alive_after_exec = unrelated.alive();
+        // Exercise real cleanup only with the explicitly inherited fixture.
+        // Never feed an unrelated or non-fixture PID into the signal path,
+        // including when this regression is run against the buggy scanner.
+        if inherited_after_exec {
+            record_tracked_process(&registration, process_identity(inherited.pid as u32).unwrap());
+        }
+        scope.terminate();
+        let owned_signal = owned.wait_for_signal();
+        let inherited_signal = inherited.wait_for_signal();
+        let unrelated_alive_after_cleanup = unrelated.alive();
         drop(unrelated);
+        drop(inherited);
         drop(owned);
 
         assert!(unrelated_alive_before_exec && unrelated_alive_after_exec);
+        assert!(unrelated_alive_after_cleanup, "scope cleanup must preserve the unrelated child");
         assert!(owned_after_exec, "an explicitly inherited marker must remain owned after exec");
+        assert!(inherited_after_exec, "inherited marker ownership must survive exec");
+        assert_eq!(owned_signal, Some(libc::SIGKILL), "the scope root must be terminated");
+        assert_eq!(inherited_signal, Some(libc::SIGKILL), "tracked inherited children must terminate");
         assert!(!unrelated_owned_after_exec, "exec must drop the unrelated child's marker copy");
         assert!(
             !unrelated_owned_before_exec,
