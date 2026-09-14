@@ -904,6 +904,7 @@ mod tests {
     fn close_handle_unblocks_a_reader() {
         let (release_server_tx, release_server_rx) = std::sync::mpsc::channel();
         let (path, server) = spawn_stream_server("close", move |mut stream| {
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut request = String::new();
             reader.read_line(&mut request).unwrap();
             let id = serde_json::from_str::<Value>(&request).unwrap()["id"].clone();

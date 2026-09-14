@@ -13336,7 +13336,7 @@ mod tests {
         ProviderWorkspaceAuthority, SessionJournalRecord, SidebarPluginOptions, SurfaceOptions,
     };
     use ghostty_vt::{Callbacks, RenderState, Terminal};
-    use std::sync::{MutexGuard, mpsc::TryRecvError};
+    use std::sync::mpsc::TryRecvError;
     use std::time::Duration;
 
     static NEXT_TEST_SOCKET_DIR: AtomicU64 = AtomicU64::new(1);
@@ -14210,7 +14210,6 @@ mod tests {
 
     #[test]
     fn pixel_only_render_delta_does_not_rescan_the_full_graphics_scene() {
-        let _scan_guard = lock_render_client_image_scan_counter();
         let mut terminal = Terminal::new(10, 3, 0, Callbacks::default()).unwrap();
         terminal.vt_write(RED_IMAGE_41);
         terminal.vt_write(GREEN_IMAGE_42);
@@ -14241,7 +14240,6 @@ mod tests {
 
     #[test]
     fn render_client_that_skips_a_graphics_frame_falls_back_to_one_linear_diff() {
-        let _scan_guard = lock_render_client_image_scan_counter();
         let mut terminal = Terminal::new(10, 3, 0, Callbacks::default()).unwrap();
         terminal.vt_write(RED_IMAGE_41);
         terminal.vt_write(GREEN_IMAGE_42);

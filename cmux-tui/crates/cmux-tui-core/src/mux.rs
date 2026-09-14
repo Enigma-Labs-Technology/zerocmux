@@ -18348,14 +18348,21 @@ mod tests {
         assert!(mux.surface(surface).is_some(), "terminal runtime must remain catalog-owned");
     }
 
+    static LARGE_SURFACE_STRESS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     fn wait_for_kitty_image_budget(mux: &Mux) {
+        wait_for_kitty_image_budget_until(
+            mux,
+            crate::terminal_host_runtime::CONTROL_RESPONSE_TIMEOUT.saturating_mul(15),
+        );
+    }
+
+    fn wait_for_kitty_image_budget_until(mux: &Mux, timeout: Duration) {
         // The stress cases create every process-budget owner while the rest
         // of this 800-test binary is also scheduling worker threads. Wait on
         // the worker's state transition instead of polling CPU progress.
         assert!(
-            mux.wait_for_kitty_image_budget_idle_for_test(
-                crate::terminal_host_runtime::CONTROL_RESPONSE_TIMEOUT.saturating_mul(15),
-            ),
+            mux.wait_for_kitty_image_budget_idle_for_test(timeout),
             "Kitty image budget worker did not converge"
         );
     }

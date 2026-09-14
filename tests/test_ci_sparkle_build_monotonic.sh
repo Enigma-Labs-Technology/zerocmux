@@ -22,7 +22,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_FILE="${CMUX_SPARKLE_PROJECT_FILE:-$ROOT_DIR/cmux.xcodeproj/project.pbxproj}"
-APPCAST_URL="${CMUX_SPARKLE_APPCAST_URL:-https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml}"
+APPCAST_URL="${CMUX_SPARKLE_APPCAST_URL:-https://github.com/Enigma-Labs-Technology/zerocmux/releases/latest/download/appcast.xml}"
 MODE="${CMUX_SPARKLE_MONOTONIC_MODE:-enforce}"
 
 case "$MODE" in
