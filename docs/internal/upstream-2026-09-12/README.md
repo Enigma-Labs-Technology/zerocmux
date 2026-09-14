@@ -120,10 +120,46 @@ artifact check, not a complete observation of every runtime network path.
 
 ## Background CI review
 
-The stale Go daemon lane was removed after upstream deleted its implementation.
+The initial sync removed the Go daemon with upstream. The production pass found
+that the retained SSH client still requires it, so the fork daemon, asset builder,
+manifest generator, and executable asset coverage are restored from `bc9b1a6e9c`.
+A focused hosted Go test lane now covers this compatibility component. It has no
+analytics client and only serves explicitly configured remote sessions.
 The real CI aggregate remains authoritative; the imported fallback that falsely
 reported successful skipped CI was removed. Windows target setup now selects the
 TUI pinned Rust toolchain, and Cargo build diagnostics remain visible in the
 Valgrind lane. Generated webview assets were rebuilt from the merged sources.
 Obsolete hosted SDK publisher workflow assertions are recorded in the exclusion
 ledger; runtime protocol, SDK artifact, and provenance checks remain enabled.
+
+## Production preparation (2026-09-14)
+
+Candidate: 1.3.0, build 93 (published 1.2.4 uses build 92). No release tag or
+production upload has been created. The monotonic check now reads the fork feed.
+
+The release workflow uses the pinned GhosttyKit source-build fallback, requires
+SDK 26 explicitly, installs the reviewed source-built TUI, and checks both TUI
+and computer-use architectures before signing. The restored SSH asset builder
+produced all four target binaries with matching manifest checksums. The official
+Go vulnerability scanner found no reachable vulnerabilities using Go 1.27.1.
+The release and SSH CI lanes pin that compiler version.
+
+An isolated unsigned arm64 Release build completed successfully on the local
+macOS 27 SDK before the packaging fixes. Its updater feed, disabled profile
+reporting, computer-use binary policy, and bundled license checks passed. That
+compile is not a signed/notarized universal release validation on SDK 26.
+
+Focused package/helper/TUI checks passed the preceding privacy changes. CI
+repairs in `48cb64e825` and `616f26ae84` preserve executable coverage; all 17 SDK
+jobs, TUI web/bindings/Windows, and Linux/macOS Clippy passed on `616f26ae84`.
+Native tests and signing verification remain deferred at the user's request.
+The focused hosted TUI lane now runs a bounded detach/reattach smoke instead of
+relying on the older opt-in gate.
+
+Dependency audit: agent-chat's Bun lockfile had no advisories. Root and webviews
+reported 4 and 33 advisories respectively, mostly build/development dependencies
+(e.g. picomatch through Tailwind, fast-uri/brace-expansion through react-doctor,
+undici through jsdom, and nanoid/postcss through Vite). The root file-type finding
+is a transitive Jimp/OpenTUI dependency and needs reachability/remediation review;
+no blanket vulnerability-free or production-ready claim is made from these
+checks. These audits did not execute app tests locally.

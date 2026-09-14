@@ -4,6 +4,8 @@ All notable changes to zerocmux are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-14
+
 ### Changed
 - Integrated upstream cmux through `309513b408` (4,819 commits), preserving the
   fork's zero-telemetry policy and exclusions for hosted Cloud and mobile services
@@ -19,6 +21,9 @@ All notable changes to zerocmux are documented here.
 - Tagged builds compile the bundled TUI from reviewed source and no longer seed
   hosted service settings
 - Reload preserves existing directories at its temporary compatibility-link path
+- Preserved the SSH daemon and its release assets for existing remote workspaces
+- Release builds now include the reviewed TUI and build GhosttyKit from the pinned
+  source when a verified prebuilt artifact is unavailable
 
 ## [1.2.4] - 2026-08-05
 

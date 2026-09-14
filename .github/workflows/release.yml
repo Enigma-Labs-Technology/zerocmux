@@ -136,41 +136,23 @@ jobs:
               throw error;
             }
 
-      - name: Select Xcode
+      - name: Select release Xcode
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          set -euo pipefail
-          if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
-            XCODE_DIR="/Applications/Xcode.app/Contents/Developer"
-          else
-            XCODE_APP=""
-            for candidate in /Applications/Xcode*.app; do
-              [ -d "$candidate" ] || continue
-              XCODE_APP="$candidate"
-              break
-            done
-            if [ -n "$XCODE_APP" ]; then
-              XCODE_DIR="$XCODE_APP/Contents/Developer"
-            else
-              echo "No Xcode.app found under /Applications" >&2
-              exit 1
-            fi
-          fi
-          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
-          export DEVELOPER_DIR="$XCODE_DIR"
-          xcodebuild -version
-          xcrun --sdk macosx --show-sdk-path
+        env:
+          CMUX_CI_REQUIRED_MACOS_SDK_MAJOR: "26"
+          CMUX_CI_MAX_MACOS_SDK_MAJOR: "26"
+        run: ./scripts/select-ci-xcode.sh
 
       - name: Install build deps
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         run: |
           ./scripts/install-rust-ci.sh
+          ./scripts/install-zig-ci.sh
           npm install --global "create-dmg@${CREATE_DMG_VERSION}"
 
-      - name: Download pre-built GhosttyKit.xcframework
+      - name: Prepare privacy-pinned GhosttyKit
         if: steps.guard_release_assets.outputs.skip_all != 'true'
-        run: |
-          ./scripts/download-prebuilt-ghosttykit.sh
+        run: ./scripts/ensure-ghosttykit.sh
 
       - name: Cache Swift packages
         if: steps.guard_release_assets.outputs.skip_all != 'true'
@@ -184,7 +166,7 @@ jobs:
         if: steps.guard_release_assets.outputs.skip_all != 'true'
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version-file: daemon/remote/go.mod
+          go-version: "1.27.1"
           cache-dependency-path: daemon/remote/go.sum
 
       - name: Build universal app (Release)
@@ -215,6 +197,19 @@ jobs:
           ./scripts/install-prebuilt-ghostty-cli-helper.sh \
             ghostty-cli-helper/ghostty \
             build-universal/Build/Products/Release/zerocmux.app
+
+      - name: Build reviewed TUI and verify computer-use policy
+        if: steps.guard_release_assets.outputs.skip_all != 'true'
+        run: |
+          set -euo pipefail
+          APP_PATH="build-universal/Build/Products/Release/zerocmux.app"
+          ./scripts/install-cmux-tui-client.sh "$APP_PATH"
+          python3 scripts/verify-cmux-cua-privacy.py "$APP_PATH/Contents/Resources/bin/cmux-cua"
+          for binary in cmux-tui cmux-cua; do
+            for arch in arm64 x86_64; do
+              lipo "$APP_PATH/Contents/Resources/bin/$binary" -verify_arch "$arch"
+            done
+          done
 
       - name: Verify binary architectures
         if: steps.guard_release_assets.outputs.skip_all != 'true'
