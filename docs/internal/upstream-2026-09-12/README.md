@@ -193,3 +193,36 @@ the dependency packages themselves are patched. Overriding the transitive npm
 versions alone would not replace the vulnerable code embedded inside OpenTUI.
 Any future Diff/3D Feed usage must first replace or patch that code. No local
 tests were executed; runtime regression coverage remains in hosted CI.
+
+
+## Final TUI recovery pass
+
+Broader core checks at `0291533169` found a separate persisted-state recovery
+bug on both Linux and macOS. Startup terminal repair left live tabs pointing to
+a tombstoned terminal, so reopening failed validation. The repair transaction
+had already committed, leaving an affected database in that partial state.
+
+Test-only commits `d74ac20fd5` and `24045d35e7` cover empty panes, surviving tabs,
+a surviving active tab, and the partial state left by an earlier failed launch.
+The first test-only commit reproduced the reopen failure on both platforms in
+Actions run `34835461082`. Runtime fix `d7114eb092` uses the shared terminal/tab
+removal helper, aligns deletion revisions, and normalizes only affected panes.
+It preserves surviving active tabs and makes a second reopen a no-op. The
+existing content index supports the new dangling-tab lookup. Two macOS socket
+test fixtures also use shorter paths so their intended permission and nested
+creation checks reach the bind operation.
+
+The focused Linux/macOS workflow now includes the complete core library test
+suite. The preceding final privacy integration run `34832088342` passed 1,790
+TUI tests, the original drag and host-disconnect regressions, and the mandatory
+attach/detach smoke. All 17 SDK checks passed in `34832088403`, and Valgrind,
+Windows, web frontend, and bindings E2E passed in `34832088207`. See PR #10 for
+current verification of the subsequent recovery fix and rebuilt artifacts.
+
+A public OSV query of all 608 locked Rust registry versions found
+`RUSTSEC-2026-0258` for h2 0.4.15 and the informational unmaintained-package notice
+`RUSTSEC-2024-0436` for paste 1.0.15. h2 is absent from the arm64 Release build:
+the built hyper and reqwest feature sets exclude HTTP/2, and the bundled TUI
+excludes Iroh. The h2 issue remains relevant to optional configurations that
+enable that dependency; this is not a clean advisory claim for every feature
+combination. Native app/UI tests and signed universal validation remain deferred.
