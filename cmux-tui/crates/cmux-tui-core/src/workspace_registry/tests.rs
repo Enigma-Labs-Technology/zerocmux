@@ -3847,14 +3847,64 @@ fn batch_terminal_close_rolls_back_every_tab_on_mid_transaction_failure() {
 
 #[test]
 fn startup_repairs_legacy_terminal_close_dangling_resource_rows() {
+    for active_survivor in [None, Some(false), Some(true)] {
+        assert_startup_repairs_legacy_terminal_close(active_survivor);
+    }
+}
+
+fn assert_startup_repairs_legacy_terminal_close(active_survivor: Option<bool>) {
     let root = temp_root("terminal-close-dangling-resource");
+    let initial_revision = if active_survivor.is_some() { 2 } else { 1 };
+    let repair_revision = initial_revision + 1;
     {
         let mut registry = WorkspaceRegistry::open(&root, "session").unwrap();
         commit_terminal_topology(&mut registry, "seed-terminal-close-dangling");
+        if let Some(keep_active) = active_survivor {
+            let mut changes = vec![
+                ResourceChange::UpsertTerminal {
+                    public_id: terminal_resource(TERMINAL_TWO),
+                    terminal: terminal(TERMINAL_TWO, "one"),
+                },
+                ResourceChange::UpsertPane(RegistryPane {
+                    public_id: pane_id(1),
+                    screen_id: screen_id(1),
+                    name: Some("Shell".into()),
+                    active_tab: Some(tab_id(if keep_active { 3 } else { 1 })),
+                    creation_ordinal: 1,
+                }),
+            ];
+            for index in [2, 3] {
+                changes.push(ResourceChange::UpsertTab(RegistryTab {
+                    public_id: tab_id(index),
+                    pane_id: pane_id(1),
+                    position: usize::try_from(index - 1).unwrap(),
+                    content_id: ContentPublicId::Terminal(terminal_resource(TERMINAL_TWO)),
+                    name: None,
+                    browser_url: None,
+                    terminal_id: Some(TERMINAL_TWO.into()),
+                }));
+            }
+            changes.push(ResourceChange::SetTabOrder {
+                pane_id: pane_id(1),
+                tab_ids: vec![tab_id(1), tab_id(2), tab_id(3)],
+            });
+            registry
+                .commit_resource_patch(
+                    &WorkspaceMutation::new("seed-surviving-tabs", "test").unwrap(),
+                    "tab.create_terminal",
+                    &json!({"operation":"tab.create_terminal"}),
+                    None,
+                    Some(1),
+                    &ResourcePatch { changes },
+                    &json!({}),
+                    &json!([]),
+                )
+                .unwrap();
+        }
         let mutation = WorkspaceMutation::new("legacy-host-only-close", "legacy-client").unwrap();
         registry.close_terminal(&mutation, None, Some(0), TERMINAL_ONE, None).unwrap();
         let topology = registry.resource_topology_snapshot().unwrap();
-        assert_eq!(topology.revision, 1);
+        assert_eq!(topology.revision, initial_revision);
         let live_terminals: i64 = registry
             .connection
             .query_row(
@@ -3863,15 +3913,28 @@ fn startup_repairs_legacy_terminal_close_dangling_resource_rows() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(live_terminals, 1);
+        assert_eq!(live_terminals, if active_survivor.is_some() { 2 } else { 1 });
     }
 
     let reopened = WorkspaceRegistry::open(&root, "session").unwrap();
     let topology = reopened.resource_topology_snapshot().unwrap();
-    assert_eq!(topology.revision, 2);
-    let events = reopened.resource_events_after(1).unwrap();
+    assert_eq!(topology.revision, repair_revision);
+    let expected_tabs = if active_survivor.is_some() { vec![tab_id(2), tab_id(3)] } else { vec![] };
+    assert_eq!(
+        topology.tabs.iter().map(|tab| tab.public_id.clone()).collect::<Vec<_>>(),
+        expected_tabs
+    );
+    assert_eq!(
+        topology.tabs.iter().map(|tab| tab.position).collect::<Vec<_>>(),
+        (0..topology.tabs.len()).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        topology.panes[0].active_tab,
+        active_survivor.map(|keep_active| tab_id(if keep_active { 3 } else { 2 }))
+    );
+    let events = reopened.resource_events_after(initial_revision).unwrap();
     assert_eq!(events.batches.len(), 1);
-    assert_eq!(events.batches[0].revision, 2);
+    assert_eq!(events.batches[0].revision, repair_revision);
     assert_eq!(events.batches[0].changes[0]["resource"], "terminal");
     let live_terminals: i64 = reopened
         .connection
@@ -3881,7 +3944,11 @@ fn startup_repairs_legacy_terminal_close_dangling_resource_rows() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(live_terminals, 0, "dangling terminal remained live: {topology:?}");
+    assert_eq!(
+        live_terminals,
+        if active_survivor.is_some() { 1 } else { 0 },
+        "dangling terminal remained live: {topology:?}"
+    );
     let public_id = terminal_resource(TERMINAL_ONE);
     let (resource_deleted, identity_deleted): (Option<i64>, Option<i64>) = reopened
         .connection
@@ -3897,6 +3964,13 @@ fn startup_repairs_legacy_terminal_close_dangling_resource_rows() {
     assert!(resource_deleted.is_some());
     assert_eq!(identity_deleted, resource_deleted);
     drop(reopened);
+    let reopened_again = WorkspaceRegistry::open(&root, "session").unwrap();
+    let topology_again = reopened_again.resource_topology_snapshot().unwrap();
+    assert_eq!(topology_again.revision, repair_revision);
+    assert_eq!(topology_again.tabs, topology.tabs);
+    assert_eq!(topology_again.panes, topology.panes);
+    assert!(reopened_again.resource_events_after(repair_revision).unwrap().batches.is_empty());
+    drop(reopened_again);
     fs::remove_dir_all(root).unwrap();
 }
 
